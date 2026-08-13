@@ -1,0 +1,33 @@
+{
+  "name": "hoanggia-crm",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=apps/web",
+    "dev:worker": "npm run dev --workspace=apps/worker",
+    "build": "npm run build --workspace=packages/db && npm run build --workspace=apps/web",
+    "build:worker": "npm run build --workspace=apps/worker",
+    "lint": "npm run lint --workspace=apps/web",
+    "test": "npm run test --workspace=apps/web",
+    "prisma:generate": "npm run generate --workspace=packages/db",
+    "prisma:migrate": "npm run migrate:dev --workspace=packages/db",
+    "prisma:studio": "npm run studio --workspace=packages/db",
+    "db:seed": "npm run seed --workspace=packages/db"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "allowScripts": {
+    "@prisma/client@5.22.0": true,
+    "@prisma/engines@5.22.0": true,
+    "esbuild@0.28.2": true,
+    "esbuild@0.21.5": true,
+    "prisma@5.22.0": true,
+    "sharp@0.33.5": true,
+    "unrs-resolver@1.12.2": true
+  }
+}

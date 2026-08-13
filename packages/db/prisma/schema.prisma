@@ -1,0 +1,233 @@
+// Hoàng Gia CRM — schema dùng chung giữa apps/web và apps/worker.
+// Xem plan: C:\Users\Administrator\.claude\plans\gi-p-anh-t-o-1-resilient-flute.md
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Enums ----------
+
+enum Role {
+  ADMIN
+  SALES
+}
+
+enum OrderStatus {
+  NEW
+  CONFIRMED
+  PRODUCING
+  PARTIAL_DELIVERED
+  DELIVERED
+  CANCELLED
+}
+
+enum SlipStatus {
+  DRAFT
+  CONFIRMED
+}
+
+enum SyncStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+// ---------- Core ----------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         Role     @default(SALES)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  orders          Order[]          @relation("OrderSalesEmployee")
+  shipmentSlips   ShipmentSlip[]   @relation("SlipCreatedBy")
+  salesTargets    SalesTarget[]
+  importTemplates ImportTemplate[]
+  importBatches   ImportBatch[]
+  employeeAliases EmployeeAlias[]
+
+  @@map("users")
+}
+
+// Ánh xạ tên nhân viên viết khác nhau trên các nguồn dữ liệu (Excel AMIS...)
+// về đúng 1 User — để lần import sau tự khớp mà không cần xử lý thủ công lại.
+model EmployeeAlias {
+  id         String @id @default(cuid())
+  aliasName  String @unique
+  employeeId String
+  employee   User   @relation(fields: [employeeId], references: [id])
+
+  @@map("employee_aliases")
+}
+
+// ---------- Đơn hàng (import từ Excel AMIS) ----------
+
+model ImportTemplate {
+  id            String   @id @default(cuid())
+  name          String
+  sourceType    String   @default("AMIS_ORDER")
+  headerHash    String   @unique
+  columnMapping Json
+  createdById   String
+  createdBy     User     @relation(fields: [createdById], references: [id])
+  createdAt     DateTime @default(now())
+
+  batches ImportBatch[]
+
+  @@map("import_templates")
+}
+
+model ImportBatch {
+  id           String          @id @default(cuid())
+  templateId   String?
+  template     ImportTemplate? @relation(fields: [templateId], references: [id])
+  fileName     String
+  totalRows    Int
+  createdCount Int
+  updatedCount Int
+  errorCount   Int
+  errorReport  Json?
+  createdById  String
+  createdBy    User            @relation(fields: [createdById], references: [id])
+  createdAt    DateTime        @default(now())
+
+  orders Order[]
+
+  @@map("import_batches")
+}
+
+model Order {
+  id                   String       @id @default(cuid())
+  orderCode            String       @unique
+  customerName         String
+  customerCode         String?
+  salesEmployeeNameRaw String?
+  salesEmployeeId      String?
+  salesEmployee        User?        @relation("OrderSalesEmployee", fields: [salesEmployeeId], references: [id])
+  orderDate            DateTime?
+  expectedDeliveryDate DateTime?
+  status               OrderStatus  @default(NEW)
+  totalValue           Decimal      @default(0) @db.Decimal(18, 2)
+  poCode               String?
+  rawData              Json?
+  importBatchId        String?
+  importBatch          ImportBatch? @relation(fields: [importBatchId], references: [id])
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+
+  shipmentSlips ShipmentSlip[]
+
+  @@index([salesEmployeeId])
+  @@index([expectedDeliveryDate])
+  @@index([status])
+  @@map("orders")
+}
+
+// ---------- Phiếu đi hàng (upload ảnh + OCR) ----------
+
+model ShipmentSlip {
+  id                String     @id @default(cuid())
+  slipNumber        String     @unique
+  slipDate          DateTime?
+  receiverName      String?
+  customerName      String?
+  deliveryAddress   String?
+  description       String?
+  paymentMethod     String?
+  preparedBy        String?
+  imagePath         String
+  imageThumbPath    String?
+  orderId           String?
+  order             Order?     @relation(fields: [orderId], references: [id])
+  ocrRawResponse    Json?
+  ocrConfidenceNote Json?
+  status            SlipStatus @default(DRAFT)
+  createdById       String
+  createdBy         User       @relation("SlipCreatedBy", fields: [createdById], references: [id])
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  items ShipmentSlipItem[]
+
+  @@index([orderId])
+  @@index([slipDate])
+  @@map("shipment_slips")
+}
+
+model ShipmentSlipItem {
+  id                 String       @id @default(cuid())
+  shipmentSlipId     String
+  shipmentSlip       ShipmentSlip @relation(fields: [shipmentSlipId], references: [id], onDelete: Cascade)
+  lineOrder          Int
+  itemCode           String?
+  itemName           String
+  warehouse          String?
+  poSaleNumber       String?
+  unit               String?
+  qtyRequested       Decimal?     @db.Decimal(14, 2)
+  qtyActual          Decimal?     @db.Decimal(14, 2)
+  poCustomerItemCode String?
+  note               String?
+
+  @@map("shipment_slip_items")
+}
+
+// ---------- Công nợ (đồng bộ từ congno.hienvi.me) ----------
+
+model DebtSnapshot {
+  id              String   @id @default(cuid())
+  snapshotDate    DateTime
+  customerName    String
+  customerCode    String?
+  salesEmployeeId String?
+  totalDebt       Decimal  @default(0) @db.Decimal(18, 2)
+  overdueDebt     Decimal  @default(0) @db.Decimal(18, 2)
+  agingBuckets    Json
+  source          String   @default("HIENVI")
+  rawData         Json?
+  createdAt       DateTime @default(now())
+
+  @@index([snapshotDate])
+  @@index([customerName])
+  @@map("debt_snapshots")
+}
+
+model SyncLog {
+  id            String     @id @default(cuid())
+  jobType       String
+  status        SyncStatus
+  startedAt     DateTime   @default(now())
+  finishedAt    DateTime?
+  message       String?
+  recordsSynced Int?
+  triggeredBy   String?
+
+  @@index([jobType, startedAt])
+  @@map("sync_logs")
+}
+
+// ---------- Kế hoạch kinh doanh ----------
+
+model SalesTarget {
+  id            String   @id @default(cuid())
+  employeeId    String
+  employee      User     @relation(fields: [employeeId], references: [id])
+  year          Int
+  month         Int
+  targetRevenue Decimal  @default(0) @db.Decimal(18, 2)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([employeeId, year, month])
+  @@map("sales_targets")
+}
