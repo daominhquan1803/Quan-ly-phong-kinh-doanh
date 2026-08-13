@@ -27,6 +27,19 @@ export async function resolveEmployeeIdByCode(amisEmployeeCode: string | null): 
 }
 
 /**
+ * Danh sách mã nhân viên AMIS đang được quản lý trong hệ thống (nhân viên active, đã
+ * gán mã AMIS tại trang Nhân viên) — dùng để giới hạn phạm vi đồng bộ đơn hàng chỉ lấy
+ * đúng đội ngũ đang quản lý, không kéo toàn bộ đơn hàng của cả công ty trên AMIS.
+ */
+export async function getManagedAmisEmployeeCodes(): Promise<Set<string>> {
+  const users = await prisma.user.findMany({
+    where: { active: true, amisEmployeeCode: { not: null } },
+    select: { amisEmployeeCode: true },
+  });
+  return new Set(users.map((u) => u.amisEmployeeCode as string));
+}
+
+/**
  * Khớp nhân viên qua tên (alias đã lưu, hoặc tên khớp chính xác) — dùng làm phương án
  * dự phòng khi chưa gán mã AMIS cho tài khoản.
  */

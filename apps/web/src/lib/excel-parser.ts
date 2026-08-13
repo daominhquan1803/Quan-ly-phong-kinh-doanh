@@ -26,7 +26,7 @@ export interface ParseResult {
   errors: { rowNumber: number; message: string }[];
 }
 
-function readFirstSheet(buffer: Buffer) {
+export function readFirstSheet(buffer: Buffer) {
   const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
   const sheetName = workbook.SheetNames[0];
   const sheet = workbook.Sheets[sheetName];
@@ -66,7 +66,7 @@ function parseExcelDate(value: unknown): Date | null {
   return Number.isNaN(fallback.getTime()) ? null : fallback;
 }
 
-function parseNumber(value: unknown): number {
+export function parseNumber(value: unknown): number {
   if (typeof value === "number") return value;
   const str = String(value ?? "")
     .replace(/[^\d.,\-]/g, "")

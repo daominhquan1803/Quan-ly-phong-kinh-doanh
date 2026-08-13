@@ -31,7 +31,7 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   CANCELLED: "Đã hủy",
 };
 
-const OPEN_STATUSES: OrderStatus[] = [
+export const OPEN_STATUSES: OrderStatus[] = [
   OrderStatus.NEW,
   OrderStatus.CONFIRMED,
   OrderStatus.PRODUCING,
@@ -50,4 +50,27 @@ export function isOrderOverdue(order: {
   today.setHours(0, 0, 0, 0);
   due.setHours(0, 0, 0, 0);
   return due.getTime() < today.getTime();
+}
+
+/**
+ * Số ngày còn lại tới hạn giao (âm nếu đã quá hạn). null nếu đơn không có ngày giao dự kiến.
+ */
+export function daysUntilDeadline(expectedDeliveryDate: Date | string | null): number | null {
+  if (!expectedDeliveryDate) return null;
+  const due = new Date(expectedDeliveryDate);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  due.setHours(0, 0, 0, 0);
+  return Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+/** Đơn còn mở, chưa quá hạn, và sẽ đến hạn giao trong `withinDays` ngày tới. */
+export function isUpcomingDeadline(
+  order: { status: OrderStatus; expectedDeliveryDate: Date | string | null },
+  withinDays: number
+): boolean {
+  if (!OPEN_STATUSES.includes(order.status)) return false;
+  const days = daysUntilDeadline(order.expectedDeliveryDate);
+  if (days === null) return false;
+  return days >= 0 && days <= withinDays;
 }

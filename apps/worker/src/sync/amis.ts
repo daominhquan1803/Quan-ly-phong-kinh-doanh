@@ -4,6 +4,7 @@ import {
   resolveEmployeeIdByCode,
   resolveEmployeeIdByName,
   extractNameFromAmisLabel,
+  getManagedAmisEmployeeCodes,
 } from "@hoanggia/db";
 import { logger } from "../logger";
 
@@ -16,7 +17,13 @@ export interface SyncOutcome {
 }
 
 interface AmisProductMapping {
-  product_code?: string;
+  product_code?: string | null;
+  description?: string | null;
+  unit?: string | null;
+  amount?: number | null; // số lượng
+  price?: number | null; // đơn giá
+  total?: number | null; // thành tiền
+  stock_name?: string | null; // kho
   custom_field3?: string | null; // "Số PO/Mã hàng KH" theo mẫu phiếu Hoàng Gia
 }
 
@@ -88,17 +95,45 @@ function mapAmisStatus(deliveryStatus: string | null, status: string | null): Or
   return OrderStatus.NEW;
 }
 
-async function upsertOrderFromAmis(o: AmisSaleOrder, unmatchedEmployeeCodes: Set<string>) {
-  let salesEmployeeId = await resolveEmployeeIdByCode(o.employee_code);
+/** Ghi đè toàn bộ bảng hàng hoá của 1 đơn — khớp với cách AMIS xử lý khi sửa đơn hàng. */
+async function syncOrderItems(orderId: string, mappings: AmisProductMapping[] | null) {
+  await prisma.orderItem.deleteMany({ where: { orderId } });
+  if (!mappings?.length) return;
+
+  await prisma.orderItem.createMany({
+    data: mappings.map((m, i) => ({
+      orderId,
+      lineOrder: i,
+      itemCode: m.product_code || null,
+      itemName: m.description || m.product_code || "(Không rõ tên hàng)",
+      unit: m.unit || null,
+      quantity: m.amount ?? 0,
+      unitPrice: m.price ?? 0,
+      totalPrice: m.total ?? 0,
+      warehouse: m.stock_name || null,
+      poCustomerItemCode: m.custom_field3?.trim() || null,
+    })),
+  });
+}
+
+/**
+ * Đồng bộ 1 đơn hàng nếu người phụ trách nằm trong danh sách nhân viên đang quản lý
+ * (managedCodes) — bỏ qua đơn của nhân viên/phòng ban khác trên cùng hệ thống AMIS.
+ * Trả về true nếu đơn được đồng bộ (nằm trong phạm vi quản lý), false nếu bỏ qua.
+ */
+async function upsertOrderFromAmis(o: AmisSaleOrder, managedCodes: Set<string>): Promise<boolean> {
   const rawNameLabel = o.recorded_sale_users_name || o.owner_name || null;
   const salesEmployeeNameRaw = rawNameLabel ? extractNameFromAmisLabel(rawNameLabel) : null;
 
-  if (!salesEmployeeId && salesEmployeeNameRaw) {
+  let salesEmployeeId: string | null = null;
+  if (o.employee_code && managedCodes.has(o.employee_code)) {
+    salesEmployeeId = await resolveEmployeeIdByCode(o.employee_code);
+  } else if (!o.employee_code && salesEmployeeNameRaw) {
+    // Một số đơn AMIS không điền employee_code — thử khớp theo tên trong đội đang quản lý.
     salesEmployeeId = await resolveEmployeeIdByName(salesEmployeeNameRaw);
   }
-  if (!salesEmployeeId && o.employee_code) {
-    unmatchedEmployeeCodes.add(o.employee_code);
-  }
+
+  if (!salesEmployeeId) return false; // ngoài phạm vi quản lý (nhân viên/phòng ban khác) — bỏ qua
 
   const firstItem = o.sale_order_product_mappings?.[0];
   const poCode = firstItem?.custom_field3?.trim() || null;
@@ -124,17 +159,19 @@ async function upsertOrderFromAmis(o: AmisSaleOrder, unmatchedEmployeeCodes: Set
     select: { id: true },
   });
 
-  if (existing) {
-    await prisma.order.update({ where: { id: existing.id }, data });
-  } else {
-    await prisma.order.create({ data });
-  }
+  const order = existing
+    ? await prisma.order.update({ where: { id: existing.id }, data })
+    : await prisma.order.create({ data });
+
+  await syncOrderItems(order.id, o.sale_order_product_mappings);
+  return true;
 }
 
 /**
- * Đồng bộ đơn hàng từ MISA AMIS CRM Open API. Chỉ lấy đơn có modified_date mới hơn lần
- * đồng bộ thành công gần nhất (incremental) — lần đầu chạy giới hạn 180 ngày gần nhất để
- * tránh kéo toàn bộ lịch sử.
+ * Đồng bộ đơn hàng từ MISA AMIS CRM Open API — CHỈ lấy đơn của nhân viên đang được quản
+ * lý trong hệ thống (active, đã gán mã AMIS tại trang Nhân viên), bỏ qua đơn của phòng
+ * ban/nhân viên khác trong cùng công ty. Chỉ lấy đơn có modified_date mới hơn lần đồng bộ
+ * thành công gần nhất (incremental) — lần đầu chạy giới hạn 180 ngày gần nhất.
  */
 export async function runAmisOrderSync(triggeredBy: string): Promise<SyncOutcome> {
   const syncLog = await prisma.syncLog.create({
@@ -146,6 +183,13 @@ export async function runAmisOrderSync(triggeredBy: string): Promise<SyncOutcome
     const clientSecret = process.env.AMIS_CLIENT_SECRET;
     if (!appId || !clientSecret) {
       throw new Error("Thiếu AMIS_APP_ID/AMIS_CLIENT_SECRET trong biến môi trường của worker");
+    }
+
+    const managedCodes = await getManagedAmisEmployeeCodes();
+    if (managedCodes.size === 0) {
+      throw new Error(
+        "Chưa có nhân viên nào được gán mã AMIS — vào trang Nhân viên điền mã AMIS trước khi đồng bộ"
+      );
     }
 
     const token = await getAmisToken(appId, clientSecret);
@@ -162,8 +206,8 @@ export async function runAmisOrderSync(triggeredBy: string): Promise<SyncOutcome
     const pageSize = 100;
     let page = 0;
     let processed = 0;
+    let scanned = 0;
     let newestModified: Date | null = null;
-    const unmatchedEmployeeCodes = new Set<string>();
 
     while (page < 200) {
       // giới hạn an toàn 200 trang (~20.000 đơn) đề phòng lỗi logic cursor gây lặp vô hạn
@@ -178,8 +222,9 @@ export async function runAmisOrderSync(triggeredBy: string): Promise<SyncOutcome
           break; // API sort theo modified_date giảm dần, gặp bản ghi cũ hơn cutoff là dừng
         }
         if (!newestModified || modifiedDate > newestModified) newestModified = modifiedDate;
-        await upsertOrderFromAmis(o, unmatchedEmployeeCodes);
-        processed++;
+        scanned++;
+        const synced = await upsertOrderFromAmis(o, managedCodes);
+        if (synced) processed++;
       }
       if (reachedCutoff || orders.length < pageSize) break;
       page++;
@@ -192,14 +237,11 @@ export async function runAmisOrderSync(triggeredBy: string): Promise<SyncOutcome
         finishedAt: new Date(),
         recordsSynced: processed,
         cursor: (newestModified ?? cursorDate ?? new Date(0)).toISOString(),
-        message:
-          unmatchedEmployeeCodes.size > 0
-            ? `NV chưa khớp (điền mã AMIS ở trang Nhân viên): ${[...unmatchedEmployeeCodes].join(", ")}`
-            : undefined,
+        message: `Đã quét ${scanned} đơn trên AMIS, đồng bộ ${processed} đơn thuộc phạm vi quản lý`,
       },
     });
 
-    logger.info(`Đồng bộ đơn hàng AMIS thành công: ${processed} đơn`);
+    logger.info(`Đồng bộ đơn hàng AMIS thành công: ${processed}/${scanned} đơn thuộc phạm vi quản lý`);
     return { status: "SUCCESS", recordsSynced: processed };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Lỗi không xác định";

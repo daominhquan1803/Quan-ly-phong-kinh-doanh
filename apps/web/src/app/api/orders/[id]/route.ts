@@ -12,6 +12,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       include: {
         salesEmployee: { select: { id: true, name: true } },
         shipmentSlips: { select: { id: true, slipNumber: true, slipDate: true, status: true, imageThumbPath: true } },
+        items: { orderBy: { lineOrder: "asc" } },
       },
     });
     if (!order) return NextResponse.json({ error: "Không tìm thấy đơn hàng" }, { status: 404 });

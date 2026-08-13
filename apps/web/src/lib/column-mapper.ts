@@ -79,27 +79,51 @@ export const ORDER_FIELDS: OrderFieldDef[] = [
 
 export type ColumnMapping = Partial<Record<OrderFieldKey, string>>;
 
+/** Định nghĩa field chung — dùng để tái sử dụng gợi ý mapping cho các loại import khác
+ * (đơn hàng, kế hoạch kinh doanh...) ngoài OrderFieldDef. */
+export interface FieldDef<K extends string = string> {
+  key: K;
+  label: string;
+  required: boolean;
+  synonyms: string[];
+}
+
 /** Hash tập header (đã chuẩn hoá, sắp xếp) để nhận diện lại cùng 1 định dạng file lần sau. */
 export function hashHeaders(headers: string[]): string {
   const normalized = headers.map(normalizeVN).sort().join("|");
   return createHash("sha256").update(normalized).digest("hex");
 }
 
-/** Gợi ý mapping field hệ thống -> tên cột Excel, dựa trên fuzzy match với synonyms. */
-export function suggestMapping(headers: string[]): ColumnMapping {
-  const mapping: ColumnMapping = {};
-  for (const field of ORDER_FIELDS) {
-    let best: { header: string; score: number } | null = null;
+/**
+ * Gợi ý mapping field hệ thống -> tên cột Excel, dựa trên fuzzy match với synonyms.
+ * Gán loại trừ theo kiểu "ghép cặp điểm cao nhất trước" (global greedy): xét mọi cặp
+ * (field, cột) đạt ngưỡng, ưu tiên ghép cặp có điểm khớp cao nhất trước — tránh trường
+ * hợp 1 field khớp mơ hồ (điểm thấp) "cướp" mất 1 cột trước khi field khớp chính xác hơn
+ * (điểm cao) kịp xét tới (vd "Ngày đặt hàng" vs cột "Ngày giao hàng" có điểm thấp hơn
+ * "Ngày giao dự kiến" vs chính cột đó, nên cột phải thuộc về field sau).
+ */
+export function suggestMapping<K extends string = OrderFieldKey>(
+  headers: string[],
+  fields: FieldDef<K>[] = ORDER_FIELDS as unknown as FieldDef<K>[]
+): Partial<Record<K, string>> {
+  const candidates: { key: K; header: string; score: number }[] = [];
+  for (const field of fields) {
     for (const header of headers) {
       let score = 0;
       for (const syn of field.synonyms) {
         score = Math.max(score, similarity(header, syn));
       }
-      if (!best || score > best.score) best = { header, score };
+      if (score >= 0.5) candidates.push({ key: field.key, header, score });
     }
-    if (best && best.score >= 0.5) {
-      mapping[field.key] = best.header;
-    }
+  }
+  candidates.sort((a, b) => b.score - a.score);
+
+  const mapping: Partial<Record<K, string>> = {};
+  const usedHeaders = new Set<string>();
+  for (const c of candidates) {
+    if (mapping[c.key] || usedHeaders.has(c.header)) continue;
+    mapping[c.key] = c.header;
+    usedHeaders.add(c.header);
   }
   return mapping;
 }

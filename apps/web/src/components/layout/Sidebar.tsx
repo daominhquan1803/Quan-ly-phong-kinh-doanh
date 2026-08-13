@@ -10,11 +10,13 @@ import {
   Wallet,
   Target,
   Users,
+  Gauge,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/", label: "Tổng quan", icon: LayoutDashboard, adminOnly: false },
   { href: "/orders", label: "Đơn hàng", icon: ShoppingCart, adminOnly: false },
+  { href: "/shipping-status", label: "Tiến độ giao hàng", icon: Gauge, adminOnly: false },
   { href: "/shipment-slips", label: "Phiếu đi hàng", icon: Truck, adminOnly: false },
   { href: "/debt", label: "Công nợ", icon: Wallet, adminOnly: false },
   { href: "/targets", label: "Kế hoạch kinh doanh", icon: Target, adminOnly: false },

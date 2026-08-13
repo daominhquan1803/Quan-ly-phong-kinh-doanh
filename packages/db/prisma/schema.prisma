@@ -52,12 +52,14 @@ model User {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
-  orders          Order[]          @relation("OrderSalesEmployee")
-  shipmentSlips   ShipmentSlip[]   @relation("SlipCreatedBy")
-  salesTargets    SalesTarget[]
-  importTemplates ImportTemplate[]
-  importBatches   ImportBatch[]
-  employeeAliases EmployeeAlias[]
+  orders           Order[]                @relation("OrderSalesEmployee")
+  shipmentSlips    ShipmentSlip[]         @relation("SlipCreatedBy")
+  salesTargets     SalesTarget[]
+  importTemplates  ImportTemplate[]
+  importBatches    ImportBatch[]
+  employeeAliases  EmployeeAlias[]
+  salesPlanLines   SalesPlanLine[]
+  salesPlanBatches SalesPlanImportBatch[]
 
   @@map("users")
 }
@@ -135,11 +137,33 @@ model Order {
   updatedAt            DateTime     @updatedAt
 
   shipmentSlips ShipmentSlip[]
+  items         OrderItem[]
 
   @@index([salesEmployeeId])
   @@index([expectedDeliveryDate])
   @@index([status])
   @@map("orders")
+}
+
+// Chi tiết mã hàng/số lượng/giá của đơn hàng — đồng bộ từ AMIS
+// (sale_order_product_mappings) hoặc nhập tay khi tạo đơn thủ công.
+model OrderItem {
+  id                 String  @id @default(cuid())
+  orderId            String
+  order              Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  lineOrder          Int
+  itemCode           String?
+  itemName           String
+  unit               String?
+  quantity           Decimal @default(0) @db.Decimal(14, 2)
+  unitPrice          Decimal @default(0) @db.Decimal(18, 2)
+  totalPrice         Decimal @default(0) @db.Decimal(18, 2)
+  warehouse          String?
+  poCustomerItemCode String?
+
+  @@index([orderId])
+  @@index([itemCode])
+  @@map("order_items")
 }
 
 // ---------- Phiếu đi hàng (upload ảnh + OCR) ----------
@@ -242,4 +266,48 @@ model SalesTarget {
 
   @@unique([employeeId, year, month])
   @@map("sales_targets")
+}
+
+// ---------- Kế hoạch kinh doanh chi tiết (import từ Excel) ----------
+// Bổ sung cho SalesTarget (tổng theo nhân viên/tháng) — cho phép chi tiết hoá
+// kế hoạch theo Nhân viên x Sản phẩm x Nhóm hàng, đọc từ file Excel kế hoạch.
+
+model SalesPlanImportBatch {
+  id           String   @id @default(cuid())
+  fileName     String
+  year         Int
+  month        Int
+  totalRows    Int
+  createdCount Int
+  errorCount   Int
+  errorReport  Json?
+  createdById  String
+  createdBy    User     @relation(fields: [createdById], references: [id])
+  createdAt    DateTime @default(now())
+
+  lines SalesPlanLine[]
+
+  @@map("sales_plan_import_batches")
+}
+
+model SalesPlanLine {
+  id              String               @id @default(cuid())
+  batchId         String
+  batch           SalesPlanImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  year            Int
+  month           Int
+  employeeNameRaw String?
+  employeeId      String?
+  employee        User?                @relation(fields: [employeeId], references: [id])
+  productCode     String?
+  productName     String?
+  productGroup    String?
+  targetRevenue   Decimal              @default(0) @db.Decimal(18, 2)
+  targetQuantity  Decimal?             @db.Decimal(14, 2)
+  createdAt       DateTime             @default(now())
+
+  @@index([year, month])
+  @@index([employeeId])
+  @@index([productCode])
+  @@map("sales_plan_lines")
 }
