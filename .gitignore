@@ -15,6 +15,7 @@ build/
 .env.production
 .env.*.local
 !.env.example
+infra/docker-compose.override.yml
 
 # Prisma
 packages/db/prisma/dev.db
