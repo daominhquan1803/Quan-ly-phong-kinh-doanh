@@ -83,7 +83,15 @@ export default async function ShipmentSlipDetailPage({ params }: { params: { id:
 
         <div className="rounded-lg border border-gray-200 bg-white p-3">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={slip.imagePath} alt={slip.slipNumber} className="w-full rounded-md" />
+          <img src={slip.imageThumbPath ?? slip.imagePath} alt={slip.slipNumber} className="w-full rounded-md" />
+          <a
+            href={slip.imagePath}
+            target="_blank"
+            rel="noreferrer"
+            className="block text-center text-xs text-navy-900 mt-2 hover:underline"
+          >
+            {slip.imagePath.toLowerCase().endsWith(".pdf") ? "Xem file PDF gốc" : "Xem ảnh gốc kích thước đầy đủ"}
+          </a>
         </div>
       </div>
     </div>

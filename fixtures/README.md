@@ -5,15 +5,19 @@ chạy UAT đầy đủ, anh cần thêm vào đây (chỉ trên máy local, kh�
 
 1. **`sample-order-export.xlsx`** — 1 file Excel xuất thật (hoặc vài dòng mẫu) từ
    AMIS CRM (Đơn hàng bán), dùng để test wizard import tại `/orders/import`.
-2. **`sample-shipment-slip.jpg`** — 1 ảnh chụp phiếu xuất kho bán hàng thật, dùng để
-   test luồng AI đọc ảnh:
+2. **`sample-shipment-slip.jpg`** (hoặc `.pdf`) — 1 ảnh chụp hoặc file PDF phiếu xuất kho
+   bán hàng thật, dùng để test luồng AI đọc phiếu (hệ thống chấp nhận cả 2 định dạng —
+   PDF được render trang 1 thành ảnh trước khi gửi AI, xem `lib/pdf-to-image.ts`):
 
    ```bash
    cd apps/web
-   npm run test:ocr -- ../../fixtures/sample-shipment-slip.jpg
+   npm run test:ocr -- ../../fixtures/sample-shipment-slip.jpg   # hoặc .pdf
+
+   # Chỉ muốn test riêng bước PDF -> ảnh (không tốn phí AI):
+   npx tsx scripts/test-pdf-render.ts ../../fixtures/sample-shipment-slip.pdf
    ```
 
-   (cần `ANTHROPIC_API_KEY` hợp lệ trong `apps/web/.env.local`)
+   (cần `ANTHROPIC_API_KEY` hợp lệ trong `apps/web/.env.local` cho `test:ocr`)
 
 ## Vì sao chưa có sẵn dữ liệu mẫu ở đây
 

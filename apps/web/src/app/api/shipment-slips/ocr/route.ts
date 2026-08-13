@@ -44,6 +44,6 @@ export async function POST(req: NextRequest) {
     if (err instanceof UploadTooLargeError) return NextResponse.json({ error: err.message }, { status: 413 });
     if (err instanceof RateLimitError) return NextResponse.json({ error: err.message }, { status: 429 });
     console.error("shipment-slips/ocr error", err);
-    return NextResponse.json({ error: "Không xử lý được ảnh phiếu" }, { status: 500 });
+    return NextResponse.json({ error: "Không xử lý được file phiếu" }, { status: 500 });
   }
 }

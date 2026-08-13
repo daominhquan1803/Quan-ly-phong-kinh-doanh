@@ -1,7 +1,8 @@
 import { randomUUID } from "crypto";
-import { mkdir, readFile } from "fs/promises";
+import { mkdir, readFile, writeFile } from "fs/promises";
 import path from "path";
 import sharp from "sharp";
+import { isPdfFile, renderPdfFirstPageToJpeg } from "./pdf-to-image";
 
 // Ảnh phiếu đi hàng lưu trong public/uploads để Next.js serve trực tiếp qua URL tĩnh.
 // Trên VPS, thư mục này được mount làm volume Docker (xem infra/docker-compose.yml) để
@@ -27,35 +28,47 @@ function subdir(): string {
 }
 
 /**
- * Lưu ảnh phiếu đi hàng: bản gốc (để đối chiếu) + bản resize/nén (để hiển thị & gửi OCR).
+ * Lưu phiếu đi hàng — nhận ảnh chụp (jpg/png/...) HOẶC file PDF (phiếu xuất trực tiếp từ
+ * hệ thống, không phải chụp giấy). PDF được giữ nguyên bản gốc để tải về/đối chiếu (rõ nét
+ * hơn ảnh chụp), đồng thời render trang 1 thành JPEG để hiển thị + gửi OCR — dùng chung 1
+ * luồng xử lý với ảnh chụp thường.
  */
 export async function saveShipmentSlipImage(file: File): Promise<SavedImage> {
   if (file.size > MAX_IMAGE_BYTES) {
-    throw new UploadTooLargeError(`Ảnh vượt quá giới hạn ${MAX_IMAGE_BYTES / 1024 / 1024}MB`);
+    throw new UploadTooLargeError(`File vượt quá giới hạn ${MAX_IMAGE_BYTES / 1024 / 1024}MB`);
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
+  const rawBuffer = Buffer.from(await file.arrayBuffer());
   const id = randomUUID();
   const relDir = subdir();
   const absDir = path.join(UPLOAD_ROOT, relDir);
   await mkdir(absDir, { recursive: true });
 
-  const originalName = `${id}-original.jpg`;
   const resizedName = `${id}.jpg`;
-  const absOriginal = path.join(absDir, originalName);
   const absResized = path.join(absDir, resizedName);
-
-  await sharp(buffer).rotate().jpeg({ quality: 92 }).toFile(absOriginal);
-  // Cạnh dài ~1568px theo khuyến nghị Anthropic cho ảnh gửi vào Claude Vision — giảm chi phí/tăng tốc OCR.
-  await sharp(buffer).rotate().resize({ width: 1568, height: 1568, fit: "inside", withoutEnlargement: true }).jpeg({ quality: 85 }).toFile(absResized);
-
   const toUrl = (name: string) => `/uploads/${relDir.split(path.sep).join("/")}/${name}`;
 
-  return {
-    imagePath: toUrl(originalName),
-    imageThumbPath: toUrl(resizedName),
-    absoluteResizedPath: absResized,
-  };
+  if (isPdfFile(file)) {
+    const originalName = `${id}-original.pdf`;
+    const absOriginal = path.join(absDir, originalName);
+    await writeFile(absOriginal, rawBuffer);
+
+    const rendered = await renderPdfFirstPageToJpeg(rawBuffer);
+    await sharp(rendered)
+      .resize({ width: 1568, height: 1568, fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality: 85 })
+      .toFile(absResized);
+
+    return { imagePath: toUrl(originalName), imageThumbPath: toUrl(resizedName), absoluteResizedPath: absResized };
+  }
+
+  const originalName = `${id}-original.jpg`;
+  const absOriginal = path.join(absDir, originalName);
+  await sharp(rawBuffer).rotate().jpeg({ quality: 92 }).toFile(absOriginal);
+  // Cạnh dài ~1568px theo khuyến nghị Anthropic cho ảnh gửi vào Claude Vision — giảm chi phí/tăng tốc OCR.
+  await sharp(rawBuffer).rotate().resize({ width: 1568, height: 1568, fit: "inside", withoutEnlargement: true }).jpeg({ quality: 85 }).toFile(absResized);
+
+  return { imagePath: toUrl(originalName), imageThumbPath: toUrl(resizedName), absoluteResizedPath: absResized };
 }
 
 export async function readResizedAsBase64(absoluteResizedPath: string): Promise<string> {

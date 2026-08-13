@@ -1,7 +1,7 @@
 # Hoàng Gia CRM — Quản lý phòng kinh doanh
 
 Web app nội bộ cho phòng kinh doanh Công ty CP Giải pháp Đóng gói Hoàng Gia:
-quản lý đơn hàng (import từ AMIS), số hoá phiếu đi hàng bằng ảnh + AI, theo dõi công nợ
+quản lý đơn hàng (import từ AMIS), số hoá phiếu đi hàng bằng ảnh hoặc PDF + AI, theo dõi công nợ
 (đồng bộ từ congno.hienvi.me), và dashboard kế hoạch kinh doanh vs thực hiện + cảnh báo
 đơn hàng quá hạn.
 

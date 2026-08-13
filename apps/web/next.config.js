@@ -10,6 +10,15 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: "10mb",
     },
+    // @napi-rs/canvas chứa native binary (.node) — không cho webpack bundle, chỉ require()
+    // thẳng lúc chạy (giống cách Next.js đã tự xử lý sẵn cho sharp).
+    serverComponentsExternalPackages: ["@napi-rs/canvas"],
+    // napi-rs require() đường dẫn binary theo platform lúc runtime (không static-analyze
+    // được), nên output file tracing (dùng cho Docker standalone build) bỏ sót .node file
+    // trừ khi khai báo thủ công ở đây.
+    outputFileTracingIncludes: {
+      "/**": ["./node_modules/@napi-rs/canvas-*/*.node"],
+    },
   },
 };
 
