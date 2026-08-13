@@ -40,14 +40,17 @@ enum SyncStatus {
 // ---------- Core ----------
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  name         String
-  role         Role     @default(SALES)
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id               String   @id @default(cuid())
+  email            String   @unique
+  passwordHash     String
+  name             String
+  role             Role     @default(SALES)
+  active           Boolean  @default(true)
+  // Mã nhân viên trên AMIS (vd "DANGTAN") — dùng để khớp đơn hàng đồng bộ tự động từ AMIS
+  // API chính xác hơn khớp theo tên. Điền tại trang Nhân viên.
+  amisEmployeeCode String?  @unique
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   orders          Order[]          @relation("OrderSalesEmployee")
   shipmentSlips   ShipmentSlip[]   @relation("SlipCreatedBy")
@@ -109,6 +112,12 @@ model ImportBatch {
 model Order {
   id                   String       @id @default(cuid())
   orderCode            String       @unique
+  // ID nội bộ của đơn hàng bên AMIS (field "id") — dùng để upsert chính xác khi đồng bộ
+  // tự động, phòng trường hợp sale_order_no bị sửa bên AMIS.
+  amisOrderId          Int?         @unique
+  // Nguồn dữ liệu: MANUAL | EXCEL_IMPORT | AMIS_API — hiển thị cho người dùng biết đơn
+  // này đến từ đâu.
+  source               String       @default("MANUAL")
   customerName         String
   customerCode         String?
   salesEmployeeNameRaw String?
@@ -211,6 +220,9 @@ model SyncLog {
   message       String?
   recordsSynced Int?
   triggeredBy   String?
+  // Điểm đánh dấu tiến trình đồng bộ tăng dần (vd modified_date mới nhất đã xử lý của
+  // AMIS) — dùng để lần chạy sau chỉ lấy dữ liệu mới/đã sửa thay vì kéo lại toàn bộ.
+  cursor        String?
 
   @@index([jobType, startedAt])
   @@map("sync_logs")

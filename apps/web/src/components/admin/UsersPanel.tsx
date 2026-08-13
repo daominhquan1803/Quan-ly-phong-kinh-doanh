@@ -10,6 +10,7 @@ interface UserRow {
   email: string;
   role: "ADMIN" | "SALES";
   active: boolean;
+  amisEmployeeCode: string | null;
 }
 interface AliasRow {
   aliasName: string;
@@ -56,6 +57,35 @@ export function UsersPanel() {
       await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Có lỗi xảy ra");
+    }
+  }
+
+  const [amisCodeEdits, setAmisCodeEdits] = useState<Record<string, string>>({});
+  const [savingAmisCode, setSavingAmisCode] = useState<string | null>(null);
+
+  async function handleSaveAmisCode(userId: string) {
+    const value = amisCodeEdits[userId];
+    if (value === undefined) return;
+    setSavingAmisCode(userId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amisEmployeeCode: value || null }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Lưu thất bại");
+      setAmisCodeEdits((prev) => {
+        const next = { ...prev };
+        delete next[userId];
+        return next;
+      });
+      await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Có lỗi xảy ra");
+    } finally {
+      setSavingAmisCode(null);
     }
   }
 
@@ -116,6 +146,7 @@ export function UsersPanel() {
                 <th className="text-left font-medium px-4 py-2.5">Tên</th>
                 <th className="text-left font-medium px-4 py-2.5">Email</th>
                 <th className="text-left font-medium px-4 py-2.5">Vai trò</th>
+                <th className="text-left font-medium px-4 py-2.5">Mã nhân viên AMIS</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -124,11 +155,38 @@ export function UsersPanel() {
                   <td className="px-4 py-2.5 font-medium text-gray-900">{u.name}</td>
                   <td className="px-4 py-2.5 text-gray-500">{u.email}</td>
                   <td className="px-4 py-2.5">{u.role === "ADMIN" ? "Quản trị viên" : "Nhân viên kinh doanh"}</td>
+                  <td className="px-4 py-2.5">
+                    {u.role === "SALES" ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          placeholder="vd: DANGTAN"
+                          defaultValue={u.amisEmployeeCode ?? ""}
+                          onChange={(e) => setAmisCodeEdits((prev) => ({ ...prev, [u.id]: e.target.value }))}
+                          className="w-32 text-sm rounded-md border border-gray-200 py-1 px-2"
+                        />
+                        {amisCodeEdits[u.id] !== undefined && (
+                          <button
+                            onClick={() => handleSaveAmisCode(u.id)}
+                            disabled={savingAmisCode === u.id}
+                            className="text-xs font-medium text-navy-900 hover:underline disabled:opacity-40"
+                          >
+                            Lưu
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        <p className="text-xs text-gray-500 mt-2">
+          Mã nhân viên AMIS (vd DANGTAN) dùng để đồng bộ đơn hàng tự động khớp đúng người phụ trách — xem tại
+          AMIS CRM, thông tin nhân viên.
+        </p>
       </div>
 
       <div>
