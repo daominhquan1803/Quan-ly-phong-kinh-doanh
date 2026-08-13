@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { OrderStatusBadge } from "./StatusBadge";
 import { cn, formatCurrencyVND, formatDateVN } from "@/lib/utils";
 import { ORDER_STATUS_LABEL } from "@/lib/order-status";
+import { EmployeeFilterSelect } from "@/components/shared/EmployeeFilterSelect";
 import { Search, Upload, RefreshCw, CheckCircle2, XCircle } from "lucide-react";
 
 interface SyncLog {
@@ -38,17 +39,19 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
   const [overdueOnly, setOverdueOnly] = useState(false);
+  const [employeeId, setEmployeeId] = useState("");
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["orders", q, status, overdueOnly],
+    queryKey: ["orders", q, status, overdueOnly, employeeId],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (q) params.set("q", q);
       if (status) params.set("status", status);
       if (overdueOnly) params.set("overdue", "1");
+      if (employeeId) params.set("employeeId", employeeId);
       const res = await fetch(`/api/orders?${params.toString()}`);
       if (!res.ok) throw new Error("Không tải được đơn hàng");
       return res.json() as Promise<{ orders: OrderRow[] }>;
@@ -112,6 +115,7 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
             <input type="checkbox" checked={overdueOnly} onChange={(e) => setOverdueOnly(e.target.checked)} />
             Chỉ đơn quá hạn
           </label>
+          {isAdmin && <EmployeeFilterSelect value={employeeId} onChange={setEmployeeId} />}
         </div>
         {isAdmin && (
           <div className="flex items-center gap-2">

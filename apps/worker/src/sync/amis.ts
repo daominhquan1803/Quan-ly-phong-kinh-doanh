@@ -5,6 +5,7 @@ import {
   resolveEmployeeIdByName,
   extractNameFromAmisLabel,
   getManagedAmisEmployeeCodes,
+  normalizeVN,
 } from "@hoanggia/db";
 import { logger } from "../logger";
 
@@ -36,6 +37,7 @@ interface AmisSaleOrder {
   deadline_date: string | null;
   status: string | null;
   delivery_status: string | null;
+  revenue_status: string | null; // "Tình trạng ghi doanh số": Bản nháp | Đề nghị ghi | Đã ghi | Huỷ ghi
   sale_order_amount: number | null;
   total_summary: number | null;
   employee_code: string | null;
@@ -85,6 +87,19 @@ async function fetchSaleOrdersPage(
 }
 
 /**
+ * Đơn ở trạng thái "Bản nháp" (chưa chốt), "Huỷ ghi" hoặc "Từ chối ghi" (không được ghi
+ * nhận doanh số) trên cột "Tình trạng ghi doanh số" của AMIS — theo yêu cầu, các đơn này
+ * không được coi là đơn hàng thật nên không đưa vào hệ thống. Dữ liệu thật quan sát được
+ * gồm 5 giá trị: Bản nháp, Đề nghị ghi, Đã ghi, Từ chối ghi, và rỗng (coi là hợp lệ, không
+ * loại trừ khi thiếu dữ liệu).
+ */
+function isExcludedRevenueStatus(revenueStatus: string | null): boolean {
+  if (!revenueStatus) return false;
+  const norm = normalizeVN(revenueStatus);
+  return norm.includes("nhap") || norm.includes("huy") || norm.includes("tu choi");
+}
+
+/**
  * AMIS dùng "status" (Chưa/Đang thực hiện) và "delivery_status" (Chưa/Đang/Đã giao hàng) —
  * ưu tiên delivery_status vì gần với khái niệm "quá hạn giao hàng" của hệ thống mình hơn.
  */
@@ -118,10 +133,22 @@ async function syncOrderItems(orderId: string, mappings: AmisProductMapping[] | 
 
 /**
  * Đồng bộ 1 đơn hàng nếu người phụ trách nằm trong danh sách nhân viên đang quản lý
- * (managedCodes) — bỏ qua đơn của nhân viên/phòng ban khác trên cùng hệ thống AMIS.
+ * (managedCodes) và không ở trạng thái ghi doanh số Bản nháp/Huỷ ghi — bỏ qua đơn của
+ * nhân viên/phòng ban khác, và xoá khỏi hệ thống nếu đơn đã đồng bộ trước đó nhưng nay
+ * chuyển sang Bản nháp/Huỷ ghi bên AMIS.
  * Trả về true nếu đơn được đồng bộ (nằm trong phạm vi quản lý), false nếu bỏ qua.
  */
 async function upsertOrderFromAmis(o: AmisSaleOrder, managedCodes: Set<string>): Promise<boolean> {
+  const existing = await prisma.order.findFirst({
+    where: { OR: [{ amisOrderId: o.id }, { orderCode: o.sale_order_no }] },
+    select: { id: true },
+  });
+
+  if (isExcludedRevenueStatus(o.revenue_status)) {
+    if (existing) await prisma.order.delete({ where: { id: existing.id } }); // cascade xoá luôn OrderItem
+    return false;
+  }
+
   const rawNameLabel = o.recorded_sale_users_name || o.owner_name || null;
   const salesEmployeeNameRaw = rawNameLabel ? extractNameFromAmisLabel(rawNameLabel) : null;
 
@@ -153,11 +180,6 @@ async function upsertOrderFromAmis(o: AmisSaleOrder, managedCodes: Set<string>):
     poCode,
     rawData: o as object,
   };
-
-  const existing = await prisma.order.findFirst({
-    where: { OR: [{ amisOrderId: o.id }, { orderCode: o.sale_order_no }] },
-    select: { id: true },
-  });
 
   const order = existing
     ? await prisma.order.update({ where: { id: existing.id }, data })

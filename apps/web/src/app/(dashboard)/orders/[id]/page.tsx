@@ -3,6 +3,7 @@ import Link from "next/link";
 import { prisma } from "@hoanggia/db";
 import { auth } from "@/lib/auth";
 import { OrderStatusBadge } from "@/components/orders/StatusBadge";
+import { CancelOrderButton } from "@/components/orders/CancelOrderButton";
 import { formatCurrencyVND, formatDateVN } from "@/lib/utils";
 import { isOrderOverdue } from "@/lib/order-status";
 
@@ -33,8 +34,19 @@ export default async function OrderDetailPage({ params }: { params: { id: string
           <h1 className="text-xl font-semibold text-gray-900">Đơn hàng {order.orderCode}</h1>
           <p className="text-sm text-gray-500">{order.customerName}</p>
         </div>
-        <OrderStatusBadge status={order.status} overdue={overdue} />
+        <div className="flex flex-col items-end gap-2">
+          <OrderStatusBadge status={order.status} overdue={overdue} />
+          {session.user.role === "ADMIN" && (
+            <CancelOrderButton orderId={order.id} isCancelled={order.status === "CANCELLED"} />
+          )}
+        </div>
       </div>
+      {session.user.role === "ADMIN" && order.source === "AMIS_API" && (
+        <p className="text-xs text-gray-500 -mt-4">
+          Đơn này đồng bộ từ AMIS — nếu AMIS vẫn ghi nhận đơn đang hoạt động, lần đồng bộ tiếp theo có thể tự khôi
+          phục lại trạng thái theo AMIS.
+        </p>
+      )}
 
       <div className="rounded-lg border border-gray-200 bg-white p-5 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
         <div>

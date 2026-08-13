@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { cn, formatCurrencyVND, formatDateVN } from "@/lib/utils";
+import { EmployeeFilterSelect } from "@/components/shared/EmployeeFilterSelect";
 import { AlertTriangle, Clock, TrendingUp, PackageCheck } from "lucide-react";
 
 interface OrderRow {
@@ -42,11 +43,14 @@ interface SummaryResponse {
 
 export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
   const [tab, setTab] = useState<"overdue" | "upcoming">("overdue");
+  const [employeeId, setEmployeeId] = useState("");
 
   const { data, isLoading } = useQuery({
-    queryKey: ["shipping-status-summary"],
+    queryKey: ["shipping-status-summary", employeeId],
     queryFn: async () => {
-      const res = await fetch("/api/shipping-status/summary");
+      const params = new URLSearchParams();
+      if (employeeId) params.set("employeeId", employeeId);
+      const res = await fetch(`/api/shipping-status/summary?${params.toString()}`);
       if (!res.ok) throw new Error("Không tải được tình hình giao hàng");
       return res.json() as Promise<SummaryResponse>;
     },
@@ -58,6 +62,12 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <div className="space-y-6">
+      {isAdmin && (
+        <div className="flex justify-end">
+          <EmployeeFilterSelect value={employeeId} onChange={setEmployeeId} />
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="kpi-card kpi-card--navy">
           <div className="flex items-center gap-1.5 text-sm text-gray-500">

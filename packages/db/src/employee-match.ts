@@ -1,7 +1,7 @@
 import { prisma } from "./index";
 
-/** Bỏ dấu tiếng Việt, hạ chữ thường — dùng để so khớp tên nhân viên giữa các nguồn dữ liệu. */
-function normalizeVN(input: string): string {
+/** Bỏ dấu tiếng Việt, hạ chữ thường — dùng để so khớp tên nhân viên/trạng thái giữa các nguồn dữ liệu. */
+export function normalizeVN(input: string): string {
   return input
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")

@@ -12,10 +12,14 @@ export async function GET(req: NextRequest) {
     const q = searchParams.get("q")?.trim();
     const status = searchParams.get("status");
     const overdueOnly = searchParams.get("overdue") === "1";
+    const employeeId = searchParams.get("employeeId");
 
     const where: Prisma.OrderWhereInput = {
       ...scopeByOwner(session, "salesEmployeeId"),
     };
+    // Chỉ ADMIN được lọc theo nhân viên bất kỳ — SALES đã bị scopeByOwner giới hạn về
+    // chính mình ở trên, không cho phép ghi đè bằng query param.
+    if (employeeId && session.user.role === "ADMIN") where.salesEmployeeId = employeeId;
     if (status) where.status = status as Prisma.EnumOrderStatusFilter["equals"];
     if (q) {
       where.OR = [

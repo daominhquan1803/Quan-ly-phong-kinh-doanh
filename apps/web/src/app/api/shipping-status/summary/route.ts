@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma, OrderStatus } from "@hoanggia/db";
 import { requireSession, scopeByOwner, UnauthorizedError } from "@/lib/rbac";
 import { isOrderOverdue, isUpcomingDeadline, daysUntilDeadline } from "@/lib/order-status";
@@ -9,16 +9,19 @@ const UPCOMING_WINDOW_DAYS = 3;
 const RATE_WINDOW_DAYS = 90; // tính tỷ lệ giao đúng hạn dựa trên đơn có hạn giao trong 90 ngày qua
 const MAX_ROWS = 200; // giới hạn số dòng trả về cho bảng — tổng số liệu (KPI) vẫn tính trên toàn bộ
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const session = await requireSession();
     const scope = scopeByOwner(session, "salesEmployeeId");
+    const employeeId = req.nextUrl.searchParams.get("employeeId");
 
     const openOrders = await prisma.order.findMany({
       where: {
         status: { notIn: [OrderStatus.CANCELLED] },
         expectedDeliveryDate: { not: null },
         ...scope,
+        // Chỉ ADMIN được lọc theo nhân viên bất kỳ — SALES đã bị scopeByOwner giới hạn.
+        ...(employeeId && session.user.role === "ADMIN" ? { salesEmployeeId: employeeId } : {}),
       },
       include: { salesEmployee: { select: { id: true, name: true } } },
       orderBy: { expectedDeliveryDate: "asc" },
