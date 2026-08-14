@@ -25,7 +25,10 @@ export const SALES_PLAN_FIELDS: FieldDef<SalesPlanFieldKey>[] = [
     key: "productName",
     label: "Tên sản phẩm",
     required: false,
-    synonyms: ["tên sản phẩm", "tên hàng", "ten san pham"],
+    // "sản phẩm" trần (không có tiền tố "mã"/"tên") được ưu tiên hiểu là tên/nhóm sản phẩm
+    // chứ không phải mã hàng — khớp đúng với file kế hoạch thật (cột "Sản phẩm" chứa tên
+    // danh mục như "Túi PE", "Băng dính", không phải mã hàng AMIS).
+    synonyms: ["tên sản phẩm", "tên hàng", "ten san pham", "sản phẩm"],
   },
   {
     key: "productGroup",

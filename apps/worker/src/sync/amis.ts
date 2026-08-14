@@ -100,6 +100,19 @@ function isExcludedRevenueStatus(revenueStatus: string | null): boolean {
 }
 
 /**
+ * Theo yêu cầu: hệ thống AMIS không cập nhật đúng thông tin giao hàng cho các đơn đặt
+ * trước tháng 4/2026, nên các đơn này không được đưa vào hệ thống (số liệu tiến độ giao
+ * hàng sẽ sai). Đơn không có sale_order_date thì không loại trừ theo mốc này.
+ */
+const ORDER_DATE_CUTOFF = new Date("2026-04-01T00:00:00.000Z");
+
+function isBeforeOrderDateCutoff(saleOrderDate: string | null): boolean {
+  if (!saleOrderDate) return false;
+  const d = new Date(saleOrderDate);
+  return !Number.isNaN(d.getTime()) && d < ORDER_DATE_CUTOFF;
+}
+
+/**
  * AMIS dùng "status" (Chưa/Đang thực hiện) và "delivery_status" (Chưa/Đang/Đã giao hàng) —
  * ưu tiên delivery_status vì gần với khái niệm "quá hạn giao hàng" của hệ thống mình hơn.
  */
@@ -133,9 +146,9 @@ async function syncOrderItems(orderId: string, mappings: AmisProductMapping[] | 
 
 /**
  * Đồng bộ 1 đơn hàng nếu người phụ trách nằm trong danh sách nhân viên đang quản lý
- * (managedCodes) và không ở trạng thái ghi doanh số Bản nháp/Huỷ ghi — bỏ qua đơn của
- * nhân viên/phòng ban khác, và xoá khỏi hệ thống nếu đơn đã đồng bộ trước đó nhưng nay
- * chuyển sang Bản nháp/Huỷ ghi bên AMIS.
+ * (managedCodes), không ở trạng thái ghi doanh số Bản nháp/Huỷ ghi, và ngày đặt hàng
+ * không trước mốc ORDER_DATE_CUTOFF — bỏ qua đơn của nhân viên/phòng ban khác, và xoá
+ * khỏi hệ thống nếu đơn đã đồng bộ trước đó nhưng nay không còn thoả các điều kiện trên.
  * Trả về true nếu đơn được đồng bộ (nằm trong phạm vi quản lý), false nếu bỏ qua.
  */
 async function upsertOrderFromAmis(o: AmisSaleOrder, managedCodes: Set<string>): Promise<boolean> {
@@ -144,7 +157,7 @@ async function upsertOrderFromAmis(o: AmisSaleOrder, managedCodes: Set<string>):
     select: { id: true },
   });
 
-  if (isExcludedRevenueStatus(o.revenue_status)) {
+  if (isExcludedRevenueStatus(o.revenue_status) || isBeforeOrderDateCutoff(o.sale_order_date)) {
     if (existing) await prisma.order.delete({ where: { id: existing.id } }); // cascade xoá luôn OrderItem
     return false;
   }
@@ -192,8 +205,9 @@ async function upsertOrderFromAmis(o: AmisSaleOrder, managedCodes: Set<string>):
 /**
  * Đồng bộ đơn hàng từ MISA AMIS CRM Open API — CHỈ lấy đơn của nhân viên đang được quản
  * lý trong hệ thống (active, đã gán mã AMIS tại trang Nhân viên), bỏ qua đơn của phòng
- * ban/nhân viên khác trong cùng công ty. Chỉ lấy đơn có modified_date mới hơn lần đồng bộ
- * thành công gần nhất (incremental) — lần đầu chạy giới hạn 180 ngày gần nhất.
+ * ban/nhân viên khác trong cùng công ty, và bỏ qua đơn đặt trước 01/04/2026 (xem
+ * ORDER_DATE_CUTOFF). Chỉ lấy đơn có modified_date mới hơn lần đồng bộ thành công gần
+ * nhất (incremental) — lần đầu chạy giới hạn 180 ngày gần nhất.
  */
 export async function runAmisOrderSync(triggeredBy: string): Promise<SyncOutcome> {
   const syncLog = await prisma.syncLog.create({

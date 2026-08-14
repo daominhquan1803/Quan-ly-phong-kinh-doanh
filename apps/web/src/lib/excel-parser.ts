@@ -26,23 +26,35 @@ export interface ParseResult {
   errors: { rowNumber: number; message: string }[];
 }
 
-export function readFirstSheet(buffer: Buffer) {
-  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
-  const sheetName = workbook.SheetNames[0];
-  const sheet = workbook.Sheets[sheetName];
-  const rows: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: "" });
-  return { sheetName, rows };
+/** Tên tất cả các sheet trong file — dùng khi Excel có nhiều sheet (vd file pivot table). */
+export function listSheetNames(buffer: Buffer): string[] {
+  const workbook = XLSX.read(buffer, { type: "buffer", bookSheets: true });
+  return workbook.SheetNames;
 }
 
-export function previewExcel(buffer: Buffer, sampleSize = 5): ExcelPreview {
-  const { sheetName, rows } = readFirstSheet(buffer);
+/** Đọc 1 sheet cụ thể — mặc định sheet đầu tiên nếu không chỉ định (giữ tương thích cũ). */
+export function readSheet(buffer: Buffer, sheetName?: string) {
+  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
+  const targetName = sheetName && workbook.SheetNames.includes(sheetName) ? sheetName : workbook.SheetNames[0];
+  const sheet = workbook.Sheets[targetName];
+  const rows: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: "" });
+  return { sheetName: targetName, rows };
+}
+
+/** @deprecated dùng readSheet(buffer, sheetName) — giữ lại cho code cũ chưa cập nhật. */
+export function readFirstSheet(buffer: Buffer) {
+  return readSheet(buffer);
+}
+
+export function previewExcel(buffer: Buffer, sheetName?: string, sampleSize = 5): ExcelPreview {
+  const { sheetName: resolvedName, rows } = readSheet(buffer, sheetName);
   const [headerRow, ...dataRows] = rows;
   const headers = (headerRow ?? []).map((h) => String(h ?? "").trim()).filter(Boolean);
   const sampleRows = dataRows
     .slice(0, sampleSize)
     .map((r) => headers.map((_, i) => String(r[i] ?? "")));
 
-  return { sheetName, headers, sampleRows, totalRows: dataRows.length };
+  return { sheetName: resolvedName, headers, sampleRows, totalRows: dataRows.length };
 }
 
 function parseExcelDate(value: unknown): Date | null {

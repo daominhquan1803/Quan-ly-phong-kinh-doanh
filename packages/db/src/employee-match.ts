@@ -8,6 +8,9 @@ export function normalizeVN(input: string): string {
     .replace(/đ/gi, "d")
     .toLowerCase()
     .trim()
+    // Bỏ dấu chấm/phẩy cuối tên (vd file Excel gõ nhầm "Ngô Thanh Tùng." có dấu chấm) để
+    // không làm khớp tên bị trượt vì khác biệt không đáng kể.
+    .replace(/[.,]/g, "")
     .replace(/\s+/g, " ");
 }
 

@@ -73,4 +73,14 @@ describe("suggestMapping", () => {
     expect(mapping.productName).toBeUndefined();
     expect(mapping.targetQuantity).toBeUndefined();
   });
+
+  it("maps a bare 'Sản phẩm' column (no mã/tên prefix) to productName, not productCode", () => {
+    // Bug thật phát hiện khi test với file kế hoạch 2026 thật: cột "Sản phẩm" của file đó
+    // chứa tên danh mục (vd "Túi PE") chứ không phải mã hàng AMIS — nếu gán nhầm sang
+    // productCode, tính năng "thực hiện" sẽ luôn ra 0đ (không có OrderItem nào khớp mã đó)
+    // thay vì fallback đúng sang tổng doanh số nhân viên.
+    const mapping = suggestMapping(["Tên nhân viên bán hàng", "Sản phẩm", "Nhóm hàng"], SALES_PLAN_FIELDS);
+    expect(mapping.productName).toBe("Sản phẩm");
+    expect(mapping.productCode).toBeUndefined();
+  });
 });

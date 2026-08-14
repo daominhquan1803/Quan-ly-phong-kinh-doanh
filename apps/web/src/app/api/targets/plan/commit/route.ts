@@ -15,6 +15,8 @@ export async function POST(req: NextRequest) {
     const mappingRaw = formData.get("mapping");
     const year = Number(formData.get("year"));
     const month = Number(formData.get("month"));
+    const sheetNameRaw = formData.get("sheetName");
+    const sheetName = typeof sheetNameRaw === "string" && sheetNameRaw ? sheetNameRaw : undefined;
 
     if (!(file instanceof File) || typeof mappingRaw !== "string") {
       return NextResponse.json({ error: "Thiếu file hoặc mapping cột" }, { status: 400 });
@@ -24,15 +26,18 @@ export async function POST(req: NextRequest) {
     }
 
     const mapping: Partial<Record<SalesPlanFieldKey, string>> = JSON.parse(mappingRaw);
-    if (!mapping.employeeName || !mapping.targetRevenue) {
-      return NextResponse.json(
-        { error: "Cần map đủ 2 cột bắt buộc: Nhân viên kinh doanh, Doanh số mục tiêu" },
-        { status: 400 }
-      );
+    if (!mapping.employeeName) {
+      return NextResponse.json({ error: "Cần map cột bắt buộc: Nhân viên kinh doanh" }, { status: 400 });
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const { rows, errors } = parseSalesPlanWithMapping(buffer, mapping);
+    const { rows, errors, wideMode } = parseSalesPlanWithMapping(buffer, mapping, year, month, sheetName);
+
+    // File "narrow" (1 cột doanh số duy nhất) bắt buộc phải map cột đó — file "wide" (pivot,
+    // mỗi tháng 1 cột) thì không cần vì doanh số đã được đọc trực tiếp theo từng cột tháng.
+    if (!wideMode && !mapping.targetRevenue) {
+      return NextResponse.json({ error: "Cần map cột bắt buộc: Doanh số mục tiêu" }, { status: 400 });
+    }
 
     const unmatchedNames = new Set<string>();
     const linesData: {
@@ -50,8 +55,8 @@ export async function POST(req: NextRequest) {
       const employeeId = await resolveEmployeeIdByName(row.employeeName);
       if (!employeeId) unmatchedNames.add(row.employeeName);
       linesData.push({
-        year,
-        month,
+        year: row.year,
+        month: row.month,
         employeeNameRaw: row.employeeName,
         employeeId,
         productCode: row.productCode,
@@ -62,9 +67,14 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Upload mới cho 1 tháng sẽ thay thế hoàn toàn kế hoạch cũ của tháng đó.
+    // Upload mới sẽ thay thế hoàn toàn kế hoạch cũ của (các) tháng có mặt trong file — ở chế
+    // độ wide, 1 file có thể chứa nhiều tháng (vd cả 12 tháng trong năm) nên xoá theo đúng
+    // tập tháng thực tế đã đọc được thay vì chỉ tháng chọn trên UI.
+    const distinctMonths = Array.from(new Set(linesData.map((l) => l.month)));
+    const monthsToClear = distinctMonths.length > 0 ? distinctMonths : [month];
+
     const result = await prisma.$transaction(async (tx) => {
-      await tx.salesPlanLine.deleteMany({ where: { year, month } });
+      await tx.salesPlanLine.deleteMany({ where: { year, month: { in: monthsToClear } } });
 
       const batch = await tx.salesPlanImportBatch.create({
         data: {
@@ -95,6 +105,9 @@ export async function POST(req: NextRequest) {
       errorCount: errors.length,
       errors,
       unmatchedEmployeeNames: Array.from(unmatchedNames),
+      wideMode,
+      year,
+      monthsImported: monthsToClear.sort((a, b) => a - b),
     });
   } catch (err) {
     if (err instanceof UnauthorizedError) return NextResponse.json({ error: err.message }, { status: 401 });

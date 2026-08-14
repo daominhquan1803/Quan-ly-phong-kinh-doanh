@@ -4,12 +4,20 @@ import { useState } from "react";
 import { SALES_PLAN_FIELDS, SalesPlanFieldKey } from "@/lib/sales-plan-fields";
 import { UploadCloud, CheckCircle2 } from "lucide-react";
 
+interface MonthColumn {
+  header: string;
+  month: number;
+  year: number;
+}
+
 interface PreviewResponse {
   sheetName: string;
+  sheetNames: string[];
   headers: string[];
   sampleRows: string[][];
   totalRows: number;
   suggestedMapping: Partial<Record<SalesPlanFieldKey, string>>;
+  monthColumnsDetected: MonthColumn[];
 }
 
 interface CommitResponse {
@@ -19,6 +27,9 @@ interface CommitResponse {
   errorCount: number;
   errors: { rowNumber: number; message: string }[];
   unmatchedEmployeeNames: string[];
+  wideMode: boolean;
+  year: number;
+  monthsImported: number[];
 }
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
@@ -35,13 +46,16 @@ export function SalesPlanImportWizard({ onDone }: { onDone: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CommitResponse | null>(null);
 
-  async function handleFileSelected(f: File) {
-    setFile(f);
+  const wideMode = (preview?.monthColumnsDetected.length ?? 0) > 0;
+
+  async function fetchPreview(f: File, sheetName?: string) {
     setError(null);
     setLoading(true);
     try {
       const formData = new FormData();
       formData.append("file", f);
+      formData.append("year", String(year));
+      if (sheetName) formData.append("sheetName", sheetName);
       const res = await fetch("/api/targets/plan/preview", { method: "POST", body: formData });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Không đọc được file");
@@ -55,8 +69,18 @@ export function SalesPlanImportWizard({ onDone }: { onDone: () => void }) {
     }
   }
 
-  async function handleCommit() {
+  async function handleFileSelected(f: File) {
+    setFile(f);
+    await fetchPreview(f);
+  }
+
+  async function handleSheetChange(sheetName: string) {
     if (!file) return;
+    await fetchPreview(file, sheetName);
+  }
+
+  async function handleCommit() {
+    if (!file || !preview) return;
     setLoading(true);
     setError(null);
     try {
@@ -65,6 +89,7 @@ export function SalesPlanImportWizard({ onDone }: { onDone: () => void }) {
       formData.append("mapping", JSON.stringify(mapping));
       formData.append("year", String(year));
       formData.append("month", String(month));
+      formData.append("sheetName", preview.sheetName);
 
       const res = await fetch("/api/targets/plan/commit", { method: "POST", body: formData });
       const json = await res.json();
@@ -79,7 +104,9 @@ export function SalesPlanImportWizard({ onDone }: { onDone: () => void }) {
     }
   }
 
-  const requiredMissing = SALES_PLAN_FIELDS.filter((f) => f.required && !mapping[f.key]);
+  const requiredMissing = SALES_PLAN_FIELDS.filter(
+    (f) => f.required && !mapping[f.key] && !(wideMode && f.key === "targetRevenue")
+  );
 
   return (
     <div className="space-y-4">
@@ -87,7 +114,7 @@ export function SalesPlanImportWizard({ onDone }: { onDone: () => void }) {
 
       {step === "upload" && (
         <div className="space-y-3">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="input w-32">
               {MONTHS.map((m) => (
                 <option key={m} value={m}>
@@ -102,7 +129,10 @@ export function SalesPlanImportWizard({ onDone }: { onDone: () => void }) {
                 </option>
               ))}
             </select>
-            <span className="text-xs text-gray-500">Kế hoạch mới sẽ thay thế kế hoạch cũ của tháng này</span>
+            <span className="text-xs text-gray-500">
+              Với file có riêng 1 cột cho mỗi tháng (vd &quot;Thg1.26&quot;), hệ thống tự nhận diện theo Năm chọn ở
+              đây — mục Tháng chỉ dùng khi file chỉ có 1 cột doanh số duy nhất.
+            </span>
           </div>
           <label className="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-gray-200 bg-white py-12 cursor-pointer hover:border-navy-900 transition-colors">
             <UploadCloud className="h-8 w-8 text-navy-900" />
@@ -123,15 +153,42 @@ export function SalesPlanImportWizard({ onDone }: { onDone: () => void }) {
 
       {step === "mapping" && preview && (
         <div className="space-y-4">
-          <div className="flex items-center gap-2 rounded-md bg-success-600/10 text-success-600 text-sm px-4 py-2.5">
-            <CheckCircle2 className="h-4 w-4" />
-            Áp dụng cho Tháng {month}/{year} — kiểm tra mapping gợi ý bên dưới trước khi tiếp tục.
-          </div>
+          {preview.sheetNames.length > 1 && (
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-gray-700">Sheet dữ liệu:</label>
+              <select
+                value={preview.sheetName}
+                onChange={(e) => handleSheetChange(e.target.value)}
+                disabled={loading}
+                className="input w-64"
+              >
+                {preview.sheetNames.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {wideMode ? (
+            <div className="flex items-center gap-2 rounded-md bg-success-600/10 text-success-600 text-sm px-4 py-2.5">
+              <CheckCircle2 className="h-4 w-4" />
+              Phát hiện {preview.monthColumnsDetected.length} cột theo tháng cho năm {year} (
+              {preview.monthColumnsDetected.map((mc) => `Tháng ${mc.month}`).join(", ")}) — hệ thống sẽ tự tách kế
+              hoạch theo từng tháng, không cần map cột &quot;Doanh số mục tiêu&quot;.
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 rounded-md bg-success-600/10 text-success-600 text-sm px-4 py-2.5">
+              <CheckCircle2 className="h-4 w-4" />
+              Áp dụng cho Tháng {month}/{year} — kiểm tra mapping gợi ý bên dưới trước khi tiếp tục.
+            </div>
+          )}
 
           <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-3">
             <h3 className="font-medium text-gray-900 text-sm">Ánh xạ cột dữ liệu</h3>
             <div className="grid grid-cols-2 gap-3">
-              {SALES_PLAN_FIELDS.map((field) => (
+              {SALES_PLAN_FIELDS.filter((f) => !(wideMode && f.key === "targetRevenue")).map((field) => (
                 <div key={field.key}>
                   <label className="block text-xs text-gray-700 mb-1">
                     {field.label} {field.required && <span className="text-brandRed-600">*</span>}
@@ -155,7 +212,8 @@ export function SalesPlanImportWizard({ onDone }: { onDone: () => void }) {
 
           <div className="rounded-lg border border-gray-200 bg-white p-4 overflow-x-auto">
             <p className="text-xs text-gray-500 mb-2">
-              Xem trước {preview.sampleRows.length} dòng đầu (tổng {preview.totalRows} dòng)
+              Xem trước {preview.sampleRows.length} dòng đầu (tổng {preview.totalRows} dòng, sheet &quot;
+              {preview.sheetName}&quot;)
             </p>
             <table className="min-w-full text-xs">
               <thead>
@@ -218,6 +276,11 @@ export function SalesPlanImportWizard({ onDone }: { onDone: () => void }) {
               <p className="text-2xl font-bold text-brandRed-600">{result.unmatchedEmployeeNames.length}</p>
             </div>
           </div>
+          {result.wideMode && result.monthsImported.length > 0 && (
+            <p className="text-sm text-gray-700">
+              Đã nhập kế hoạch cho các tháng {result.monthsImported.map((m) => `T${m}`).join(", ")}/{result.year}.
+            </p>
+          )}
           {result.unmatchedEmployeeNames.length > 0 && (
             <p className="text-sm text-gray-700">
               Tên chưa khớp: {result.unmatchedEmployeeNames.join(", ")} — vào trang Nhân viên thêm alias.
