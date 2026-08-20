@@ -1,11 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { cn, formatCurrencyVND, formatDateVN } from "@/lib/utils";
+import { normalizeVN } from "@/lib/text-normalize";
 import { EmployeeFilterSelect } from "@/components/shared/EmployeeFilterSelect";
-import { AlertTriangle, Clock, TrendingUp, PackageCheck } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  Clock,
+  PackageCheck,
+  Search,
+  TrendingUp,
+  X,
+} from "lucide-react";
 
 interface OrderRow {
   id: string;
@@ -41,9 +52,18 @@ interface SummaryResponse {
   upcomingOrdersTruncated: boolean;
 }
 
+type SortField = "expectedDeliveryDate" | "daysUntilDeadline" | "totalValue";
+
 export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
   const [tab, setTab] = useState<"overdue" | "upcoming">("overdue");
   const [employeeId, setEmployeeId] = useState("");
+  const [filterOrderCode, setFilterOrderCode] = useState("");
+  const [filterCustomer, setFilterCustomer] = useState("");
+  const [filterEmployeeName, setFilterEmployeeName] = useState("");
+  const [sort, setSort] = useState<{ field: SortField | null; dir: "asc" | "desc" }>({
+    field: null,
+    dir: "asc",
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ["shipping-status-summary", employeeId],
@@ -57,8 +77,59 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
   });
 
   const rows = tab === "overdue" ? data?.overdueOrders : data?.upcomingOrders;
-  const truncated = tab === "overdue" ? data?.overdueOrdersTruncated : data?.upcomingOrdersTruncated;
   const totalCount = tab === "overdue" ? data?.overdueCount : data?.upcomingCount;
+
+  const hasActiveFilter = !!(filterOrderCode || filterCustomer || filterEmployeeName);
+
+  const visibleRows = useMemo(() => {
+    let list = rows ?? [];
+    if (filterOrderCode.trim()) {
+      const q = normalizeVN(filterOrderCode);
+      list = list.filter((o) => normalizeVN(o.orderCode).includes(q));
+    }
+    if (filterCustomer.trim()) {
+      const q = normalizeVN(filterCustomer);
+      list = list.filter((o) => normalizeVN(o.customerName).includes(q));
+    }
+    if (filterEmployeeName.trim()) {
+      const q = normalizeVN(filterEmployeeName);
+      list = list.filter((o) => normalizeVN(o.salesEmployeeName ?? "").includes(q));
+    }
+    if (sort.field) {
+      const field = sort.field;
+      const dir = sort.dir === "asc" ? 1 : -1;
+      list = [...list].sort((a, b) => {
+        const av =
+          field === "expectedDeliveryDate"
+            ? a.expectedDeliveryDate
+              ? new Date(a.expectedDeliveryDate).getTime()
+              : -Infinity
+            : field === "daysUntilDeadline"
+            ? Math.abs(a.daysUntilDeadline ?? 0)
+            : Number(a.totalValue);
+        const bv =
+          field === "expectedDeliveryDate"
+            ? b.expectedDeliveryDate
+              ? new Date(b.expectedDeliveryDate).getTime()
+              : -Infinity
+            : field === "daysUntilDeadline"
+            ? Math.abs(b.daysUntilDeadline ?? 0)
+            : Number(b.totalValue);
+        return (av - bv) * dir;
+      });
+    }
+    return list;
+  }, [rows, filterOrderCode, filterCustomer, filterEmployeeName, sort]);
+
+  function handleSort(field: SortField) {
+    setSort((prev) => (prev.field === field ? { field, dir: prev.dir === "asc" ? "desc" : "asc" } : { field, dir: "asc" }));
+  }
+
+  function clearFilters() {
+    setFilterOrderCode("");
+    setFilterCustomer("");
+    setFilterEmployeeName("");
+  }
 
   return (
     <div className="space-y-6">
@@ -152,27 +223,56 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
 
         <div className="rounded-lg border border-gray-200 bg-white overflow-x-auto max-h-[600px] overflow-y-auto">
           <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 text-gray-500 sticky top-0">
+            <thead className="bg-gray-50 text-gray-500 sticky top-0 z-10">
               <tr>
                 <th className="text-left font-medium px-4 py-2.5">Mã đơn</th>
                 <th className="text-left font-medium px-4 py-2.5">Khách hàng</th>
                 <th className="text-left font-medium px-4 py-2.5">NVKD</th>
-                <th className="text-left font-medium px-4 py-2.5">Hạn giao</th>
-                <th className="text-right font-medium px-4 py-2.5">
+                <SortableTh field="expectedDeliveryDate" sort={sort} onSort={handleSort}>
+                  Hạn giao
+                </SortableTh>
+                <SortableTh field="daysUntilDeadline" sort={sort} onSort={handleSort} align="right">
                   {tab === "overdue" ? "Số ngày quá hạn" : "Còn lại"}
+                </SortableTh>
+                <SortableTh field="totalValue" sort={sort} onSort={handleSort} align="right">
+                  Giá trị
+                </SortableTh>
+              </tr>
+              <tr className="bg-white border-t border-gray-100">
+                <th className="px-4 py-2 font-normal">
+                  <FilterInput value={filterOrderCode} onChange={setFilterOrderCode} placeholder="Tìm mã đơn..." />
                 </th>
-                <th className="text-right font-medium px-4 py-2.5">Giá trị</th>
+                <th className="px-4 py-2 font-normal">
+                  <FilterInput value={filterCustomer} onChange={setFilterCustomer} placeholder="Tìm khách hàng..." />
+                </th>
+                <th className="px-4 py-2 font-normal">
+                  <FilterInput value={filterEmployeeName} onChange={setFilterEmployeeName} placeholder="Tìm NVKD..." />
+                </th>
+                <th colSpan={3} className="px-4 py-2 text-right">
+                  {hasActiveFilter && (
+                    <button
+                      onClick={clearFilters}
+                      className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-brandRed-600"
+                    >
+                      <X className="h-3 w-3" /> Xoá lọc
+                    </button>
+                  )}
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {!isLoading && (rows?.length ?? 0) === 0 && (
+              {!isLoading && visibleRows.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-4 py-6 text-center text-gray-500">
-                    {tab === "overdue" ? "Không có đơn quá hạn 🎉" : "Không có đơn sắp đến hạn"}
+                    {hasActiveFilter
+                      ? "Không tìm thấy đơn phù hợp"
+                      : tab === "overdue"
+                      ? "Không có đơn quá hạn 🎉"
+                      : "Không có đơn sắp đến hạn"}
                   </td>
                 </tr>
               )}
-              {rows?.map((o) => (
+              {visibleRows.map((o) => (
                 <tr key={o.id} className="hover:bg-gray-50">
                   <td className="px-4 py-2.5 font-medium text-navy-900">
                     <Link href={`/orders/${o.id}`}>{o.orderCode}</Link>
@@ -200,13 +300,65 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
             </tbody>
           </table>
         </div>
-        {truncated && (
+        {hasActiveFilter && !isLoading && (
           <p className="text-xs text-gray-500 mt-2">
-            Đang hiển thị {rows?.length} / {totalCount} đơn (ưu tiên các đơn quá hạn lâu nhất) — xem bảng theo
-            nhân viên phía trên để biết số lượng chính xác của từng người.
+            Đang hiển thị {visibleRows.length} / {totalCount ?? 0} đơn theo bộ lọc hiện tại.
           </p>
         )}
       </div>
     </div>
+  );
+}
+
+function FilterInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <div className="relative">
+      <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full pl-7 pr-2 py-1.5 text-xs font-normal rounded-md border border-gray-200 focus:outline-none focus:ring-2 focus:ring-navy-900"
+      />
+    </div>
+  );
+}
+
+function SortableTh({
+  field,
+  sort,
+  onSort,
+  align = "left",
+  children,
+}: {
+  field: "expectedDeliveryDate" | "daysUntilDeadline" | "totalValue";
+  sort: { field: string | null; dir: "asc" | "desc" };
+  onSort: (field: "expectedDeliveryDate" | "daysUntilDeadline" | "totalValue") => void;
+  align?: "left" | "right";
+  children: React.ReactNode;
+}) {
+  const isActive = sort.field === field;
+  const Icon = !isActive ? ArrowUpDown : sort.dir === "asc" ? ArrowUp : ArrowDown;
+  return (
+    <th className={cn("font-medium px-4 py-2.5 select-none", align === "right" ? "text-right" : "text-left")}>
+      <button
+        onClick={() => onSort(field)}
+        className={cn(
+          "inline-flex items-center gap-1 hover:text-navy-900",
+          align === "right" && "flex-row-reverse"
+        )}
+      >
+        {children}
+        <Icon className={cn("h-3.5 w-3.5", isActive ? "text-navy-900" : "text-gray-300")} />
+      </button>
+    </th>
   );
 }

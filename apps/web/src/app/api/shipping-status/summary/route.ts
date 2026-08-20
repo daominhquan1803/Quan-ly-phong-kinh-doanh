@@ -7,7 +7,10 @@ export const dynamic = "force-dynamic";
 
 const UPCOMING_WINDOW_DAYS = 3;
 const RATE_WINDOW_DAYS = 90; // tính tỷ lệ giao đúng hạn dựa trên đơn có hạn giao trong 90 ngày qua
-const MAX_ROWS = 200; // giới hạn số dòng trả về cho bảng — tổng số liệu (KPI) vẫn tính trên toàn bộ
+// Trả nguyên danh sách (không cắt bớt) để bảng có tìm kiếm/sắp xếp ở client tìm được đúng
+// mọi đơn — quy mô thực tế (vài trăm đơn quá hạn) vẫn nhẹ để render, chỉ chặn ở mức rất cao
+// để tránh trường hợp bất thường dữ liệu phình to đột biến làm treo trang.
+const MAX_ROWS = 2000;
 
 export async function GET(req: NextRequest) {
   try {
