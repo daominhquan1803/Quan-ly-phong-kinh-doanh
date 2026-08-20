@@ -82,53 +82,99 @@ export function SalesPlanDetailSection({ isAdmin }: { isAdmin: boolean }) {
         </div>
       )}
 
-      <div className="rounded-lg border border-gray-200 bg-white overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-gray-500">
-            <tr>
-              <th className="text-left font-medium px-4 py-2.5">Nhân viên</th>
-              <th className="text-left font-medium px-4 py-2.5">Mã hàng</th>
-              <th className="text-left font-medium px-4 py-2.5">Nhóm hàng</th>
-              <th className="text-right font-medium px-4 py-2.5">Chỉ tiêu</th>
-              <th className="text-right font-medium px-4 py-2.5">Thực hiện</th>
-              <th className="text-right font-medium px-4 py-2.5">%</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {isLoading && (
-              <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-gray-500">
-                  Đang tải...
-                </td>
-              </tr>
-            )}
-            {!isLoading && (data?.lines.length ?? 0) === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-gray-500">
-                  Chưa có kế hoạch chi tiết cho tháng này.
-                </td>
-              </tr>
-            )}
-            {data?.lines.map((l) => (
-              <tr key={l.id} className="hover:bg-gray-50">
-                <td className="px-4 py-2.5 font-medium text-gray-900">{l.employeeName}</td>
-                <td className="px-4 py-2.5">{l.productCode ?? "—"}</td>
-                <td className="px-4 py-2.5">
-                  {l.productGroup ?? "—"}
-                  {l.actualBasis === "EMPLOYEE_TOTAL" && !l.productCode && (
-                    <span className="block text-[11px] text-gray-400">*thực hiện = tổng NV (chưa tách theo nhóm)</span>
-                  )}
-                </td>
-                <td className="px-4 py-2.5 text-right">{formatCurrencyVND(l.targetRevenue)}</td>
-                <td className="px-4 py-2.5 text-right">{formatCurrencyVND(l.actualRevenue)}</td>
-                <td className="px-4 py-2.5 text-right font-medium">
-                  {l.completionPct != null ? `${l.completionPct}%` : "—"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {isLoading && (
+        <div className="rounded-lg border border-gray-200 bg-white px-4 py-6 text-center text-gray-500 text-sm">
+          Đang tải...
+        </div>
+      )}
+      {!isLoading && (data?.lines.length ?? 0) === 0 && (
+        <div className="rounded-lg border border-gray-200 bg-white px-4 py-6 text-center text-gray-500 text-sm">
+          Chưa có kế hoạch chi tiết cho tháng này.
+        </div>
+      )}
+      {!isLoading &&
+        data &&
+        groupLines(data.lines).map((group) => (
+          <div key={group.name} className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+            <div className="flex items-center justify-between flex-wrap gap-2 bg-gray-50 px-4 py-2.5 border-b border-gray-200">
+              <h3 className="font-medium text-gray-900">Nhóm hàng {group.name}</h3>
+              <div className="flex items-center gap-4 text-xs text-gray-600">
+                <span>
+                  Chỉ tiêu: <span className="font-medium text-gray-900">{formatCurrencyVND(group.targetRevenue)}</span>
+                </span>
+                <span>
+                  Thực hiện: <span className="font-medium text-gray-900">{formatCurrencyVND(group.actualRevenue)}</span>
+                </span>
+                <span className="font-semibold text-navy-900">
+                  {group.completionPct != null ? `${group.completionPct}%` : "—"}
+                </span>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="text-gray-500">
+                  <tr>
+                    <th className="text-left font-medium px-4 py-2">Nhân viên</th>
+                    <th className="text-left font-medium px-4 py-2">Mã hàng</th>
+                    <th className="text-right font-medium px-4 py-2">Chỉ tiêu</th>
+                    <th className="text-right font-medium px-4 py-2">Thực hiện</th>
+                    <th className="text-right font-medium px-4 py-2">%</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {group.lines.map((l) => (
+                    <tr key={l.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-2.5 font-medium text-gray-900">{l.employeeName}</td>
+                      <td className="px-4 py-2.5">
+                        {l.productCode ?? "—"}
+                        {l.actualBasis === "EMPLOYEE_TOTAL" && !l.productCode && (
+                          <span className="block text-[11px] text-gray-400">
+                            *thực hiện = tổng NV (chưa tách theo nhóm)
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">{formatCurrencyVND(l.targetRevenue)}</td>
+                      <td className="px-4 py-2.5 text-right">{formatCurrencyVND(l.actualRevenue)}</td>
+                      <td className="px-4 py-2.5 text-right font-medium">
+                        {l.completionPct != null ? `${l.completionPct}%` : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
     </div>
   );
+}
+
+/**
+ * Gộp kế hoạch chi tiết thành 2 nhóm cố định "Sản xuất" và "Thương mại" theo đúng cách
+ * công ty phân loại — dòng nào có Nhóm hàng khác (vd "Dịch vụ", hoặc thiếu nhóm) được gom
+ * vào "Khác" ở cuối, không bị ẩn mất dữ liệu dù không khớp 1 trong 2 nhóm chính.
+ */
+function groupLines(lines: PlanLine[]) {
+  const order = ["Sản xuất", "Thương mại"];
+  const buckets = new Map<string, PlanLine[]>();
+  for (const l of lines) {
+    const key = order.includes(l.productGroup ?? "") ? (l.productGroup as string) : "Khác";
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key)!.push(l);
+  }
+
+  const names = [...order.filter((n) => buckets.has(n)), ...(buckets.has("Khác") ? ["Khác"] : [])];
+
+  return names.map((name) => {
+    const groupLines = buckets.get(name)!;
+    const targetRevenue = groupLines.reduce((s, l) => s + l.targetRevenue, 0);
+    const actualRevenue = groupLines.reduce((s, l) => s + l.actualRevenue, 0);
+    return {
+      name,
+      lines: groupLines,
+      targetRevenue,
+      actualRevenue,
+      completionPct: targetRevenue > 0 ? Math.round((actualRevenue / targetRevenue) * 100) : null,
+    };
+  });
 }
