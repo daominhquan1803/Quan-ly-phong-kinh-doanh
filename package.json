@@ -7,7 +7,7 @@
     "packages/*"
   ],
   "scripts": {
-    "postinstall": "npm run build --workspace=packages/db",
+    "postinstall": "node -e \"if(require('fs').existsSync('packages/db/src')){require('child_process').execSync('npm run build --workspace=packages/db',{stdio:'inherit'})}\"",
     "dev": "npm run dev --workspace=apps/web",
     "dev:worker": "npm run dev --workspace=apps/worker",
     "build": "npm run build --workspace=packages/db && npm run build --workspace=apps/web",
