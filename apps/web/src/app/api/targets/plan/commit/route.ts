@@ -95,6 +95,25 @@ export async function POST(req: NextRequest) {
         });
       }
 
+      // Đồng bộ luôn chỉ tiêu tổng theo Nhân viên x Tháng (SalesTarget, hiển thị ở bảng "Kế
+      // hoạch kinh doanh" tổng quan) = tổng chỉ tiêu các dòng chi tiết theo sản phẩm vừa nhập
+      // — lấy thẳng từ file, không cần nhập tay lại số đã có sẵn trong Excel.
+      const targetSums = new Map<string, { employeeId: string; year: number; month: number; total: number }>();
+      for (const l of linesData) {
+        if (!l.employeeId) continue;
+        const key = `${l.employeeId}::${l.year}::${l.month}`;
+        const cur = targetSums.get(key) ?? { employeeId: l.employeeId, year: l.year, month: l.month, total: 0 };
+        cur.total += l.targetRevenue;
+        targetSums.set(key, cur);
+      }
+      for (const { employeeId, year: y, month: m, total } of targetSums.values()) {
+        await tx.salesTarget.upsert({
+          where: { employeeId_year_month: { employeeId, year: y, month: m } },
+          update: { targetRevenue: total },
+          create: { employeeId, year: y, month: m, targetRevenue: total },
+        });
+      }
+
       return batch;
     });
 

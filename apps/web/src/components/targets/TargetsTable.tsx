@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { formatCurrencyVND } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 
@@ -15,13 +15,10 @@ interface TargetRow {
   completionPct: number | null;
 }
 
-export function TargetsTable({ isAdmin }: { isAdmin: boolean }) {
+export function TargetsTable() {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
-  const [editing, setEditing] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState<string | null>(null);
-  const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
     queryKey: ["targets", year, month],
@@ -31,29 +28,6 @@ export function TargetsTable({ isAdmin }: { isAdmin: boolean }) {
       return res.json() as Promise<{ rows: TargetRow[] }>;
     },
   });
-
-  async function handleSave(employeeId: string) {
-    const raw = editing[employeeId];
-    const targetRevenue = Number(raw);
-    if (!Number.isFinite(targetRevenue) || targetRevenue < 0) return;
-    setSaving(employeeId);
-    try {
-      const res = await fetch("/api/targets", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ employeeId, year, month, targetRevenue }),
-      });
-      if (!res.ok) throw new Error("Lưu thất bại");
-      await queryClient.invalidateQueries({ queryKey: ["targets", year, month] });
-      setEditing((prev) => {
-        const next = { ...prev };
-        delete next[employeeId];
-        return next;
-      });
-    } finally {
-      setSaving(null);
-    }
-  }
 
   return (
     <div className="space-y-4">
@@ -103,28 +77,7 @@ export function TargetsTable({ isAdmin }: { isAdmin: boolean }) {
             {data?.rows.map((r) => (
               <tr key={r.employeeId} className="hover:bg-gray-50">
                 <td className="px-4 py-2.5 font-medium text-gray-900">{r.employeeName}</td>
-                <td className="px-4 py-2.5 text-right">
-                  {isAdmin ? (
-                    <div className="flex items-center justify-end gap-2">
-                      <input
-                        type="number"
-                        placeholder={String(r.targetRevenue)}
-                        value={editing[r.employeeId] ?? ""}
-                        onChange={(e) => setEditing((prev) => ({ ...prev, [r.employeeId]: e.target.value }))}
-                        className="w-32 text-right text-sm rounded-md border border-gray-200 py-1 px-2"
-                      />
-                      <button
-                        onClick={() => handleSave(r.employeeId)}
-                        disabled={saving === r.employeeId || !editing[r.employeeId]}
-                        className="text-xs font-medium text-navy-900 hover:underline disabled:opacity-40"
-                      >
-                        Lưu
-                      </button>
-                    </div>
-                  ) : (
-                    formatCurrencyVND(r.targetRevenue)
-                  )}
-                </td>
+                <td className="px-4 py-2.5 text-right">{formatCurrencyVND(r.targetRevenue)}</td>
                 <td className="px-4 py-2.5 text-right">{formatCurrencyVND(r.actualRevenue)}</td>
                 <td
                   className={cn(
