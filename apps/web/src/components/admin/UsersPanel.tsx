@@ -133,7 +133,9 @@ export function UsersPanel() {
     await queryClient.invalidateQueries({ queryKey: ["admin-aliases"] });
   }
 
-  const salesUsers = usersData?.users.filter((u) => u.role === "SALES") ?? [];
+  // Danh sách cho phần alias — không lọc theo vai trò vì chủ tài khoản có thể vừa là ADMIN
+  // vừa trực tiếp bán hàng (vd chủ doanh nghiệp), vẫn cần ánh xạ tên như 1 nhân viên kinh doanh.
+  const salesUsers = usersData?.users.filter((u) => u.active) ?? [];
 
   return (
     <div className="space-y-8">
@@ -214,27 +216,23 @@ export function UsersPanel() {
                     </button>
                   </td>
                   <td className="px-4 py-2.5">
-                    {u.role === "SALES" ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          placeholder="vd: DANGTAN"
-                          defaultValue={u.amisEmployeeCode ?? ""}
-                          onChange={(e) => setAmisCodeEdits((prev) => ({ ...prev, [u.id]: e.target.value }))}
-                          className="w-32 text-sm rounded-md border border-gray-200 py-1 px-2"
-                        />
-                        {amisCodeEdits[u.id] !== undefined && (
-                          <button
-                            onClick={() => handleSaveAmisCode(u.id)}
-                            disabled={savingAmisCode === u.id}
-                            className="text-xs font-medium text-navy-900 hover:underline disabled:opacity-40"
-                          >
-                            Lưu
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      "—"
-                    )}
+                    <div className="flex items-center gap-2">
+                      <input
+                        placeholder="vd: DANGTAN"
+                        defaultValue={u.amisEmployeeCode ?? ""}
+                        onChange={(e) => setAmisCodeEdits((prev) => ({ ...prev, [u.id]: e.target.value }))}
+                        className="w-32 text-sm rounded-md border border-gray-200 py-1 px-2"
+                      />
+                      {amisCodeEdits[u.id] !== undefined && (
+                        <button
+                          onClick={() => handleSaveAmisCode(u.id)}
+                          disabled={savingAmisCode === u.id}
+                          className="text-xs font-medium text-navy-900 hover:underline disabled:opacity-40"
+                        >
+                          Lưu
+                        </button>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-2.5">
                     {resetPasswordFor === u.id ? (

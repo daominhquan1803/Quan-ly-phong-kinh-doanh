@@ -27,8 +27,11 @@ export async function getEmployeeTargetVsActual(
 ): Promise<EmployeeTargetVsActual[]> {
   const { start, end } = monthRange(year, month);
 
+  // Lấy theo "có gán mã AMIS" (tức đang thực sự bán hàng, được đồng bộ đơn) chứ không lọc
+  // theo vai trò SALES — vì chủ tài khoản có thể vừa là ADMIN vừa trực tiếp bán hàng (vd
+  // chủ doanh nghiệp), vẫn cần theo dõi chỉ tiêu cá nhân như một nhân viên kinh doanh.
   const employees = await prisma.user.findMany({
-    where: { role: "SALES", active: true, ...(onlyEmployeeId ? { id: onlyEmployeeId } : {}) },
+    where: { active: true, amisEmployeeCode: { not: null }, ...(onlyEmployeeId ? { id: onlyEmployeeId } : {}) },
     select: { id: true, name: true },
   });
 

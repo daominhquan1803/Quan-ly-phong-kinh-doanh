@@ -115,28 +115,26 @@ export function SalesPlanDetailSection({ isAdmin }: { isAdmin: boolean }) {
                 <thead className="text-gray-500">
                   <tr>
                     <th className="text-left font-medium px-4 py-2">Nhân viên</th>
-                    <th className="text-left font-medium px-4 py-2">Mã hàng</th>
                     <th className="text-right font-medium px-4 py-2">Chỉ tiêu</th>
                     <th className="text-right font-medium px-4 py-2">Thực hiện</th>
                     <th className="text-right font-medium px-4 py-2">%</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {group.lines.map((l) => (
-                    <tr key={l.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-2.5 font-medium text-gray-900">{l.employeeName}</td>
-                      <td className="px-4 py-2.5">
-                        {l.productCode ?? "—"}
-                        {l.actualBasis === "EMPLOYEE_TOTAL" && !l.productCode && (
-                          <span className="block text-[11px] text-gray-400">
+                  {group.rows.map((r) => (
+                    <tr key={r.key} className="hover:bg-gray-50">
+                      <td className="px-4 py-2.5 font-medium text-gray-900">
+                        {r.employeeName}
+                        {r.hasEmployeeTotalBasis && (
+                          <span className="block text-[11px] text-gray-400 font-normal">
                             *thực hiện = tổng NV (chưa tách theo nhóm)
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-2.5 text-right">{formatCurrencyVND(l.targetRevenue)}</td>
-                      <td className="px-4 py-2.5 text-right">{formatCurrencyVND(l.actualRevenue)}</td>
+                      <td className="px-4 py-2.5 text-right">{formatCurrencyVND(r.targetRevenue)}</td>
+                      <td className="px-4 py-2.5 text-right">{formatCurrencyVND(r.actualRevenue)}</td>
                       <td className="px-4 py-2.5 text-right font-medium">
-                        {l.completionPct != null ? `${l.completionPct}%` : "—"}
+                        {r.completionPct != null ? `${r.completionPct}%` : "—"}
                       </td>
                     </tr>
                   ))}
@@ -149,10 +147,62 @@ export function SalesPlanDetailSection({ isAdmin }: { isAdmin: boolean }) {
   );
 }
 
+interface EmployeeRow {
+  key: string;
+  employeeName: string;
+  targetRevenue: number;
+  actualRevenue: number;
+  completionPct: number | null;
+  hasEmployeeTotalBasis: boolean;
+}
+
+/**
+ * Gộp nhiều dòng kế hoạch (1 dòng/sản phẩm) của cùng 1 nhân viên trong 1 nhóm hàng thành
+ * đúng 1 dòng. Chỉ tiêu cộng dồn bình thường (mỗi dòng là 1 phần chỉ tiêu khác nhau), nhưng
+ * "Thực hiện" ở basis EMPLOYEE_TOTAL là *cùng 1 con số* tổng doanh số nhân viên lặp lại trên
+ * mọi dòng (chưa tách được theo sản phẩm) — nên chỉ được cộng 1 lần duy nhất, không phải
+ * cộng theo số dòng, nếu không sẽ ra số ảo nhân lên theo số sản phẩm.
+ */
+function aggregateByEmployee(lines: PlanLine[]): EmployeeRow[] {
+  const buckets = new Map<
+    string,
+    { employeeName: string; targetRevenue: number; productActual: number; employeeTotalActual: number | null }
+  >();
+  for (const l of lines) {
+    const key = l.employeeName; // tên hiển thị đã là danh tính nhân viên duy nhất trong 1 tháng
+    if (!buckets.has(key)) {
+      buckets.set(key, { employeeName: l.employeeName, targetRevenue: 0, productActual: 0, employeeTotalActual: null });
+    }
+    const b = buckets.get(key)!;
+    b.targetRevenue += l.targetRevenue;
+    if (l.actualBasis === "PRODUCT") {
+      b.productActual += l.actualRevenue; // theo đúng mã hàng — cộng dồn được
+    } else if (l.actualBasis === "EMPLOYEE_TOTAL") {
+      b.employeeTotalActual = l.actualRevenue; // cùng 1 giá trị lặp lại — lấy 1 lần
+    }
+  }
+
+  return Array.from(buckets.entries())
+    .map(([key, b]) => {
+      const actualRevenue = b.productActual + (b.employeeTotalActual ?? 0);
+      return {
+        key,
+        employeeName: b.employeeName,
+        targetRevenue: b.targetRevenue,
+        actualRevenue,
+        completionPct: b.targetRevenue > 0 ? Math.round((actualRevenue / b.targetRevenue) * 100) : null,
+        hasEmployeeTotalBasis: b.employeeTotalActual !== null,
+      };
+    })
+    .sort((a, b) => b.targetRevenue - a.targetRevenue);
+}
+
 /**
  * Gộp kế hoạch chi tiết thành 2 nhóm cố định "Sản xuất" và "Thương mại" theo đúng cách
  * công ty phân loại — dòng nào có Nhóm hàng khác (vd "Dịch vụ", hoặc thiếu nhóm) được gom
- * vào "Khác" ở cuối, không bị ẩn mất dữ liệu dù không khớp 1 trong 2 nhóm chính.
+ * vào "Khác" ở cuối, không bị ẩn mất dữ liệu dù không khớp 1 trong 2 nhóm chính. Mỗi nhóm
+ * sau đó gộp tiếp theo từng nhân viên (xem aggregateByEmployee) — tổng của nhóm luôn khớp
+ * đúng tổng các dòng nhân viên bên dưới nó.
  */
 function groupLines(lines: PlanLine[]) {
   const order = ["Sản xuất", "Thương mại"];
@@ -166,12 +216,12 @@ function groupLines(lines: PlanLine[]) {
   const names = [...order.filter((n) => buckets.has(n)), ...(buckets.has("Khác") ? ["Khác"] : [])];
 
   return names.map((name) => {
-    const groupLines = buckets.get(name)!;
-    const targetRevenue = groupLines.reduce((s, l) => s + l.targetRevenue, 0);
-    const actualRevenue = groupLines.reduce((s, l) => s + l.actualRevenue, 0);
+    const rows = aggregateByEmployee(buckets.get(name)!);
+    const targetRevenue = rows.reduce((s, r) => s + r.targetRevenue, 0);
+    const actualRevenue = rows.reduce((s, r) => s + r.actualRevenue, 0);
     return {
       name,
-      lines: groupLines,
+      rows,
       targetRevenue,
       actualRevenue,
       completionPct: targetRevenue > 0 ? Math.round((actualRevenue / targetRevenue) * 100) : null,

@@ -34,9 +34,10 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
     const { rows, errors } = parseWithMapping(buffer, mapping);
 
-    // Danh sách nhân viên hiện có để tự khớp theo tên (chính xác) hoặc alias đã lưu.
+    // Danh sách nhân viên hiện có để tự khớp theo tên (chính xác) hoặc alias đã lưu — không
+    // lọc theo vai trò vì chủ tài khoản có thể vừa là ADMIN vừa trực tiếp bán hàng.
     const [employees, aliases] = await Promise.all([
-      prisma.user.findMany({ where: { role: "SALES" } }),
+      prisma.user.findMany({ where: { active: true } }),
       prisma.employeeAlias.findMany(),
     ]);
     const employeeByNormName = new Map(employees.map((e) => [normalizeVN(e.name), e.id]));

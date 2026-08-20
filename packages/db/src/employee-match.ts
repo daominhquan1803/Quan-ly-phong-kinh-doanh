@@ -50,9 +50,11 @@ export async function resolveEmployeeIdByName(rawName: string | null): Promise<s
   if (!rawName?.trim()) return null;
   const norm = normalizeVN(rawName);
 
+  // Không lọc theo vai trò — chủ tài khoản có thể vừa là ADMIN vừa trực tiếp bán hàng (vd
+  // chủ doanh nghiệp), tên của họ vẫn cần khớp được khi nhập Excel kế hoạch/đơn hàng.
   const [aliases, employees] = await Promise.all([
     prisma.employeeAlias.findMany(),
-    prisma.user.findMany({ where: { role: "SALES" }, select: { id: true, name: true } }),
+    prisma.user.findMany({ where: { active: true }, select: { id: true, name: true } }),
   ]);
 
   const alias = aliases.find((a) => normalizeVN(a.aliasName) === norm);

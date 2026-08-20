@@ -7,6 +7,7 @@ interface UserRow {
   name: string;
   role: "ADMIN" | "SALES";
   active: boolean;
+  amisEmployeeCode: string | null;
 }
 
 /** Dropdown lọc theo nhân viên — chỉ hiển thị cho ADMIN (SALES đã mặc định chỉ thấy của mình). */
@@ -26,7 +27,9 @@ export function EmployeeFilterSelect({
     },
   });
 
-  const employees = (data?.users ?? []).filter((u) => u.role === "SALES" && u.active);
+  // Lọc theo "có gán mã AMIS" (đang thực sự bán hàng) chứ không theo vai trò — chủ tài
+  // khoản có thể vừa là ADMIN vừa trực tiếp bán hàng, vẫn cần lọc được đơn của họ.
+  const employees = (data?.users ?? []).filter((u) => u.active && u.amisEmployeeCode);
 
   return (
     <select
