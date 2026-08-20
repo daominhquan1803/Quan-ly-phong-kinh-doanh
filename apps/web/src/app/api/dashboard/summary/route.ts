@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma, OrderStatus } from "@hoanggia/db";
 import { requireSession, scopeByOwner, UnauthorizedError } from "@/lib/rbac";
-import { getEmployeeTargetVsActual } from "@/lib/dashboard-metrics";
+import { getEmployeeTargetVsActual, getProductGroupTargetVsActual } from "@/lib/dashboard-metrics";
 import { isOrderOverdue } from "@/lib/order-status";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +21,12 @@ export async function GET() {
 
     const totalTarget = perEmployee.reduce((s, r) => s + r.targetRevenue, 0);
     const totalActual = perEmployee.reduce((s, r) => s + r.actualRevenue, 0);
+
+    const byProductGroup = await getProductGroupTargetVsActual(
+      year,
+      month,
+      session.user.role === "ADMIN" ? undefined : session.user.id
+    );
 
     const openOrders = await prisma.order.findMany({
       where: {
@@ -60,6 +66,7 @@ export async function GET() {
       totalActual,
       completionPct: totalTarget > 0 ? Math.round((totalActual / totalTarget) * 100) : null,
       perEmployee,
+      byProductGroup,
       overdueOrderCount: overdueOrders.length,
       overdueOrders: overdueOrders.map((o) => ({
         id: o.id,

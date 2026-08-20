@@ -174,3 +174,59 @@ export async function getSalesPlanLinesWithActual(
     };
   });
 }
+
+export interface ProductGroupTargetVsActual {
+  group: string; // "Sản xuất" | "Thương mại" | "Khác"
+  targetRevenue: number;
+  actualRevenue: number;
+  completionPct: number | null;
+}
+
+/**
+ * Kế hoạch vs thực hiện gộp theo Nhóm hàng (Sản xuất/Thương mại) — dùng cho biểu đồ ở trang
+ * Tổng quan. Cùng logic gộp với trang Kế hoạch kinh doanh (xem SalesPlanDetailSection.tsx):
+ * với basis PRODUCT_GROUP/EMPLOYEE_TOTAL, thực hiện là *cùng 1 con số* lặp lại trên mọi dòng
+ * sản phẩm của 1 nhân viên trong nhóm đó — nên phải gộp theo nhân viên trước (lấy 1 lần) rồi
+ * mới cộng giữa các nhân viên, nếu không sẽ bị nhân đôi/ba theo số dòng sản phẩm.
+ */
+export async function getProductGroupTargetVsActual(
+  year: number,
+  month: number,
+  onlyEmployeeId?: string
+): Promise<ProductGroupTargetVsActual[]> {
+  const lines = await getSalesPlanLinesWithActual(year, month, onlyEmployeeId);
+  const order = ["Sản xuất", "Thương mại"];
+
+  const buckets = new Map<string, Map<string, { target: number; productActual: number; groupActual: number | null }>>();
+  for (const l of lines) {
+    const groupKey = order.includes(l.productGroup ?? "") ? (l.productGroup as string) : "Khác";
+    if (!buckets.has(groupKey)) buckets.set(groupKey, new Map());
+    const empMap = buckets.get(groupKey)!;
+    const empKey = l.employeeId ?? l.employeeName;
+    if (!empMap.has(empKey)) empMap.set(empKey, { target: 0, productActual: 0, groupActual: null });
+    const b = empMap.get(empKey)!;
+    b.target += l.targetRevenue;
+    if (l.actualBasis === "PRODUCT") {
+      b.productActual += l.actualRevenue;
+    } else if (l.actualBasis === "PRODUCT_GROUP" || l.actualBasis === "EMPLOYEE_TOTAL") {
+      b.groupActual = l.actualRevenue;
+    }
+  }
+
+  const names = [...order.filter((n) => buckets.has(n)), ...(buckets.has("Khác") ? ["Khác"] : [])];
+  return names.map((name) => {
+    const empMap = buckets.get(name)!;
+    let targetRevenue = 0;
+    let actualRevenue = 0;
+    for (const b of empMap.values()) {
+      targetRevenue += b.target;
+      actualRevenue += b.productActual + (b.groupActual ?? 0);
+    }
+    return {
+      group: name,
+      targetRevenue,
+      actualRevenue,
+      completionPct: targetRevenue > 0 ? Math.round((actualRevenue / targetRevenue) * 100) : null,
+    };
+  });
+}

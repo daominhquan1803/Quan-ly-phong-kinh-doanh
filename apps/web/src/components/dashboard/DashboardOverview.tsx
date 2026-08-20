@@ -27,6 +27,12 @@ interface SummaryResponse {
     actualRevenue: number;
     completionPct: number | null;
   }[];
+  byProductGroup: {
+    group: string;
+    targetRevenue: number;
+    actualRevenue: number;
+    completionPct: number | null;
+  }[];
   overdueOrderCount: number;
   overdueOrders: {
     id: string;
@@ -55,6 +61,12 @@ export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
     name: e.employeeName,
     "Kế hoạch": e.targetRevenue,
     "Thực hiện": e.actualRevenue,
+  }));
+
+  const groupChartData = data?.byProductGroup.map((g) => ({
+    name: `Nhóm hàng ${g.group}`,
+    "Chỉ tiêu": g.targetRevenue,
+    "Thực hiện": g.actualRevenue,
   }));
 
   return (
@@ -104,6 +116,25 @@ export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
               <Tooltip formatter={(v: number) => formatCurrencyVND(v)} />
               <Legend />
               <Bar dataKey="Kế hoạch" fill="#0B2447" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="Thực hiện" fill="#C8102E" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {groupChartData && groupChartData.length > 0 && (
+        <div className="rounded-lg border border-gray-200 bg-white p-5">
+          <h2 className="font-medium text-gray-900 mb-4">
+            {isAdmin ? "Kế hoạch vs Thực hiện theo Nhóm hàng" : "Kế hoạch vs Thực hiện của bạn theo Nhóm hàng"}
+          </h2>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={groupChartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#E2E6ED" />
+              <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+              <YAxis tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}tr`} tick={{ fontSize: 12 }} />
+              <Tooltip formatter={(v: number) => formatCurrencyVND(v)} />
+              <Legend />
+              <Bar dataKey="Chỉ tiêu" fill="#0B2447" radius={[4, 4, 0, 0]} />
               <Bar dataKey="Thực hiện" fill="#C8102E" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
