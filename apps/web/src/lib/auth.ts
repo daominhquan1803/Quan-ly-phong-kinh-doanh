@@ -4,6 +4,12 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@hoanggia/db";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  // Ứng dụng chạy sau reverse proxy (Traefik/Nginx) trên VPS, không phải Vercel
+  // — Auth.js v5 mặc định chặn mọi Host header không phải Vercel để chống tấn
+  // công Host header giả mạo. Ta tin cậy Host vì Traefik đã terminate TLS và
+  // forward đúng Host thật của domain đã cấu hình (không mở cổng app ra ngoài
+  // trực tiếp, chỉ qua proxy).
+  trustHost: true,
   session: { strategy: "jwt" },
   pages: {
     signIn: "/login",

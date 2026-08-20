@@ -37,6 +37,16 @@ services:
       - web_uploads:/app/apps/web/public/uploads
     expose:
       - "3000"
+    # Nhãn Traefik — vô hại nếu VPS không có Traefik (không dùng profile
+    # standalone-tls thì không cần quan tâm); dùng khi VPS đã có sẵn Traefik
+    # riêng (vd template "Docker and Traefik" của Hostinger) làm reverse
+    # proxy + tự cấp HTTPS, thay cho nginx+certbot tự quản lý bên dưới.
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.hoanggia-web.rule=Host(`${DOMAIN:-kinhdoanh.hoanggiaps.vn}`)"
+      - "traefik.http.routers.hoanggia-web.entrypoints=websecure"
+      - "traefik.http.routers.hoanggia-web.tls.certresolver=letsencrypt"
+      - "traefik.http.services.hoanggia-web.loadbalancer.server.port=3000"
 
   worker:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-hoanggia}/hoanggia-worker:latest
@@ -64,9 +74,15 @@ services:
     expose:
       - "4001"
 
+  # Chỉ chạy 2 service dưới đây khi VPS CHƯA có sẵn reverse proxy nào khác:
+  #   docker compose --profile standalone-tls up -d --build
+  # Nếu VPS đã có Traefik riêng (vd template có sẵn của nhà cung cấp VPS),
+  # KHÔNG bật profile này — chỉ cần "docker compose up -d --build" là đủ,
+  # nhãn Traefik ở service web bên trên sẽ tự được nhận diện.
   nginx:
     image: nginx:alpine
     restart: unless-stopped
+    profiles: ["standalone-tls"]
     depends_on:
       - web
     ports:
@@ -80,6 +96,7 @@ services:
   certbot:
     image: certbot/certbot
     restart: unless-stopped
+    profiles: ["standalone-tls"]
     volumes:
       - certbot_www:/var/www/certbot
       - certbot_certs:/etc/letsencrypt

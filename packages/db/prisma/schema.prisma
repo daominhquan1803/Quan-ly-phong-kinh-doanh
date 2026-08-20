@@ -3,6 +3,11 @@
 
 generator client {
   provider = "prisma-client-js"
+  // "native" cho dev trên Windows/macOS; "linux-musl-openssl-3.0.x" cho
+  // image production node:*-alpine — Alpine bản mới dùng OpenSSL 3, engine
+  // musl mặc định của Prisma lại build cho OpenSSL 1.1 nên load lỗi
+  // "Error loading shared library libssl.so.1.1" nếu không khai báo rõ.
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {

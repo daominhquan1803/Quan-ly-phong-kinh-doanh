@@ -27,6 +27,11 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# Alpine không có sẵn openssl — Prisma cần nó ở runtime để nhận diện đúng
+# bản OpenSSL và nạp đúng file engine (linux-musl-openssl-3.0.x), thiếu nó
+# Prisma sẽ đoán nhầm sang engine cũ build cho OpenSSL 1.1 và lỗi khi load.
+RUN apk add --no-cache openssl
+
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 
 # Next.js standalone output giữ nguyên cấu trúc monorepo (apps/web/...)
