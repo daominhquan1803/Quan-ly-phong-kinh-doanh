@@ -18,7 +18,7 @@ const NAV_ITEMS = [
   { href: "/orders", label: "Đơn hàng", icon: ShoppingCart, adminOnly: false },
   { href: "/shipping-status", label: "Tiến độ giao hàng", icon: Gauge, adminOnly: false },
   { href: "/shipment-slips", label: "Phiếu đi hàng", icon: Truck, adminOnly: false },
-  { href: "/debt", label: "Công nợ", icon: Wallet, adminOnly: false },
+  { href: "/debt", label: "Công nợ", icon: Wallet, adminOnly: true },
   { href: "/targets", label: "Kế hoạch kinh doanh", icon: Target, adminOnly: false },
   { href: "/admin/users", label: "Nhân viên", icon: Users, adminOnly: true },
 ];

@@ -14,6 +14,7 @@ import {
 } from "recharts";
 import { formatCurrencyVND, formatDateVN } from "@/lib/utils";
 import { AlertTriangle } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface SummaryResponse {
   totalTarget: number;
@@ -34,12 +35,13 @@ interface SummaryResponse {
     salesEmployeeName: string | null;
     expectedDeliveryDate: string | null;
   }[];
-  debtTotal: number;
-  debtOverdue: number;
+  // null cho nhân viên kinh doanh — công nợ là số liệu tổng cả phòng, chỉ ADMIN xem được.
+  debtTotal: number | null;
+  debtOverdue: number | null;
   debtSnapshotDate: string | null;
 }
 
-export function DashboardOverview() {
+export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard-summary"],
     queryFn: async () => {
@@ -57,9 +59,14 @@ export function DashboardOverview() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div
+        className={cn(
+          "grid grid-cols-1 sm:grid-cols-2 gap-4",
+          isAdmin ? "lg:grid-cols-4" : "lg:grid-cols-3"
+        )}
+      >
         <div className="kpi-card kpi-card--navy">
-          <p className="text-sm text-gray-500">Doanh số tháng này</p>
+          <p className="text-sm text-gray-500">{isAdmin ? "Doanh số tháng này" : "Doanh số của bạn tháng này"}</p>
           <p className="text-2xl font-bold text-navy-900 mt-1">
             {isLoading ? "—" : formatCurrencyVND(data?.totalActual ?? 0)}
           </p>
@@ -71,20 +78,24 @@ export function DashboardOverview() {
           </p>
         </div>
         <div className="kpi-card kpi-card--red">
-          <p className="text-sm text-gray-500">Đơn hàng quá hạn</p>
+          <p className="text-sm text-gray-500">{isAdmin ? "Đơn hàng quá hạn" : "Đơn hàng quá hạn của bạn"}</p>
           <p className="text-2xl font-bold text-brandRed-600 mt-1">{isLoading ? "—" : data?.overdueOrderCount ?? 0}</p>
         </div>
-        <div className="kpi-card kpi-card--red">
-          <p className="text-sm text-gray-500">Công nợ quá hạn</p>
-          <p className="text-2xl font-bold text-brandRed-600 mt-1">
-            {isLoading ? "—" : formatCurrencyVND(data?.debtOverdue ?? 0)}
-          </p>
-        </div>
+        {isAdmin && (
+          <div className="kpi-card kpi-card--red">
+            <p className="text-sm text-gray-500">Công nợ quá hạn</p>
+            <p className="text-2xl font-bold text-brandRed-600 mt-1">
+              {isLoading ? "—" : formatCurrencyVND(data?.debtOverdue ?? 0)}
+            </p>
+          </div>
+        )}
       </div>
 
       {chartData && chartData.length > 0 && (
         <div className="rounded-lg border border-gray-200 bg-white p-5">
-          <h2 className="font-medium text-gray-900 mb-4">Kế hoạch vs Thực hiện theo nhân viên</h2>
+          <h2 className="font-medium text-gray-900 mb-4">
+            {isAdmin ? "Kế hoạch vs Thực hiện theo nhân viên" : "Kế hoạch vs Thực hiện của bạn"}
+          </h2>
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#E2E6ED" />
@@ -99,11 +110,13 @@ export function DashboardOverview() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className={cn("grid grid-cols-1 gap-6", isAdmin && "lg:grid-cols-2")}>
         <div className="rounded-lg border border-gray-200 bg-white p-5">
           <div className="flex items-center gap-2 mb-3">
             <AlertTriangle className="h-4 w-4 text-brandRed-600" />
-            <h2 className="font-medium text-gray-900">Đơn hàng quá hạn giao</h2>
+            <h2 className="font-medium text-gray-900">
+              {isAdmin ? "Đơn hàng quá hạn giao" : "Đơn hàng của bạn quá hạn giao"}
+            </h2>
           </div>
           {(!data || data.overdueOrders.length === 0) && (
             <p className="text-sm text-gray-500">{isLoading ? "Đang tải..." : "Không có đơn hàng quá hạn 🎉"}</p>
@@ -119,32 +132,34 @@ export function DashboardOverview() {
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-brandRed-600 font-medium">{formatDateVN(o.expectedDeliveryDate)}</p>
-                  <p className="text-gray-500 text-xs">{o.salesEmployeeName ?? "—"}</p>
+                  {isAdmin && <p className="text-gray-500 text-xs">{o.salesEmployeeName ?? "—"}</p>}
                 </div>
               </li>
             ))}
           </ul>
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-5">
-          <h2 className="font-medium text-gray-900 mb-3">Công nợ</h2>
-          <div className="grid grid-cols-2 gap-4 mb-3">
-            <div>
-              <p className="text-sm text-gray-500">Tổng công nợ</p>
-              <p className="text-lg font-bold text-navy-900">{isLoading ? "—" : formatCurrencyVND(data?.debtTotal ?? 0)}</p>
+        {isAdmin && (
+          <div className="rounded-lg border border-gray-200 bg-white p-5">
+            <h2 className="font-medium text-gray-900 mb-3">Công nợ</h2>
+            <div className="grid grid-cols-2 gap-4 mb-3">
+              <div>
+                <p className="text-sm text-gray-500">Tổng công nợ</p>
+                <p className="text-lg font-bold text-navy-900">{isLoading ? "—" : formatCurrencyVND(data?.debtTotal ?? 0)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Quá hạn</p>
+                <p className="text-lg font-bold text-brandRed-600">{isLoading ? "—" : formatCurrencyVND(data?.debtOverdue ?? 0)}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-gray-500">Quá hạn</p>
-              <p className="text-lg font-bold text-brandRed-600">{isLoading ? "—" : formatCurrencyVND(data?.debtOverdue ?? 0)}</p>
-            </div>
+            <p className="text-xs text-gray-500 mb-3">
+              Cập nhật lần cuối: {data?.debtSnapshotDate ? formatDateVN(data.debtSnapshotDate) : "chưa có dữ liệu"}
+            </p>
+            <Link href="/debt" className="text-sm text-navy-900 hover:underline">
+              Xem chi tiết công nợ →
+            </Link>
           </div>
-          <p className="text-xs text-gray-500 mb-3">
-            Cập nhật lần cuối: {data?.debtSnapshotDate ? formatDateVN(data.debtSnapshotDate) : "chưa có dữ liệu"}
-          </p>
-          <Link href="/debt" className="text-sm text-navy-900 hover:underline">
-            Xem chi tiết công nợ →
-          </Link>
-        </div>
+        )}
       </div>
     </div>
   );

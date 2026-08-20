@@ -34,13 +34,23 @@ export async function GET() {
     });
     const overdueOrders = openOrders.filter(isOrderOverdue).slice(0, 20);
 
-    const latestDebt = await prisma.debtSnapshot.findFirst({ orderBy: { snapshotDate: "desc" } });
-    let debtTotal = 0;
-    let debtOverdue = 0;
-    if (latestDebt) {
-      const rows = await prisma.debtSnapshot.findMany({ where: { snapshotDate: latestDebt.snapshotDate } });
-      debtTotal = rows.reduce((s, r) => s + Number(r.totalDebt), 0);
-      debtOverdue = rows.reduce((s, r) => s + Number(r.overdueDebt), 0);
+    // Công nợ là số liệu tổng của cả phòng (không gắn được theo từng nhân viên) — chỉ
+    // ADMIN mới thấy, đúng yêu cầu "chỉ Quản trị viên xem được thông tin tổng của cả phòng".
+    const isAdmin = session.user.role === "ADMIN";
+    let debtTotal: number | null = null;
+    let debtOverdue: number | null = null;
+    let debtSnapshotDate: Date | null = null;
+    if (isAdmin) {
+      const latestDebt = await prisma.debtSnapshot.findFirst({ orderBy: { snapshotDate: "desc" } });
+      if (latestDebt) {
+        const rows = await prisma.debtSnapshot.findMany({ where: { snapshotDate: latestDebt.snapshotDate } });
+        debtTotal = rows.reduce((s, r) => s + Number(r.totalDebt), 0);
+        debtOverdue = rows.reduce((s, r) => s + Number(r.overdueDebt), 0);
+        debtSnapshotDate = latestDebt.snapshotDate;
+      } else {
+        debtTotal = 0;
+        debtOverdue = 0;
+      }
     }
 
     return NextResponse.json({
@@ -60,7 +70,7 @@ export async function GET() {
       })),
       debtTotal,
       debtOverdue,
-      debtSnapshotDate: latestDebt?.snapshotDate ?? null,
+      debtSnapshotDate,
     });
   } catch (err) {
     if (err instanceof UnauthorizedError) return NextResponse.json({ error: err.message }, { status: 401 });

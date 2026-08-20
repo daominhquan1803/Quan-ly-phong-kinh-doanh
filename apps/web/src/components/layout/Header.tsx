@@ -1,4 +1,5 @@
 import { LogOut } from "lucide-react";
+import { ChangePasswordButton } from "@/components/layout/ChangePasswordButton";
 
 export function Header({ userName, role }: { userName?: string; role?: "ADMIN" | "SALES" }) {
   return (
@@ -11,6 +12,7 @@ export function Header({ userName, role }: { userName?: string; role?: "ADMIN" |
         <span className="status-badge status-badge--draft">
           {role === "ADMIN" ? "Quản trị viên" : "Nhân viên kinh doanh"}
         </span>
+        <ChangePasswordButton />
         <form action="/api/auth/signout" method="post">
           <button
             type="submit"
