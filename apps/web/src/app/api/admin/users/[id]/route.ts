@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import bcrypt from "bcryptjs";
 import { prisma } from "@hoanggia/db";
 import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
 import { z } from "zod";
@@ -7,6 +8,9 @@ export const dynamic = "force-dynamic";
 
 const updateUserSchema = z.object({
   amisEmployeeCode: z.string().trim().max(50).optional().nullable(),
+  role: z.enum(["ADMIN", "SALES"]).optional(),
+  active: z.boolean().optional(),
+  password: z.string().min(6, "Mật khẩu tối thiểu 6 ký tự").optional(),
 });
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
@@ -15,22 +19,56 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const body = await req.json();
     const parsed = updateUserSchema.safeParse(body);
     if (!parsed.success) {
-      return NextResponse.json({ error: "Dữ liệu không hợp lệ" }, { status: 400 });
+      return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Dữ liệu không hợp lệ" }, { status: 400 });
     }
 
-    const amisEmployeeCode = parsed.data.amisEmployeeCode?.trim() || null;
+    const target = await prisma.user.findUnique({ where: { id: params.id } });
+    if (!target) return NextResponse.json({ error: "Không tìm thấy nhân viên" }, { status: 404 });
 
-    if (amisEmployeeCode) {
-      const existing = await prisma.user.findUnique({ where: { amisEmployeeCode } });
-      if (existing && existing.id !== params.id) {
-        return NextResponse.json({ error: `Mã AMIS "${amisEmployeeCode}" đã gán cho nhân viên khác` }, { status: 409 });
+    const data: {
+      amisEmployeeCode?: string | null;
+      role?: "ADMIN" | "SALES";
+      active?: boolean;
+      passwordHash?: string;
+    } = {};
+
+    if (parsed.data.amisEmployeeCode !== undefined) {
+      const amisEmployeeCode = parsed.data.amisEmployeeCode?.trim() || null;
+      if (amisEmployeeCode) {
+        const dup = await prisma.user.findUnique({ where: { amisEmployeeCode } });
+        if (dup && dup.id !== params.id) {
+          return NextResponse.json({ error: `Mã AMIS "${amisEmployeeCode}" đã gán cho nhân viên khác` }, { status: 409 });
+        }
+      }
+      data.amisEmployeeCode = amisEmployeeCode;
+    }
+
+    if (parsed.data.role !== undefined) data.role = parsed.data.role;
+    if (parsed.data.active !== undefined) data.active = parsed.data.active;
+    if (parsed.data.password) data.passwordHash = await bcrypt.hash(parsed.data.password, 10);
+
+    // Không cho phép thao tác làm hệ thống mất hết quản trị viên đang hoạt động
+    // (vd hạ quyền hoặc khoá nốt người quản trị cuối cùng) — tránh tự khoá cả hệ thống.
+    const resultingRole = parsed.data.role ?? target.role;
+    const resultingActive = parsed.data.active ?? target.active;
+    const wasActiveAdmin = target.role === "ADMIN" && target.active;
+    const willBeActiveAdmin = resultingRole === "ADMIN" && resultingActive;
+    if (wasActiveAdmin && !willBeActiveAdmin) {
+      const otherActiveAdmins = await prisma.user.count({
+        where: { role: "ADMIN", active: true, id: { not: params.id } },
+      });
+      if (otherActiveAdmins === 0) {
+        return NextResponse.json(
+          { error: "Không thể thực hiện — hệ thống cần còn ít nhất 1 quản trị viên đang hoạt động" },
+          { status: 400 }
+        );
       }
     }
 
     const user = await prisma.user.update({
       where: { id: params.id },
-      data: { amisEmployeeCode },
-      select: { id: true, name: true, amisEmployeeCode: true },
+      data,
+      select: { id: true, name: true, email: true, role: true, active: true, amisEmployeeCode: true },
     });
 
     return NextResponse.json({ user });

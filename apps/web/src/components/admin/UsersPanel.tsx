@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Plus, KeyRound } from "lucide-react";
 
 interface UserRow {
   id: string;
@@ -23,6 +23,9 @@ export function UsersPanel() {
   const [form, setForm] = useState({ name: "", email: "", role: "SALES" as "ADMIN" | "SALES", password: "" });
   const [error, setError] = useState<string | null>(null);
   const [aliasForm, setAliasForm] = useState({ aliasName: "", employeeId: "" });
+  const [resetPasswordFor, setResetPasswordFor] = useState<string | null>(null);
+  const [resetPasswordValue, setResetPasswordValue] = useState("");
+  const [rowBusy, setRowBusy] = useState<string | null>(null);
 
   const { data: usersData } = useQuery({
     queryKey: ["admin-users"],
@@ -60,6 +63,47 @@ export function UsersPanel() {
     }
   }
 
+  async function patchUser(userId: string, body: Record<string, unknown>) {
+    setRowBusy(userId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Cập nhật thất bại");
+      await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      return true;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Có lỗi xảy ra");
+      return false;
+    } finally {
+      setRowBusy(null);
+    }
+  }
+
+  async function handleRoleChange(userId: string, role: "ADMIN" | "SALES") {
+    await patchUser(userId, { role });
+  }
+
+  async function handleToggleActive(userId: string, active: boolean) {
+    await patchUser(userId, { active });
+  }
+
+  async function handleSubmitResetPassword(userId: string) {
+    if (resetPasswordValue.trim().length < 6) {
+      setError("Mật khẩu tối thiểu 6 ký tự");
+      return;
+    }
+    const ok = await patchUser(userId, { password: resetPasswordValue.trim() });
+    if (ok) {
+      setResetPasswordFor(null);
+      setResetPasswordValue("");
+    }
+  }
+
   const [amisCodeEdits, setAmisCodeEdits] = useState<Record<string, string>>({});
   const [savingAmisCode, setSavingAmisCode] = useState<string | null>(null);
 
@@ -67,26 +111,15 @@ export function UsersPanel() {
     const value = amisCodeEdits[userId];
     if (value === undefined) return;
     setSavingAmisCode(userId);
-    setError(null);
-    try {
-      const res = await fetch(`/api/admin/users/${userId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amisEmployeeCode: value || null }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Lưu thất bại");
+    const ok = await patchUser(userId, { amisEmployeeCode: value || null });
+    if (ok) {
       setAmisCodeEdits((prev) => {
         const next = { ...prev };
         delete next[userId];
         return next;
       });
-      await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Có lỗi xảy ra");
-    } finally {
-      setSavingAmisCode(null);
     }
+    setSavingAmisCode(null);
   }
 
   async function handleCreateAlias() {
@@ -139,6 +172,8 @@ export function UsersPanel() {
           </div>
         )}
 
+        {error && !showForm && <p className="text-sm text-brandRed-600 mb-3">{error}</p>}
+
         <div className="rounded-lg border border-gray-200 bg-white overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead className="bg-gray-50 text-gray-500">
@@ -146,15 +181,38 @@ export function UsersPanel() {
                 <th className="text-left font-medium px-4 py-2.5">Tên</th>
                 <th className="text-left font-medium px-4 py-2.5">Email</th>
                 <th className="text-left font-medium px-4 py-2.5">Vai trò</th>
+                <th className="text-left font-medium px-4 py-2.5">Trạng thái</th>
                 <th className="text-left font-medium px-4 py-2.5">Mã nhân viên AMIS</th>
+                <th className="text-left font-medium px-4 py-2.5">Mật khẩu</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {usersData?.users.map((u) => (
-                <tr key={u.id}>
+                <tr key={u.id} className={u.active ? "" : "opacity-50"}>
                   <td className="px-4 py-2.5 font-medium text-gray-900">{u.name}</td>
                   <td className="px-4 py-2.5 text-gray-500">{u.email}</td>
-                  <td className="px-4 py-2.5">{u.role === "ADMIN" ? "Quản trị viên" : "Nhân viên kinh doanh"}</td>
+                  <td className="px-4 py-2.5">
+                    <select
+                      value={u.role}
+                      disabled={rowBusy === u.id}
+                      onChange={(e) => handleRoleChange(u.id, e.target.value as "ADMIN" | "SALES")}
+                      className="text-sm rounded-md border border-gray-200 py-1 px-2 disabled:opacity-40"
+                    >
+                      <option value="SALES">Nhân viên kinh doanh</option>
+                      <option value="ADMIN">Quản trị viên</option>
+                    </select>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <button
+                      onClick={() => handleToggleActive(u.id, !u.active)}
+                      disabled={rowBusy === u.id}
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium disabled:opacity-40 ${
+                        u.active ? "bg-success-600/10 text-success-600" : "bg-gray-200 text-gray-600"
+                      }`}
+                    >
+                      {u.active ? "Đang hoạt động" : "Đã khoá"}
+                    </button>
+                  </td>
                   <td className="px-4 py-2.5">
                     {u.role === "SALES" ? (
                       <div className="flex items-center gap-2">
@@ -178,6 +236,46 @@ export function UsersPanel() {
                       "—"
                     )}
                   </td>
+                  <td className="px-4 py-2.5">
+                    {resetPasswordFor === u.id ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          placeholder="Mật khẩu mới"
+                          value={resetPasswordValue}
+                          onChange={(e) => setResetPasswordValue(e.target.value)}
+                          className="w-32 text-sm rounded-md border border-gray-200 py-1 px-2"
+                          autoFocus
+                        />
+                        <button
+                          onClick={() => handleSubmitResetPassword(u.id)}
+                          disabled={rowBusy === u.id}
+                          className="text-xs font-medium text-navy-900 hover:underline disabled:opacity-40"
+                        >
+                          Lưu
+                        </button>
+                        <button
+                          onClick={() => {
+                            setResetPasswordFor(null);
+                            setResetPasswordValue("");
+                          }}
+                          className="text-xs text-gray-500 hover:underline"
+                        >
+                          Huỷ
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setResetPasswordFor(u.id);
+                          setResetPasswordValue("");
+                        }}
+                        className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-navy-900"
+                      >
+                        <KeyRound className="h-3.5 w-3.5" /> Đặt lại
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -185,7 +283,8 @@ export function UsersPanel() {
         </div>
         <p className="text-xs text-gray-500 mt-2">
           Mã nhân viên AMIS (vd DANGTAN) dùng để đồng bộ đơn hàng tự động khớp đúng người phụ trách — xem tại
-          AMIS CRM, thông tin nhân viên.
+          AMIS CRM, thông tin nhân viên. Đổi vai trò/khoá tài khoản áp dụng ngay lập tức; hệ thống luôn giữ lại
+          ít nhất 1 quản trị viên đang hoạt động.
         </p>
       </div>
 
