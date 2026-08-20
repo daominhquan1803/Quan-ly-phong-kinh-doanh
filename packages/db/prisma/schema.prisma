@@ -2,7 +2,7 @@
 // Xem plan: C:\Users\Administrator\.claude\plans\gi-p-anh-t-o-1-resilient-flute.md
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   // "native" cho dev trên Windows/macOS; "linux-musl-openssl-3.0.x" cho
   // image production node:*-alpine — Alpine bản mới dùng OpenSSL 3, engine
   // musl mặc định của Prisma lại build cho OpenSSL 1.1 nên load lỗi
@@ -117,39 +117,45 @@ model ImportBatch {
 }
 
 model Order {
-  id                   String       @id @default(cuid())
-  orderCode            String       @unique
+  id                       String       @id @default(cuid())
+  orderCode                String       @unique
   // ID nội bộ của đơn hàng bên AMIS (field "id") — dùng để upsert chính xác khi đồng bộ
   // tự động, phòng trường hợp sale_order_no bị sửa bên AMIS.
-  amisOrderId          Int?         @unique
+  amisOrderId              Int?         @unique
   // Nguồn dữ liệu: MANUAL | EXCEL_IMPORT | AMIS_API — hiển thị cho người dùng biết đơn
   // này đến từ đâu.
-  source               String       @default("MANUAL")
-  customerName         String
-  customerCode         String?
-  salesEmployeeNameRaw String?
-  salesEmployeeId      String?
-  salesEmployee        User?        @relation("OrderSalesEmployee", fields: [salesEmployeeId], references: [id])
-  orderDate            DateTime?
-  expectedDeliveryDate DateTime?
+  source                   String       @default("MANUAL")
+  customerName             String
+  customerCode             String?
+  salesEmployeeNameRaw     String?
+  salesEmployeeId          String?
+  salesEmployee            User?        @relation("OrderSalesEmployee", fields: [salesEmployeeId], references: [id])
+  orderDate                DateTime?
+  expectedDeliveryDate     DateTime?
   // Ngày giao hàng thực tế — lấy từ field "delivery_date" của AMIS CRM (khác với
   // deadline_date/expectedDeliveryDate là hạn giao dự kiến). Null nếu đơn nhập thủ công/
   // Excel (không có nguồn này) hoặc AMIS chưa điền.
-  actualDeliveryDate   DateTime?
-  status               OrderStatus  @default(NEW)
-  totalValue           Decimal      @default(0) @db.Decimal(18, 2)
+  actualDeliveryDate       DateTime?
+  status                   OrderStatus  @default(NEW)
+  totalValue               Decimal      @default(0) @db.Decimal(18, 2)
   // Giá trị hàng đã giao cộng dồn — lấy từ field "total_amount_delivered_summary" của AMIS
   // CRM. Dùng để tính "giá trị còn lại chưa giao" (totalValue - deliveredValue) cho các đơn
   // giao một phần, thay vì tính cả giá trị đơn vào phần quá hạn/sắp đến hạn. Mặc định 0 cho
   // đơn nhập tay/Excel (chưa giao gì) — khi đó giá trị còn lại = toàn bộ giá trị đơn, đúng
   // hành vi cũ.
-  deliveredValue       Decimal      @default(0) @db.Decimal(18, 2)
-  poCode               String?
-  rawData              Json?
-  importBatchId        String?
-  importBatch          ImportBatch? @relation(fields: [importBatchId], references: [id])
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
+  deliveredValue           Decimal      @default(0) @db.Decimal(18, 2)
+  // true khi đơn đã được đối chiếu và sửa thủ công từ nguồn đáng tin hơn AMIS CRM (vd Sổ chi
+  // tiết bán hàng bên kế toán, khi phát hiện AMIS CRM báo sai/lỗi đồng bộ nội bộ AMIS) —
+  // worker sync AMIS sẽ bỏ qua hoàn toàn đơn đã đánh dấu (không ghi đè, không xoá dù AMIS báo
+  // loại trừ), coi như "đã khoá" theo kết quả đối chiếu thủ công.
+  deliveryVerifiedManually Boolean      @default(false)
+  deliveryVerifiedNote     String?
+  poCode                   String?
+  rawData                  Json?
+  importBatchId            String?
+  importBatch              ImportBatch? @relation(fields: [importBatchId], references: [id])
+  createdAt                DateTime     @default(now())
+  updatedAt                DateTime     @updatedAt
 
   shipmentSlips ShipmentSlip[]
   items         OrderItem[]

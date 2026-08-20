@@ -158,8 +158,13 @@ async function syncOrderItems(orderId: string, mappings: AmisProductMapping[] | 
 async function upsertOrderFromAmis(o: AmisSaleOrder, managedCodes: Set<string>): Promise<boolean> {
   const existing = await prisma.order.findFirst({
     where: { OR: [{ amisOrderId: o.id }, { orderCode: o.sale_order_no }] },
-    select: { id: true },
+    select: { id: true, deliveryVerifiedManually: true },
   });
+
+  // Đơn đã được đối chiếu/sửa thủ công (vd theo Sổ chi tiết bán hàng kế toán, khi phát hiện
+  // AMIS CRM báo sai) — không đụng vào nữa dù AMIS báo loại trừ (revenue_status/cutoff), để
+  // không xoá mất bản ghi đã xác minh đúng là có thật.
+  if (existing?.deliveryVerifiedManually) return false;
 
   if (isExcludedRevenueStatus(o.revenue_status) || isBeforeOrderDateCutoff(o.sale_order_date)) {
     if (existing) await prisma.order.delete({ where: { id: existing.id } }); // cascade xoá luôn OrderItem
