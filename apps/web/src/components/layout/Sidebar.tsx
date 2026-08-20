@@ -11,6 +11,8 @@ import {
   Target,
   Users,
   Gauge,
+  Award,
+  Briefcase,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -20,6 +22,8 @@ const NAV_ITEMS = [
   { href: "/shipment-slips", label: "Phiếu đi hàng", icon: Truck, adminOnly: false },
   { href: "/debt", label: "Công nợ", icon: Wallet, adminOnly: true },
   { href: "/targets", label: "Kế hoạch kinh doanh", icon: Target, adminOnly: false },
+  { href: "/kpi", label: "Đánh giá KPI", icon: Award, adminOnly: false },
+  { href: "/business-trips", label: "Đăng ký đi công tác", icon: Briefcase, adminOnly: false },
   { href: "/admin/users", label: "Nhân viên", icon: Users, adminOnly: true },
 ];
 

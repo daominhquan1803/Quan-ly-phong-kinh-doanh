@@ -42,6 +42,12 @@ enum SyncStatus {
   FAILED
 }
 
+enum TripStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 // ---------- Core ----------
 
 model User {
@@ -65,6 +71,12 @@ model User {
   employeeAliases  EmployeeAlias[]
   salesPlanLines   SalesPlanLine[]
   salesPlanBatches SalesPlanImportBatch[]
+  kpiEntries       KpiMonthlyEntry[]      @relation("KpiEmployee")
+  kpiEntriesEdited KpiMonthlyEntry[]      @relation("KpiUpdatedBy")
+  businessTrips    BusinessTripRequest[]  @relation("TripEmployee")
+  tripApprovals    BusinessTripRequest[]  @relation("TripApprovedBy")
+  defectReports    DefectReport[]         @relation("DefectEmployee")
+  defectsCreated   DefectReport[]         @relation("DefectCreatedBy")
 
   @@map("users")
 }
@@ -331,4 +343,88 @@ model SalesPlanLine {
   @@index([employeeId])
   @@index([productCode])
   @@map("sales_plan_lines")
+}
+
+// ---------- Đăng ký đi công tác (gặp khách hàng) ----------
+// NVKD tự đăng ký, Quản trị viên duyệt mới được ghi nhận vào KPI "Điểm Đi Gặp Khách".
+
+model BusinessTripRequest {
+  id           String     @id @default(cuid())
+  employeeId   String
+  employee     User       @relation("TripEmployee", fields: [employeeId], references: [id])
+  visitDate    DateTime // Ngày đi
+  expectedTime String? // Giờ dự kiến gặp (vd "09:30") — chỉ là mốc dự kiến, không phải DateTime đầy đủ
+  companyName  String // Công ty đến gặp
+  content      String // Nội dung buổi gặp
+  status       TripStatus @default(PENDING)
+  approvedById String?
+  approvedBy   User?      @relation("TripApprovedBy", fields: [approvedById], references: [id])
+  approvedAt   DateTime?
+  rejectReason String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([employeeId])
+  @@index([visitDate])
+  @@index([status])
+  @@map("business_trip_requests")
+}
+
+// ---------- Biên bản hàng lỗi (Quản trị viên nhập, dùng tính KPI CSKH & Chất lượng) ----------
+
+model DefectReport {
+  id           String   @id @default(cuid())
+  reportNumber String // Số biên bản hàng lỗi
+  employeeId   String // NVKD chịu trách nhiệm
+  employee     User     @relation("DefectEmployee", fields: [employeeId], references: [id])
+  reportDate   DateTime @default(now())
+  description  String // Nội dung lỗi
+  createdById  String
+  createdBy    User     @relation("DefectCreatedBy", fields: [createdById], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@index([employeeId])
+  @@index([reportDate])
+  @@map("defect_reports")
+}
+
+// ---------- KPI đánh giá hàng tháng ----------
+// Chỉ lưu các chỉ tiêu/số liệu KHÔNG tính tự động được từ dữ liệu hệ thống (Quản trị viên
+// nhập tay) — Doanh số/Doanh số Sản xuất lấy từ SalesTarget + SalesPlanLine (Nhóm Sản xuất)
+// đã có sẵn; Điểm Đi Gặp Khách đếm từ BusinessTripRequest đã duyệt trong tháng; Hàng lỗi đếm
+// từ DefectReport trong tháng — không lưu lặp lại ở đây, tính trực tiếp lúc đọc báo cáo
+// (xem apps/web/src/lib/kpi-metrics.ts) để không bị lệch dữ liệu giữa 2 nơi.
+model KpiMonthlyEntry {
+  id         String @id @default(cuid())
+  employeeId String
+  employee   User   @relation("KpiEmployee", fields: [employeeId], references: [id])
+  year       Int
+  month      Int
+
+  // 2. Lợi nhuận — chưa có dữ liệu giá vốn trong hệ thống nên nhập tay cả chỉ tiêu lẫn thực tế.
+  targetProfitPct Decimal? @db.Decimal(6, 2)
+  actualProfitPct Decimal? @db.Decimal(6, 2)
+
+  // 3. Phát triển khách hàng mới — chưa có khái niệm "khách hàng mới" trong dữ liệu đơn hàng.
+  targetNewCustomers Int?
+  actualNewCustomers Int?
+
+  // 4. Công nợ — tạm thời nhập tay vì congno.hienvi.me chưa hoạt động (HIENVI_MOCK_MODE).
+  debtOverduePct        Decimal? @db.Decimal(6, 2) // % công nợ quá hạn
+  debtCollectionRatePct Decimal? @db.Decimal(6, 2) // % tỷ lệ thu hồi công nợ trong tháng
+
+  // Chỉ tiêu số lượt đi gặp khách hàng/tháng — dùng quy đổi điểm từ số lượt đăng ký đã duyệt.
+  visitTarget Int @default(8)
+
+  // 6. Thái độ & kỷ luật
+  attendanceDays Decimal? @db.Decimal(5, 2) // ngày công / 26
+  violationCount Int?     @default(0)
+
+  updatedById String?
+  updatedBy   User?    @relation("KpiUpdatedBy", fields: [updatedById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([employeeId, year, month])
+  @@map("kpi_monthly_entries")
 }
