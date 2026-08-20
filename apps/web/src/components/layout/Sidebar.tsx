@@ -40,7 +40,7 @@ export function Sidebar({ role }: { role?: "ADMIN" | "SALES" }) {
         </div>
       </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {NAV_ITEMS.filter((item) => !item.adminOnly || role === "ADMIN").map((item) => {
           const active = pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href));
           const Icon = item.icon;
@@ -49,10 +49,10 @@ export function Sidebar({ role }: { role?: "ADMIN" | "SALES" }) {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium border-l-4 border-transparent transition-colors",
+                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                 active
-                  ? "bg-white/10 border-l-brandRed-600 text-white"
-                  : "text-white/70 hover:bg-white/5 hover:text-white"
+                  ? "bg-brandRed-600 text-white shadow-card"
+                  : "text-white/70 hover:bg-white/10 hover:text-white"
               )}
             >
               <Icon className="h-4 w-4 shrink-0" />
@@ -61,6 +61,16 @@ export function Sidebar({ role }: { role?: "ADMIN" | "SALES" }) {
           );
         })}
       </nav>
+
+      {/* Ảnh thật từ website công ty (hoanggiaps.com) — nhắc thương hiệu ở chân sidebar. */}
+      <div className="mx-3 mb-3 overflow-hidden rounded-lg border border-white/10">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/images/company-banner.webp" alt="Hoàng Gia PS" className="h-16 w-full object-cover" />
+        <div className="bg-white/5 px-3 py-2">
+          <p className="text-[11px] font-medium text-white/90">Hoàng Gia PS</p>
+          <p className="text-[10px] text-white/50">Giải pháp đóng gói trọn gói</p>
+        </div>
+      </div>
 
       <div className="px-5 py-4 border-t border-white/10 text-[11px] text-white/50">
         © {new Date().getFullYear()} Công ty CP Giải pháp Đóng gói Hoàng Gia

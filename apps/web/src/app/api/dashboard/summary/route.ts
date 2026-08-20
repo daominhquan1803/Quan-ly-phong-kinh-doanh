@@ -21,12 +21,33 @@ export async function GET() {
 
     const totalTarget = perEmployee.reduce((s, r) => s + r.targetRevenue, 0);
     const totalActual = perEmployee.reduce((s, r) => s + r.actualRevenue, 0);
+    const completionPct = totalTarget > 0 ? Math.round((totalActual / totalTarget) * 100) : null;
 
     const byProductGroup = await getProductGroupTargetVsActual(
       year,
       month,
       session.user.role === "ADMIN" ? undefined : session.user.id
     );
+
+    // So sánh với tháng trước để hiện xu hướng tăng/giảm ở các thẻ KPI — chỉ tính khi có
+    // dữ liệu thật của tháng trước, không suy đoán.
+    let prevYear = year;
+    let prevMonth = month - 1;
+    if (prevMonth < 1) {
+      prevMonth = 12;
+      prevYear -= 1;
+    }
+    const prevPerEmployee = await getEmployeeTargetVsActual(
+      prevYear,
+      prevMonth,
+      session.user.role === "ADMIN" ? undefined : session.user.id
+    );
+    const prevTotalTarget = prevPerEmployee.reduce((s, r) => s + r.targetRevenue, 0);
+    const prevTotalActual = prevPerEmployee.reduce((s, r) => s + r.actualRevenue, 0);
+    const prevCompletionPct = prevTotalTarget > 0 ? Math.round((prevTotalActual / prevTotalTarget) * 100) : null;
+
+    const actualTrendPct = prevTotalActual > 0 ? Math.round(((totalActual - prevTotalActual) / prevTotalActual) * 100) : null;
+    const completionTrendPts = completionPct != null && prevCompletionPct != null ? completionPct - prevCompletionPct : null;
 
     const openOrders = await prisma.order.findMany({
       where: {
@@ -46,6 +67,7 @@ export async function GET() {
     let debtTotal: number | null = null;
     let debtOverdue: number | null = null;
     let debtSnapshotDate: Date | null = null;
+    let debtTrendPct: number | null = null;
     if (isAdmin) {
       const latestDebt = await prisma.debtSnapshot.findFirst({ orderBy: { snapshotDate: "desc" } });
       if (latestDebt) {
@@ -53,6 +75,18 @@ export async function GET() {
         debtTotal = rows.reduce((s, r) => s + Number(r.totalDebt), 0);
         debtOverdue = rows.reduce((s, r) => s + Number(r.overdueDebt), 0);
         debtSnapshotDate = latestDebt.snapshotDate;
+
+        // So với lần đồng bộ công nợ liền trước (nếu có) — số liệu thật từ SyncLog, không suy đoán.
+        const prevSnapshot = await prisma.debtSnapshot.findFirst({
+          where: { snapshotDate: { lt: latestDebt.snapshotDate } },
+          orderBy: { snapshotDate: "desc" },
+        });
+        if (prevSnapshot) {
+          const prevRows = await prisma.debtSnapshot.findMany({ where: { snapshotDate: prevSnapshot.snapshotDate } });
+          const prevOverdue = prevRows.reduce((s, r) => s + Number(r.overdueDebt), 0);
+          debtTrendPct =
+            prevOverdue > 0 ? Math.round(((debtOverdue - prevOverdue) / prevOverdue) * 100) : debtOverdue > 0 ? 100 : 0;
+        }
       } else {
         debtTotal = 0;
         debtOverdue = 0;
@@ -64,7 +98,9 @@ export async function GET() {
       month,
       totalTarget,
       totalActual,
-      completionPct: totalTarget > 0 ? Math.round((totalActual / totalTarget) * 100) : null,
+      completionPct,
+      actualTrendPct,
+      completionTrendPts,
       perEmployee,
       byProductGroup,
       overdueOrderCount: overdueOrders.length,
@@ -78,6 +114,7 @@ export async function GET() {
       debtTotal,
       debtOverdue,
       debtSnapshotDate,
+      debtTrendPct,
     });
   } catch (err) {
     if (err instanceof UnauthorizedError) return NextResponse.json({ error: err.message }, { status: 401 });

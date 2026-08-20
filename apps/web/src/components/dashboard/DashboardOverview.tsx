@@ -6,20 +6,29 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   Legend,
+  Pie,
+  PieChart,
+  RadialBar,
+  RadialBarChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 import { formatCurrencyVND, formatDateVN } from "@/lib/utils";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Minus, TrendingDown, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface SummaryResponse {
+  year: number;
+  month: number;
   totalTarget: number;
   totalActual: number;
   completionPct: number | null;
+  actualTrendPct: number | null;
+  completionTrendPts: number | null;
   perEmployee: {
     employeeId: string;
     employeeName: string;
@@ -45,7 +54,40 @@ interface SummaryResponse {
   debtTotal: number | null;
   debtOverdue: number | null;
   debtSnapshotDate: string | null;
+  debtTrendPct: number | null;
 }
+
+/** Dòng nhỏ hiện xu hướng tăng/giảm so với tháng trước dưới mỗi số KPI. */
+function TrendLine({
+  delta,
+  unit,
+  invert,
+}: {
+  delta: number | null;
+  unit: string;
+  invert?: boolean;
+}) {
+  if (delta == null) return null;
+  const isUp = delta > 0;
+  const isGood = invert ? !isUp : isUp;
+  const Icon = delta === 0 ? Minus : isUp ? TrendingUp : TrendingDown;
+  const color = delta === 0 ? "text-gray-400" : isGood ? "text-success-600" : "text-brandRed-600";
+  return (
+    <p className={cn("text-xs mt-1.5 flex items-center gap-1", color)}>
+      <Icon className="h-3 w-3 shrink-0" />
+      {delta > 0 ? "+" : ""}
+      {delta}
+      {unit} so với tháng trước
+    </p>
+  );
+}
+
+const RANK_COLORS = ["#0B2447", "#C8102E", "#2F6FED", "#D4A017", "#1E9E63", "#123A6B"];
+const GROUP_COLORS: Record<string, string> = {
+  "Sản xuất": "#0B2447",
+  "Thương mại": "#C8102E",
+  Khác: "#6B7280",
+};
 
 export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
   const { data, isLoading } = useQuery({
@@ -63,11 +105,20 @@ export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
     "Thực hiện": e.actualRevenue,
   }));
 
+  const topEmployees = data?.perEmployee.slice().sort((a, b) => b.actualRevenue - a.actualRevenue).slice(0, 6);
+  const maxActual = topEmployees && topEmployees.length ? Math.max(...topEmployees.map((e) => e.actualRevenue), 1) : 1;
+
   const groupChartData = data?.byProductGroup.map((g) => ({
     name: `Nhóm hàng ${g.group}`,
     "Chỉ tiêu": g.targetRevenue,
     "Thực hiện": g.actualRevenue,
   }));
+
+  const donutData = (data?.byProductGroup ?? [])
+    .filter((g) => g.actualRevenue > 0)
+    .map((g) => ({ name: g.group, value: g.actualRevenue }));
+
+  const gaugeData = [{ name: "completion", value: Math.min(data?.completionPct ?? 0, 100), fill: "#0B2447" }];
 
   return (
     <div className="space-y-6">
@@ -82,12 +133,14 @@ export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
           <p className="text-2xl font-bold text-navy-900 mt-1">
             {isLoading ? "—" : formatCurrencyVND(data?.totalActual ?? 0)}
           </p>
+          <TrendLine delta={data?.actualTrendPct ?? null} unit="%" />
         </div>
         <div className="kpi-card kpi-card--navy">
           <p className="text-sm text-gray-500">% hoàn thành kế hoạch</p>
           <p className="text-2xl font-bold text-navy-900 mt-1">
             {isLoading || data?.completionPct == null ? "—" : `${data.completionPct}%`}
           </p>
+          <TrendLine delta={data?.completionTrendPts ?? null} unit=" điểm" />
         </div>
         <div className="kpi-card kpi-card--red">
           <p className="text-sm text-gray-500">{isAdmin ? "Đơn hàng quá hạn" : "Đơn hàng quá hạn của bạn"}</p>
@@ -99,47 +152,117 @@ export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
             <p className="text-2xl font-bold text-brandRed-600 mt-1">
               {isLoading ? "—" : formatCurrencyVND(data?.debtOverdue ?? 0)}
             </p>
+            <TrendLine delta={data?.debtTrendPct ?? null} unit="%" invert />
           </div>
         )}
       </div>
 
       {chartData && chartData.length > 0 && (
-        <div className="rounded-lg border border-gray-200 bg-white p-5">
-          <h2 className="font-medium text-gray-900 mb-4">
-            {isAdmin ? "Kế hoạch vs Thực hiện theo nhân viên" : "Kế hoạch vs Thực hiện của bạn"}
-          </h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E2E6ED" />
-              <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-              <YAxis tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}tr`} tick={{ fontSize: 12 }} />
-              <Tooltip formatter={(v: number) => formatCurrencyVND(v)} />
-              <Legend />
-              <Bar dataKey="Kế hoạch" fill="#0B2447" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="Thực hiện" fill="#C8102E" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 rounded-lg border border-gray-200 bg-white p-5">
+            <h2 className="font-medium text-gray-900">
+              {isAdmin ? "Kế hoạch vs Thực hiện theo nhân viên" : "Kế hoạch vs Thực hiện của bạn"}
+            </h2>
+            <p className="text-xs text-gray-400 mb-4">{data ? `Tháng ${data.month}/${data.year}` : ""}</p>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E2E6ED" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                <YAxis tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}tr`} tick={{ fontSize: 12 }} />
+                <Tooltip formatter={(v: number) => formatCurrencyVND(v)} />
+                <Legend />
+                <Bar dataKey="Kế hoạch" fill="#0B2447" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Thực hiện" fill="#C8102E" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {topEmployees && topEmployees.length > 0 && (
+            <div className="rounded-lg border border-gray-200 bg-white p-5">
+              <h2 className="font-medium text-gray-900 mb-4">Top nhân viên theo doanh số</h2>
+              <ul className="space-y-4">
+                {topEmployees.map((e, i) => (
+                  <li key={e.employeeId}>
+                    <div className="flex items-center justify-between text-sm mb-1.5">
+                      <span className="font-medium text-gray-900 truncate">{e.employeeName}</span>
+                      <span className="text-gray-500 shrink-0 ml-2">{formatCurrencyVND(e.actualRevenue)}</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${Math.max((e.actualRevenue / maxActual) * 100, 2)}%`,
+                          backgroundColor: RANK_COLORS[i % RANK_COLORS.length],
+                        }}
+                      />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
 
-      {groupChartData && groupChartData.length > 0 && (
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {groupChartData && groupChartData.length > 0 && (
+          <div className="rounded-lg border border-gray-200 bg-white p-5">
+            <h2 className="font-medium text-gray-900 mb-4">Kế hoạch vs Thực hiện theo Nhóm hàng</h2>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={groupChartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E2E6ED" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                <YAxis tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}tr`} tick={{ fontSize: 11 }} />
+                <Tooltip formatter={(v: number) => formatCurrencyVND(v)} />
+                <Bar dataKey="Chỉ tiêu" fill="#0B2447" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Thực hiện" fill="#C8102E" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {donutData.length > 0 && (
+          <div className="rounded-lg border border-gray-200 bg-white p-5">
+            <h2 className="font-medium text-gray-900 mb-4">Tỷ trọng thực hiện theo Nhóm hàng</h2>
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie data={donutData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={80} paddingAngle={2}>
+                  {donutData.map((d) => (
+                    <Cell key={d.name} fill={GROUP_COLORS[d.name] ?? "#6B7280"} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(v: number) => formatCurrencyVND(v)} />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
         <div className="rounded-lg border border-gray-200 bg-white p-5">
-          <h2 className="font-medium text-gray-900 mb-4">
-            {isAdmin ? "Kế hoạch vs Thực hiện theo Nhóm hàng" : "Kế hoạch vs Thực hiện của bạn theo Nhóm hàng"}
-          </h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={groupChartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E2E6ED" />
-              <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-              <YAxis tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}tr`} tick={{ fontSize: 12 }} />
-              <Tooltip formatter={(v: number) => formatCurrencyVND(v)} />
-              <Legend />
-              <Bar dataKey="Chỉ tiêu" fill="#0B2447" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="Thực hiện" fill="#C8102E" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <h2 className="font-medium text-gray-900 mb-2">Hoàn thành kế hoạch tháng</h2>
+          <div className="relative">
+            <ResponsiveContainer width="100%" height={220}>
+              <RadialBarChart
+                data={gaugeData}
+                startAngle={90}
+                endAngle={-270}
+                innerRadius="70%"
+                outerRadius="100%"
+              >
+                <RadialBar dataKey="value" background={{ fill: "#EDF1F7" }} cornerRadius={20} />
+              </RadialBarChart>
+            </ResponsiveContainer>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-3xl font-bold text-navy-900">
+                {data?.completionPct != null ? `${data.completionPct}%` : "—"}
+              </span>
+              <span className="text-xs text-gray-400 mt-1">
+                {formatCurrencyVND(data?.totalActual ?? 0)} / {formatCurrencyVND(data?.totalTarget ?? 0)}
+              </span>
+            </div>
+          </div>
         </div>
-      )}
+      </div>
 
       <div className={cn("grid grid-cols-1 gap-6", isAdmin && "lg:grid-cols-2")}>
         <div className="rounded-lg border border-gray-200 bg-white p-5">
