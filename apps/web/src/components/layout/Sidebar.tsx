@@ -29,8 +29,10 @@ export function Sidebar({ role }: { role?: "ADMIN" | "SALES" }) {
   return (
     <aside className="hidden md:flex md:w-64 md:flex-col bg-navy-900 text-white">
       <div className="flex items-center gap-3 px-5 py-5 border-b border-white/10">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white">
-          <span className="text-navy-900 font-bold text-lg">HG</span>
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white p-1.5">
+          {/* eslint-disable-next-line @next/next/no-img-element -- SVG tĩnh, next/image
+              không tối ưu được vector nên dùng img thường cho gọn, khỏi bật dangerouslyAllowSVG */}
+          <img src="/logo/mark.svg" alt="Hoàng Gia PS" className="w-full h-auto" />
         </div>
         <div className="leading-tight">
           <p className="font-semibold text-sm">HOÀNG GIA</p>
