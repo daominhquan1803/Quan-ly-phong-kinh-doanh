@@ -38,10 +38,26 @@ export async function GET(req: NextRequest) {
     const dueInWindow = openOrders.filter(
       (o) => o.expectedDeliveryDate && new Date(o.expectedDeliveryDate) >= rateCutoff && new Date(o.expectedDeliveryDate) <= new Date()
     );
-    const deliveredInWindow = dueInWindow.filter((o) => o.status === OrderStatus.DELIVERED).length;
-    const onTimeRatePct = dueInWindow.length > 0 ? Math.round((deliveredInWindow / dueInWindow.length) * 100) : null;
+    // "Đúng hạn" = có ngày giao thực tế (actualDeliveryDate, đồng bộ từ field delivery_date
+    // của AMIS) và ngày đó không muộn hơn hạn giao — chính xác hơn hẳn so với suy đoán qua
+    // trạng thái. Đơn chưa có actualDeliveryDate (đồng bộ trước khi có field này, hoặc nhập
+    // tay/Excel) thì tạm coi trạng thái "Đã giao" là đúng hạn, giữ hành vi cũ để không làm
+    // tụt tỷ lệ do thiếu dữ liệu lịch sử.
+    const onTimeInWindow = dueInWindow.filter((o) => {
+      if (o.actualDeliveryDate && o.expectedDeliveryDate) {
+        return new Date(o.actualDeliveryDate) <= new Date(o.expectedDeliveryDate);
+      }
+      return o.status === OrderStatus.DELIVERED;
+    }).length;
+    const onTimeRatePct = dueInWindow.length > 0 ? Math.round((onTimeInWindow / dueInWindow.length) * 100) : null;
 
-    const overdueValue = overdue.reduce((s, o) => s + Number(o.totalValue), 0);
+    // Giá trị còn lại CHƯA giao = tổng đơn - đã giao (deliveredValue, đồng bộ từ
+    // total_amount_delivered_summary của AMIS) — đơn giao 1 phần chỉ tính đúng phần còn nợ,
+    // không tính cả giá trị đơn (đơn nhập tay/Excel chưa có deliveredValue thì mặc định 0,
+    // tức toàn bộ giá trị đơn coi như chưa giao — đúng thực tế vì chưa có gì đối chiếu).
+    const remainingValue = (o: (typeof openOrders)[number]) =>
+      Math.max(Number(o.totalValue) - Number(o.deliveredValue), 0);
+    const overdueValue = overdue.reduce((s, o) => s + remainingValue(o), 0);
 
     // Thống kê theo nhân viên — chỉ có ý nghĩa khi xem toàn đội (ADMIN).
     const byEmployeeMap = new Map<
@@ -72,7 +88,8 @@ export async function GET(req: NextRequest) {
       customerName: o.customerName,
       salesEmployeeName: o.salesEmployee?.name ?? o.salesEmployeeNameRaw,
       expectedDeliveryDate: o.expectedDeliveryDate,
-      totalValue: o.totalValue.toString(),
+      // Giá trị còn lại chưa giao — không phải tổng giá trị đơn (xem remainingValue ở trên).
+      remainingValue: remainingValue(o).toString(),
       daysUntilDeadline: daysUntilDeadline(o.expectedDeliveryDate),
       status: o.status,
     });

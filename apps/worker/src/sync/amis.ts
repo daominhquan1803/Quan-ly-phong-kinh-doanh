@@ -35,11 +35,15 @@ interface AmisSaleOrder {
   account_code: string | null;
   sale_order_date: string | null;
   deadline_date: string | null;
+  // Ngày giao hàng thực tế AMIS ghi nhận — khác với deadline_date (hạn giao dự kiến).
+  delivery_date: string | null;
   status: string | null;
   delivery_status: string | null;
   revenue_status: string | null; // "Tình trạng ghi doanh số": Bản nháp | Đề nghị ghi | Đã ghi | Huỷ ghi
   sale_order_amount: number | null;
   total_summary: number | null;
+  // Giá trị hàng đã giao cộng dồn — dùng để tính "còn lại chưa giao" cho đơn giao 1 phần.
+  total_amount_delivered_summary: number | null;
   employee_code: string | null;
   recorded_sale_users_name: string | null;
   owner_name: string | null;
@@ -188,8 +192,10 @@ async function upsertOrderFromAmis(o: AmisSaleOrder, managedCodes: Set<string>):
     salesEmployeeId,
     orderDate: o.sale_order_date ? new Date(o.sale_order_date) : null,
     expectedDeliveryDate: o.deadline_date ? new Date(o.deadline_date) : null,
+    actualDeliveryDate: o.delivery_date ? new Date(o.delivery_date) : null,
     status: o.is_deleted ? OrderStatus.CANCELLED : mapAmisStatus(o.delivery_status, o.status),
     totalValue: o.sale_order_amount ?? o.total_summary ?? 0,
+    deliveredValue: o.total_amount_delivered_summary ?? 0,
     poCode,
     rawData: o as object,
   };

@@ -68,6 +68,12 @@ export default async function OrderDetailPage({ params }: { params: { id: string
           </p>
         </div>
         <div>
+          <p className="text-gray-500">Ngày giao thực tế</p>
+          <p className="font-medium text-gray-900">
+            {order.actualDeliveryDate ? formatDateVN(order.actualDeliveryDate) : "Chưa giao"}
+          </p>
+        </div>
+        <div>
           <p className="text-gray-500">Giá trị đơn hàng</p>
           <p className="font-medium text-gray-900">{formatCurrencyVND(order.totalValue.toString())}</p>
         </div>

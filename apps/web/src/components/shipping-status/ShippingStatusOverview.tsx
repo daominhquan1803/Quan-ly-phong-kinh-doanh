@@ -24,7 +24,9 @@ interface OrderRow {
   customerName: string;
   salesEmployeeName: string | null;
   expectedDeliveryDate: string | null;
-  totalValue: string;
+  // Giá trị còn lại chưa giao (đã trừ phần đã giao nếu đơn giao 1 phần) — không phải tổng
+  // giá trị đơn.
+  remainingValue: string;
   daysUntilDeadline: number | null;
   status: string;
 }
@@ -52,7 +54,7 @@ interface SummaryResponse {
   upcomingOrdersTruncated: boolean;
 }
 
-type SortField = "expectedDeliveryDate" | "daysUntilDeadline" | "totalValue";
+type SortField = "expectedDeliveryDate" | "daysUntilDeadline" | "remainingValue";
 
 export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
   const [tab, setTab] = useState<"overdue" | "upcoming">("overdue");
@@ -106,7 +108,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
               : -Infinity
             : field === "daysUntilDeadline"
             ? Math.abs(a.daysUntilDeadline ?? 0)
-            : Number(a.totalValue);
+            : Number(a.remainingValue);
         const bv =
           field === "expectedDeliveryDate"
             ? b.expectedDeliveryDate
@@ -114,7 +116,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
               : -Infinity
             : field === "daysUntilDeadline"
             ? Math.abs(b.daysUntilDeadline ?? 0)
-            : Number(b.totalValue);
+            : Number(b.remainingValue);
         return (av - bv) * dir;
       });
     }
@@ -234,8 +236,8 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
                 <SortableTh field="daysUntilDeadline" sort={sort} onSort={handleSort} align="right">
                   {tab === "overdue" ? "Số ngày quá hạn" : "Còn lại"}
                 </SortableTh>
-                <SortableTh field="totalValue" sort={sort} onSort={handleSort} align="right">
-                  Giá trị
+                <SortableTh field="remainingValue" sort={sort} onSort={handleSort} align="right">
+                  Giá trị còn lại
                 </SortableTh>
               </tr>
               <tr className="bg-white border-t border-gray-100">
@@ -294,7 +296,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
                         : `${o.daysUntilDeadline} ngày`
                       : "—"}
                   </td>
-                  <td className="px-4 py-2.5 text-right">{formatCurrencyVND(o.totalValue)}</td>
+                  <td className="px-4 py-2.5 text-right">{formatCurrencyVND(o.remainingValue)}</td>
                 </tr>
               ))}
             </tbody>
@@ -339,9 +341,9 @@ function SortableTh({
   align = "left",
   children,
 }: {
-  field: "expectedDeliveryDate" | "daysUntilDeadline" | "totalValue";
+  field: "expectedDeliveryDate" | "daysUntilDeadline" | "remainingValue";
   sort: { field: string | null; dir: "asc" | "desc" };
-  onSort: (field: "expectedDeliveryDate" | "daysUntilDeadline" | "totalValue") => void;
+  onSort: (field: "expectedDeliveryDate" | "daysUntilDeadline" | "remainingValue") => void;
   align?: "left" | "right";
   children: React.ReactNode;
 }) {
