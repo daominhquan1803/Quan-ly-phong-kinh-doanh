@@ -16,7 +16,7 @@ interface PlanLine {
   targetQuantity: number | null;
   actualRevenue: number;
   actualQuantity: number | null;
-  actualBasis: "PRODUCT" | "EMPLOYEE_TOTAL" | "UNRESOLVED";
+  actualBasis: "PRODUCT" | "PRODUCT_GROUP" | "EMPLOYEE_TOTAL" | "UNRESOLVED";
   completionPct: number | null;
 }
 
@@ -159,39 +159,47 @@ interface EmployeeRow {
 /**
  * Gộp nhiều dòng kế hoạch (1 dòng/sản phẩm) của cùng 1 nhân viên trong 1 nhóm hàng thành
  * đúng 1 dòng. Chỉ tiêu cộng dồn bình thường (mỗi dòng là 1 phần chỉ tiêu khác nhau), nhưng
- * "Thực hiện" ở basis EMPLOYEE_TOTAL là *cùng 1 con số* tổng doanh số nhân viên lặp lại trên
- * mọi dòng (chưa tách được theo sản phẩm) — nên chỉ được cộng 1 lần duy nhất, không phải
- * cộng theo số dòng, nếu không sẽ ra số ảo nhân lên theo số sản phẩm.
+ * "Thực hiện" ở basis PRODUCT_GROUP/EMPLOYEE_TOTAL là *cùng 1 con số* (doanh số thực hiện
+ * của nhân viên trong đúng nhóm hàng này, hoặc tổng cả nhân viên nếu không xác định được
+ * nhóm) lặp lại trên mọi dòng sản phẩm — nên chỉ được cộng 1 lần duy nhất, không phải cộng
+ * theo số dòng, nếu không sẽ ra số ảo nhân lên theo số sản phẩm.
  */
 function aggregateByEmployee(lines: PlanLine[]): EmployeeRow[] {
   const buckets = new Map<
     string,
-    { employeeName: string; targetRevenue: number; productActual: number; employeeTotalActual: number | null }
+    { employeeName: string; targetRevenue: number; productActual: number; groupActual: number | null; hasEmployeeTotalFallback: boolean }
   >();
   for (const l of lines) {
     const key = l.employeeName; // tên hiển thị đã là danh tính nhân viên duy nhất trong 1 tháng
     if (!buckets.has(key)) {
-      buckets.set(key, { employeeName: l.employeeName, targetRevenue: 0, productActual: 0, employeeTotalActual: null });
+      buckets.set(key, {
+        employeeName: l.employeeName,
+        targetRevenue: 0,
+        productActual: 0,
+        groupActual: null,
+        hasEmployeeTotalFallback: false,
+      });
     }
     const b = buckets.get(key)!;
     b.targetRevenue += l.targetRevenue;
     if (l.actualBasis === "PRODUCT") {
       b.productActual += l.actualRevenue; // theo đúng mã hàng — cộng dồn được
-    } else if (l.actualBasis === "EMPLOYEE_TOTAL") {
-      b.employeeTotalActual = l.actualRevenue; // cùng 1 giá trị lặp lại — lấy 1 lần
+    } else if (l.actualBasis === "PRODUCT_GROUP" || l.actualBasis === "EMPLOYEE_TOTAL") {
+      b.groupActual = l.actualRevenue; // cùng 1 giá trị lặp lại theo nhân viên trong nhóm này — lấy 1 lần
+      if (l.actualBasis === "EMPLOYEE_TOTAL") b.hasEmployeeTotalFallback = true;
     }
   }
 
   return Array.from(buckets.entries())
     .map(([key, b]) => {
-      const actualRevenue = b.productActual + (b.employeeTotalActual ?? 0);
+      const actualRevenue = b.productActual + (b.groupActual ?? 0);
       return {
         key,
         employeeName: b.employeeName,
         targetRevenue: b.targetRevenue,
         actualRevenue,
         completionPct: b.targetRevenue > 0 ? Math.round((actualRevenue / b.targetRevenue) * 100) : null,
-        hasEmployeeTotalBasis: b.employeeTotalActual !== null,
+        hasEmployeeTotalBasis: b.hasEmployeeTotalFallback,
       };
     })
     .sort((a, b) => b.targetRevenue - a.targetRevenue);

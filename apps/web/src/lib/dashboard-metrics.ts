@@ -77,10 +77,12 @@ export interface SalesPlanLineWithActual {
   targetQuantity: number | null;
   actualRevenue: number;
   actualQuantity: number | null;
-  // PRODUCT: khớp đúng theo mã hàng. EMPLOYEE_TOTAL: dòng không có mã hàng cụ thể (vd theo
-  // nhóm hàng) nên tạm lấy tổng doanh số nhân viên trong tháng làm số liệu tham chiếu gần
-  // đúng nhất — chưa có dữ liệu nhóm hàng ở cấp từng mặt hàng để tính chính xác hơn.
-  actualBasis: "PRODUCT" | "EMPLOYEE_TOTAL" | "UNRESOLVED";
+  // PRODUCT: khớp đúng theo mã hàng. PRODUCT_GROUP: dòng kế hoạch không có mã hàng cụ thể
+  // nhưng có Nhóm hàng (Sản xuất/Thương mại) — thực hiện lấy theo đúng nhóm, phân loại từng
+  // OrderItem theo tiền tố mã hàng thật (SI/SB = Sản xuất, còn lại = Thương mại). EMPLOYEE_TOTAL:
+  // dòng không xác định được nhóm hàng — tạm lấy tổng doanh số nhân viên trong tháng làm số
+  // liệu tham chiếu gần đúng nhất.
+  actualBasis: "PRODUCT" | "PRODUCT_GROUP" | "EMPLOYEE_TOTAL" | "UNRESOLVED";
   completionPct: number | null;
 }
 
@@ -117,6 +119,9 @@ export async function getSalesPlanLinesWithActual(
     select: { itemCode: true, quantity: true, totalPrice: true, order: { select: { salesEmployeeId: true } } },
   });
   const productMap = new Map<string, { revenue: number; quantity: number }>();
+  // Doanh số thực hiện theo nhân viên x Nhóm hàng, phân loại theo đúng quy tắc thật của công
+  // ty: mã hàng bắt đầu bằng SI hoặc SB là hàng sản xuất, còn lại là hàng thương mại.
+  const employeeGroupMap = new Map<string, { production: number; trading: number }>();
   for (const it of items) {
     if (!it.itemCode || !it.order.salesEmployeeId) continue;
     const key = `${it.order.salesEmployeeId}::${it.itemCode}`;
@@ -124,6 +129,13 @@ export async function getSalesPlanLinesWithActual(
     cur.revenue += Number(it.totalPrice);
     cur.quantity += Number(it.quantity);
     productMap.set(key, cur);
+
+    const upperCode = it.itemCode.toUpperCase();
+    const isProduction = upperCode.startsWith("SI") || upperCode.startsWith("SB");
+    const g = employeeGroupMap.get(it.order.salesEmployeeId) ?? { production: 0, trading: 0 };
+    if (isProduction) g.production += Number(it.totalPrice);
+    else g.trading += Number(it.totalPrice);
+    employeeGroupMap.set(it.order.salesEmployeeId, g);
   }
 
   return lines.map((l) => {
@@ -137,6 +149,10 @@ export async function getSalesPlanLinesWithActual(
       actualRevenue = agg?.revenue ?? 0;
       actualQuantity = agg?.quantity ?? 0;
       actualBasis = "PRODUCT";
+    } else if (l.employeeId && (l.productGroup === "Sản xuất" || l.productGroup === "Thương mại")) {
+      const g = employeeGroupMap.get(l.employeeId);
+      actualRevenue = l.productGroup === "Sản xuất" ? g?.production ?? 0 : g?.trading ?? 0;
+      actualBasis = "PRODUCT_GROUP";
     } else if (l.employeeId) {
       actualRevenue = employeeTotalMap.get(l.employeeId) ?? 0;
       actualBasis = "EMPLOYEE_TOTAL";
