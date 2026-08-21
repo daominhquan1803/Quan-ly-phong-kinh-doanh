@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 
 const UPCOMING_WINDOW_DAYS = 3;
 const RATE_WINDOW_DAYS = 90; // tính tỷ lệ giao đúng hạn dựa trên PO có hạn giao trong 90 ngày qua
+const DAILY_WINDOW_DAYS = 7; // thống kê giao hàng hàng ngày — chỉ hiện 7 ngày gần nhất
 // Trả nguyên danh sách (không cắt bớt) để bảng có tìm kiếm/sắp xếp ở client tìm được đúng mọi
 // PO — quy mô thực tế (vài trăm PO quá hạn) vẫn nhẹ để render, chỉ chặn ở mức rất cao để tránh
 // trường hợp bất thường dữ liệu phình to đột biến làm treo trang.
@@ -206,6 +207,44 @@ export async function GET(req: NextRequest) {
     const totalDeliveredValue = Array.from(byEmployeeMap.values()).reduce((s, r) => s + r.deliveredValue, 0);
     const totalUndeliveredValue = openPos.reduce((s, p) => s + p.remainingValue, 0);
 
+    // Thống kê giao hàng theo ngày — 7 ngày gần nhất (kể cả hôm nay), lấy từ đúng nguồn
+    // PoDeliveryEvent như "Giá trị đã giao" ở trên, chỉ khác là gộp theo NGÀY thay vì THÁNG.
+    const dailyStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (DAILY_WINDOW_DAYS - 1));
+    const dailyEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const dailyEvents = await prisma.poDeliveryEvent.findMany({
+      where: {
+        eventDate: { gte: dailyStart, lt: dailyEnd },
+        salesEmployeeId: { not: null },
+        ...(employeeId && session.user.role === "ADMIN" ? { salesEmployeeId: employeeId } : {}),
+        ...(session.user.role !== "ADMIN" ? { salesEmployeeId: session.user.id } : {}),
+      },
+      select: { eventDate: true, salesEmployeeId: true, value: true },
+    });
+
+    const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const dayBuckets = new Map<string, { date: string; total: number; byEmployee: Record<string, number> }>();
+    for (let i = 0; i < DAILY_WINDOW_DAYS; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (DAILY_WINDOW_DAYS - 1) + i);
+      dayBuckets.set(dayKey(d), { date: dayKey(d), total: 0, byEmployee: {} });
+    }
+    const dailyEmployeeIds = new Set<string>(byEmployeeMap.keys());
+    for (const ev of dailyEvents) {
+      const empId = ev.salesEmployeeId;
+      if (!empId) continue;
+      dailyEmployeeIds.add(empId);
+      const bucket = dayBuckets.get(dayKey(new Date(ev.eventDate)));
+      if (!bucket) continue; // ngoài khoảng 7 ngày do lệch múi giờ biên ngày — bỏ qua, không đáng kể
+      const value = Number(ev.value);
+      bucket.total += value;
+      bucket.byEmployee[empId] = (bucket.byEmployee[empId] ?? 0) + value;
+    }
+    // Không lấy tên nhân viên trực tiếp từ byEmployeeMap vì có thể thiếu người chỉ có giao
+    // hàng trong 7 ngày qua nhưng không có PO đang mở/doanh số tháng này (hiếm nhưng có thể).
+    const dailyEmployees = await prisma.user.findMany({
+      where: { id: { in: Array.from(dailyEmployeeIds) } },
+      select: { id: true, name: true },
+    });
+
     const toRow = (p: PoAgg) => ({
       id: p.poCode,
       orderCode: p.poCode,
@@ -231,6 +270,9 @@ export async function GET(req: NextRequest) {
       totalDeliveredValue,
       totalUndeliveredValue,
       reportMonthLabel,
+      dailyWindowDays: DAILY_WINDOW_DAYS,
+      dailyEmployees,
+      dailyDelivery: Array.from(dayBuckets.values()),
       byEmployee: Array.from(byEmployeeMap.values()).sort((a, b) => b.overdueCount - a.overdueCount),
       overdueOrders: overdue.slice(0, MAX_ROWS).map(toRow),
       overdueOrdersTruncated: overdue.length > MAX_ROWS,

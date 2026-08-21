@@ -6,7 +6,7 @@ import { cn, formatCurrencyVND, formatDateVN } from "@/lib/utils";
 import { normalizeVN } from "@/lib/text-normalize";
 import { EmployeeFilterSelect } from "@/components/shared/EmployeeFilterSelect";
 import { FilterInput, SortableTh, toggleSort, type SortState } from "@/components/shared/SortableFilterableTable";
-import { AlertTriangle, Clock, PackageCheck, TrendingUp, X } from "lucide-react";
+import { AlertTriangle, CalendarDays, Clock, PackageCheck, TrendingUp, X } from "lucide-react";
 
 interface OrderRow {
   id: string;
@@ -31,6 +31,17 @@ interface EmployeeRow {
   undeliveredValue: number;
 }
 
+interface EmployeeMeta {
+  id: string;
+  name: string;
+}
+
+interface DailyDeliveryRow {
+  date: string; // "YYYY-MM-DD"
+  total: number;
+  byEmployee: Record<string, number>;
+}
+
 interface SummaryResponse {
   openCount: number;
   overdueCount: number;
@@ -42,11 +53,21 @@ interface SummaryResponse {
   totalDeliveredValue: number;
   totalUndeliveredValue: number;
   reportMonthLabel: string;
+  dailyWindowDays: number;
+  dailyEmployees: EmployeeMeta[];
+  dailyDelivery: DailyDeliveryRow[];
   byEmployee: EmployeeRow[];
   overdueOrders: OrderRow[];
   overdueOrdersTruncated: boolean;
   upcomingOrders: OrderRow[];
   upcomingOrdersTruncated: boolean;
+}
+
+const WEEKDAY_LABELS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+function formatDayLabel(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  return `${WEEKDAY_LABELS[date.getDay()]} ${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}`;
 }
 
 type SortField = "expectedDeliveryDate" | "daysUntilDeadline" | "remainingValue";
@@ -205,6 +226,56 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
                 </td>
                 <td className="px-4 py-2.5 text-right font-semibold text-brandRed-600">
                   {formatCurrencyVND(data.totalUndeliveredValue)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+
+      {data && data.dailyDelivery.length > 0 && (
+        <div className="rounded-lg border border-gray-200 bg-white overflow-x-auto">
+          <div className="flex items-center gap-1.5 px-4 pt-3 text-sm font-medium text-gray-900">
+            <CalendarDays className="h-4 w-4" />
+            Giao hàng theo ngày ({data.dailyWindowDays} ngày gần nhất)
+          </div>
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-50 text-gray-500">
+              <tr>
+                <th className="text-left font-medium px-4 py-2.5">Ngày</th>
+                {data.dailyEmployees.map((e) => (
+                  <th key={e.id} className="text-right font-medium px-4 py-2.5">
+                    {e.name}
+                  </th>
+                ))}
+                <th className="text-right font-medium px-4 py-2.5">Tổng ngày</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {data.dailyDelivery.map((d) => (
+                <tr key={d.date}>
+                  <td className="px-4 py-2.5 font-medium text-gray-900">{formatDayLabel(d.date)}</td>
+                  {data.dailyEmployees.map((e) => (
+                    <td key={e.id} className="px-4 py-2.5 text-right text-gray-700">
+                      {d.byEmployee[e.id] ? formatCurrencyVND(d.byEmployee[e.id]) : "—"}
+                    </td>
+                  ))}
+                  <td className="px-4 py-2.5 text-right font-semibold text-success-600">
+                    {d.total > 0 ? formatCurrencyVND(d.total) : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot className="border-t-2 border-gray-200 bg-gray-50">
+              <tr>
+                <td className="px-4 py-2.5 font-semibold text-gray-900">Tổng {data.dailyWindowDays} ngày</td>
+                {data.dailyEmployees.map((e) => (
+                  <td key={e.id} className="px-4 py-2.5 text-right font-semibold text-gray-900">
+                    {formatCurrencyVND(data.dailyDelivery.reduce((s, d) => s + (d.byEmployee[e.id] ?? 0), 0))}
+                  </td>
+                ))}
+                <td className="px-4 py-2.5 text-right font-semibold text-success-600">
+                  {formatCurrencyVND(data.dailyDelivery.reduce((s, d) => s + d.total, 0))}
                 </td>
               </tr>
             </tfoot>
