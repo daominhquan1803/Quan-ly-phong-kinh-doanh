@@ -158,7 +158,7 @@ async function syncOrderItems(orderId: string, mappings: AmisProductMapping[] | 
 async function upsertOrderFromAmis(o: AmisSaleOrder, managedCodes: Set<string>): Promise<boolean> {
   const existing = await prisma.order.findFirst({
     where: { OR: [{ amisOrderId: o.id }, { orderCode: o.sale_order_no }] },
-    select: { id: true, deliveryVerifiedManually: true },
+    select: { id: true, deliveryVerifiedManually: true, deliveredValue: true },
   });
 
   // Đơn đã được đối chiếu/sửa thủ công (vd theo Sổ chi tiết bán hàng kế toán, khi phát hiện
@@ -210,7 +210,46 @@ async function upsertOrderFromAmis(o: AmisSaleOrder, managedCodes: Set<string>):
     : await prisma.order.create({ data });
 
   await syncOrderItems(order.id, o.sale_order_product_mappings);
+  await recordDeliveryDelta({
+    orderId: order.id,
+    salesEmployeeId,
+    previousDeliveredValue: existing ? Number(existing.deliveredValue) : 0,
+    newDeliveredValue: Number(data.deliveredValue),
+    // Đơn đã tồn tại: coi delta là phát hiện NGAY LÚC ĐỒNG BỘ NÀY (đúng thời điểm ta biết
+    // tin này). Đơn mới lần đầu thấy: nếu đã có sẵn deliveredValue > 0 (vd đơn được tạo và
+    // giao xong giữa 2 lần đồng bộ), dùng actualDeliveryDate của đơn làm mốc thay vì "bây
+    // giờ" — tránh dồn giá trị đã giao từ trước vào đúng ngày đồng bộ, làm phồng tháng hiện tại.
+    fallbackOccurredAt: data.actualDeliveryDate ?? new Date(),
+    isNewOrder: !existing,
+  });
   return true;
+}
+
+/**
+ * Ghi 1 dòng lịch sử chênh lệch giá trị đã giao (xem model OrderDeliveryEvent) nếu có thay
+ * đổi — bỏ qua nếu deliveredValue không đổi giữa 2 lần đồng bộ (trường hợp phổ biến nhất,
+ * đơn chưa có gì mới).
+ */
+async function recordDeliveryDelta(params: {
+  orderId: string;
+  salesEmployeeId: string | null;
+  previousDeliveredValue: number;
+  newDeliveredValue: number;
+  fallbackOccurredAt: Date;
+  isNewOrder: boolean;
+}): Promise<void> {
+  const delta = params.newDeliveredValue - params.previousDeliveredValue;
+  if (delta === 0) return;
+
+  await prisma.orderDeliveryEvent.create({
+    data: {
+      orderId: params.orderId,
+      salesEmployeeId: params.salesEmployeeId,
+      deltaValue: delta,
+      deliveredValueAfter: params.newDeliveredValue,
+      occurredAt: params.isNewOrder ? params.fallbackOccurredAt : new Date(),
+    },
+  });
 }
 
 /**

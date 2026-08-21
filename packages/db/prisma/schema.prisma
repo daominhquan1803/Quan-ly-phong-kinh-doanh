@@ -175,13 +175,47 @@ model Order {
   createdAt                DateTime     @default(now())
   updatedAt                DateTime     @updatedAt
 
-  shipmentSlips ShipmentSlip[]
-  items         OrderItem[]
+  shipmentSlips  ShipmentSlip[]
+  items          OrderItem[]
+  deliveryEvents OrderDeliveryEvent[]
 
   @@index([salesEmployeeId])
   @@index([expectedDeliveryDate])
   @@index([status])
   @@map("orders")
+}
+
+// Lịch sử tăng/giảm giá trị đã giao (deliveredValue) của từng đơn qua mỗi lần đồng bộ AMIS
+// (hoặc đối chiếu thủ công) — ghi 1 dòng "delta" (phần chênh lệch so với lần trước) mỗi khi
+// phát hiện thay đổi, kèm thời điểm PHÁT HIỆN (occurredAt). Lý do cần bảng này: AMIS chỉ trả
+// về giá trị đã giao LUỸ KẾ + ngày giao GẦN NHẤT của cả đơn (không có lịch sử từng đợt giao),
+// nên đơn giao nhiều đợt trải qua nhiều tháng (vd đợt 1 tháng 7, đợt 2 tháng 8) nếu tính trực
+// tiếp trên Order.actualDeliveryDate sẽ bị dồn hết vào tháng của đợt giao GẦN NHẤT, và số liệu
+// tháng cũ có thể tự đổi khi có đợt giao mới — sai lệch cho báo cáo doanh số theo tháng. Ghi
+// nhận delta ngay khi phát hiện giúp "doanh số tháng" ổn định theo thời gian, không bị dồn/đổi
+// ngược — nhưng chỉ chính xác kể từ khi bảng này bắt đầu ghi (không truy hồi được lịch sử các
+// đợt giao đã xảy ra trước đó, nên có 1 lần backfill duy nhất lúc thêm tính năng — xem
+// migration liên quan).
+model OrderDeliveryEvent {
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  // Chép lại salesEmployeeId của đơn tại thời điểm ghi — tránh phải join sang Order chỉ để
+  // gộp theo nhân viên/tháng (truy vấn doanh số chạy thường xuyên, cần nhanh).
+  salesEmployeeId String?
+  // Phần chênh lệch giá trị đã giao so với lần đồng bộ trước — có thể ÂM nếu AMIS điều chỉnh
+  // giảm (huỷ một phần, sửa lỗi nhập liệu...). Tổng các delta của 1 đơn luôn bằng
+  // deliveredValue hiện tại của đơn đó.
+  deltaValue          Decimal  @db.Decimal(18, 2)
+  deliveredValueAfter Decimal  @db.Decimal(18, 2)
+  // Thời điểm phát hiện delta này (giờ chạy đồng bộ, hoặc ngày backfill/đối chiếu thủ công) —
+  // quyết định delta này tính vào "doanh số tháng" nào, và không đổi về sau.
+  occurredAt DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([occurredAt])
+  @@index([salesEmployeeId, occurredAt])
+  @@map("order_delivery_events")
 }
 
 // Chi tiết mã hàng/số lượng/giá của đơn hàng — đồng bộ từ AMIS

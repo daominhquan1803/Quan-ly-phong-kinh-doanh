@@ -88,7 +88,7 @@ async function main() {
 
   const existingOrders = await prisma.order.findMany({
     where: { orderCode: { in: Array.from(byOrder.keys()) } },
-    select: { id: true, orderCode: true, status: true, totalValue: true },
+    select: { id: true, orderCode: true, status: true, totalValue: true, deliveredValue: true, salesEmployeeId: true },
   });
   const existingByCode = new Map(existingOrders.map((o) => [o.orderCode, o]));
 
@@ -128,7 +128,7 @@ async function main() {
       const customerName = orderLines.find((l) => l.customerName)?.customerName ?? "(Không rõ khách hàng)";
 
       if (!dryRun) {
-        await prisma.order.create({
+        const created2 = await prisma.order.create({
           data: {
             orderCode,
             source: "ACCOUNTING_RECONCILE",
@@ -154,6 +154,19 @@ async function main() {
             },
           },
         });
+        // Đơn mới toanh trong hệ thống — ghi nhận trọn giá trị đã giao thành 1 delta duy nhất,
+        // mốc ngày lấy theo hoá đơn kế toán (gần với thực tế hơn "ngày chạy script").
+        if (totalRevenue !== 0) {
+          await prisma.orderDeliveryEvent.create({
+            data: {
+              orderId: created2.id,
+              salesEmployeeId: employee.id,
+              deltaValue: totalRevenue,
+              deliveredValueAfter: totalRevenue,
+              occurredAt: maxInvoiceDate ? new Date(maxInvoiceDate) : new Date(),
+            },
+          });
+        }
       }
       created.push(`${orderCode} — ${customerName} — ${totalRevenue.toLocaleString("vi-VN")}đ — NV ${employee.name}`);
       continue;
@@ -161,6 +174,7 @@ async function main() {
 
     if (existing.status === "PARTIAL_DELIVERED" && totalRevenue >= Number(existing.totalValue) * 0.9) {
       const pct = Math.round((totalRevenue / Number(existing.totalValue)) * 100);
+      const delta = Number(existing.totalValue) - Number(existing.deliveredValue);
       if (!dryRun) {
         await prisma.order.update({
           where: { id: existing.id },
@@ -172,6 +186,19 @@ async function main() {
             deliveryVerifiedNote: `CRM báo "Giao 1 phần" nhưng kế toán đã xuất hoá đơn ${pct}% giá trị đơn ${RECONCILE_NOTE_SUFFIX}`,
           },
         });
+        // Chỉ phần CHÊNH LỆCH mới được nâng lên "Đã giao" — phần đã ghi nhận từ trước (nếu
+        // deliveredValue cũ > 0) giữ nguyên mốc thời gian cũ, không tính lại vào tháng này.
+        if (delta !== 0) {
+          await prisma.orderDeliveryEvent.create({
+            data: {
+              orderId: existing.id,
+              salesEmployeeId: existing.salesEmployeeId,
+              deltaValue: delta,
+              deliveredValueAfter: Number(existing.totalValue),
+              occurredAt: maxInvoiceDate ? new Date(maxInvoiceDate) : new Date(),
+            },
+          });
+        }
       }
       updatedPartial.push(`${orderCode} — đã xuất HĐ ${pct}% — ${totalRevenue.toLocaleString("vi-VN")}đ`);
     }
