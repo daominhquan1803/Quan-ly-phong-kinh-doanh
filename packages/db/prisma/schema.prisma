@@ -83,6 +83,8 @@ model User {
   tripApprovals    BusinessTripRequest[]  @relation("TripApprovedBy")
   defectReports    DefectReport[]         @relation("DefectEmployee")
   defectsCreated   DefectReport[]         @relation("DefectCreatedBy")
+  poTrackingLines  PoTrackingLine[]
+  poTrackingBatches PoTrackingImportBatch[]
 
   @@map("users")
 }
@@ -467,4 +469,106 @@ model KpiMonthlyEntry {
 
   @@unique([employeeId, year, month])
   @@map("kpi_monthly_entries")
+}
+
+// ---------- Theo dõi PO/giao hàng độc lập (nhập tay từ file Excel, KHÔNG qua AMIS) ----------
+// Anh Quân trực tiếp theo dõi PO + từng đợt giao hàng trong 1 file Excel riêng (không đi qua
+// AMIS CRM), gửi file cập nhật hàng ngày. Từ khi có tính năng này, đây là NGUỒN CHÍNH cho
+// "Doanh số" / "Giá trị PO đặt hàng" toàn app (Tổng quan, Kế hoạch kinh doanh, KPI) — thay cho
+// cách tính suy ra từ AMIS trước đó — vì file có sẵn NGÀY + SỐ LƯỢNG + GIÁ TRỊ của TỪNG đợt
+// giao (tối đa 3 đợt/dòng hàng), chính xác hơn hẳn deliveredValue luỹ kế + 1 ngày giao duy
+// nhất mà AMIS cung cấp. Trang "Tiến độ giao hàng" (quá hạn/sắp đến hạn theo đơn) KHÔNG đổi,
+// vẫn dùng dữ liệu Order đồng bộ AMIS như cũ — 2 nguồn dữ liệu độc lập, phục vụ 2 mục đích
+// khác nhau (quá hạn giao ở mức đơn vs. doanh số ở mức PO/mã hàng).
+model PoTrackingImportBatch {
+  id           String   @id @default(cuid())
+  fileName     String
+  totalRows    Int
+  createdCount Int
+  updatedCount Int
+  errorCount   Int
+  errorReport  Json?
+  createdById  String
+  createdBy    User     @relation(fields: [createdById], references: [id])
+  createdAt    DateTime @default(now())
+
+  lines PoTrackingLine[]
+
+  @@map("po_tracking_import_batches")
+}
+
+model PoTrackingLine {
+  id String @id @default(cuid())
+
+  // Khoá tự nhiên để upsert đúng dòng khi file được gửi lại (PO/dòng hàng lặp lại mỗi lần gửi,
+  // chỉ tiến độ giao hàng thay đổi) — ghép Số PO + Mã hàng (hoặc Tên SP nếu thiếu mã) + số thứ
+  // tự xuất hiện trong PO đó (phòng trường hợp 1 PO có nhiều dòng cùng mã hàng). KHÔNG ghép số
+  // lượng/giá vào khoá vì đây là các trường có thể được anh sửa lại theo thời gian.
+  naturalKey String @unique
+
+  // Mã NVKD gốc trong file (đã chuẩn hoá hoa/trim, vd "TANDT") — chỉ gán salesEmployeeId khi
+  // khớp đúng 1 trong 4 nhân viên đang theo dõi (xác nhận qua đối chiếu tên khách hàng trùng
+  // khớp với dữ liệu AMIS: TANDT=Đặng Văn Tấn, QUANDM=Đào Minh Quân, TUNGNT=Ngô Thanh Tùng,
+  // DUNGP=Phạm Thị Dung). Các mã NVKD khác (nhân viên khác/cũ) vẫn lưu nguyên văn, không gán
+  // tài khoản — theo đúng quyết định của anh, không tự suy đoán gán nhầm người.
+  nvkdCodeRaw     String?
+  salesEmployeeId String?
+  salesEmployee   User?   @relation(fields: [salesEmployeeId], references: [id])
+
+  customerCode          String? // "Mã khách hàng"
+  poMonthLabel          String? // "Tháng PO" — chỉ tham khảo, mọi tính toán dùng poDate
+  poCode                String // "Số PO"
+  itemCode              String? // "Mã hàng"
+  itemName              String? // "Tên SP"
+  invoiceName           String? // "Tên Hoá đơn"
+  customerItemCode      String? // "Mã KH" (mã hàng phía khách hàng)
+  monthLabel            String? // "Tháng" — chỉ tham khảo
+  poDate                DateTime?
+  poQuantity            Decimal?  @db.Decimal(14, 2)
+  unit                  String?
+  actualPrice           Decimal?  @db.Decimal(18, 2) // "Giá thực"
+  contractPrice         Decimal?  @db.Decimal(18, 2) // "Giá HĐ"
+  requestedDeliveryDate DateTime? // "Ngày Y/C giao"
+  note                  String?
+  statusRaw             String? // "Trạng thái" (đã trim) — vd "Kết thúc", "Đang thực hiện"
+
+  totalDeliveredQty Decimal? @db.Decimal(14, 2) // "Tổng SL giao"
+  remainingQty      Decimal? @db.Decimal(14, 2) // "SL Chưa giao"
+
+  poValue        Decimal @default(0) @db.Decimal(18, 2) // "G.Trị PO"
+  deliveredValue Decimal @default(0) @db.Decimal(18, 2) // "G.Trị Thực giao"
+  remainingValue Decimal @default(0) @db.Decimal(18, 2) // "G.Trị còn lại"
+  content        String? // "Nội Dung"
+
+  importBatchId String?
+  importBatch   PoTrackingImportBatch? @relation(fields: [importBatchId], references: [id])
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+
+  deliveryEvents PoDeliveryEvent[]
+
+  @@index([salesEmployeeId])
+  @@index([poDate])
+  @@index([poCode])
+  @@map("po_tracking_lines")
+}
+
+// 1 dòng = 1 đợt giao hàng thật (tách từ 3 cột "Ngày/SL/Giá trị giao lần 1/2/3" của
+// PoTrackingLine) — cho phép cộng dồn theo tháng chính xác bằng 1 câu groupBy đơn giản, đúng
+// bằng ngày/giá trị anh đã ghi nhận, không cần suy đoán/xấp xỉ như với dữ liệu AMIS.
+model PoDeliveryEvent {
+  id     String         @id @default(cuid())
+  lineId String
+  line   PoTrackingLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  // Chép lại salesEmployeeId của dòng tại thời điểm ghi — tránh phải join sang PoTrackingLine
+  // chỉ để gộp theo nhân viên/tháng.
+  salesEmployeeId String?
+  eventDate       DateTime
+  quantity        Decimal  @db.Decimal(14, 2)
+  value           Decimal  @db.Decimal(18, 2)
+  sequence        Int // đợt giao thứ 1/2/3 trong dòng PO này
+
+  @@index([eventDate])
+  @@index([salesEmployeeId, eventDate])
+  @@map("po_delivery_events")
 }

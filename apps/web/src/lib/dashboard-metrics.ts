@@ -1,4 +1,4 @@
-import { prisma, OrderStatus } from "@hoanggia/db";
+import { prisma } from "@hoanggia/db";
 
 export function monthRange(year: number, month: number) {
   const start = new Date(year, month - 1, 1);
@@ -12,11 +12,13 @@ export interface EmployeeTargetVsActual {
   year: number;
   month: number;
   targetRevenue: number;
-  // "Doanh số" thực hiện — tính theo GIÁ TRỊ ĐÃ GIAO trong tháng (actualDeliveryDate rơi vào
-  // tháng đang xem), không phải theo ngày đặt hàng. Đây là số dùng để so KPI/chỉ tiêu.
+  // "Doanh số" thực hiện — tính theo GIÁ TRỊ ĐÃ GIAO trong tháng, lấy từ file theo dõi PO độc
+  // lập anh Quân nhập tay (PoDeliveryEvent — tách đúng từng đợt giao thật, chính xác hơn hẳn
+  // deliveredValue luỹ kế từ AMIS). Đây là số dùng để so KPI/chỉ tiêu.
   actualRevenue: number;
-  // Giá trị PO đặt hàng trong tháng — tính theo ngày ĐẶT hàng (orderDate), bất kể đã giao hay
-  // chưa. Tách riêng khỏi "Doanh số" vì 2 số đo 2 việc khác nhau: đặt hàng vs giao hàng.
+  // Giá trị PO đặt hàng trong tháng — tính theo ngày ĐẶT PO (PoTrackingLine.poDate), cùng
+  // nguồn với "Doanh số" (độc lập AMIS). Tách riêng vì 2 số đo 2 việc khác nhau: đặt hàng vs
+  // giao hàng.
   poValue: number;
   completionPct: number | null;
 }
@@ -51,33 +53,27 @@ export async function getEmployeeTargetVsActual(
 
   const [targets, deliveredByEmployee, poByEmployee] = await Promise.all([
     prisma.salesTarget.findMany({ where: { year, month } }),
-    // "Doanh số" = tổng delta giá trị đã giao PHÁT HIỆN trong tháng này (bảng
-    // OrderDeliveryEvent — xem model để hiểu vì sao không dùng trực tiếp Order.deliveredValue/
-    // actualDeliveryDate: đơn giao nhiều đợt trải nhiều tháng sẽ được tách đúng theo từng đợt,
-    // và số liệu tháng cũ không bị đổi ngược khi có đợt giao mới về sau).
-    prisma.orderDeliveryEvent.groupBy({
+    // "Doanh số" = tổng giá trị các đợt giao THẬT trong tháng này (PoDeliveryEvent — nhập tay
+    // từ file theo dõi PO độc lập, không qua AMIS). Mỗi đợt giao có ngày riêng nên đơn giao
+    // nhiều đợt trải nhiều tháng được tách đúng theo từng tháng, không dồn/xáo trộn như dữ
+    // liệu suy ra từ AMIS trước đây.
+    prisma.poDeliveryEvent.groupBy({
       by: ["salesEmployeeId"],
-      where: { occurredAt: { gte: start, lt: end }, salesEmployeeId: { not: null } },
-      _sum: { deltaValue: true },
+      where: { eventDate: { gte: start, lt: end }, salesEmployeeId: { not: null } },
+      _sum: { value: true },
     }),
-    // "Giá trị PO đặt hàng" = tổng giá trị đơn ĐẶT trong tháng (orderDate), không quan tâm đã
-    // giao hay chưa — chỉ tiêu tham khảo riêng, không dùng để so KPI.
-    prisma.order.groupBy({
+    // "Giá trị PO đặt hàng" = tổng G.Trị PO của các dòng có ngày đặt PO (poDate) trong tháng —
+    // cùng nguồn file, không quan tâm đã giao hay chưa.
+    prisma.poTrackingLine.groupBy({
       by: ["salesEmployeeId"],
-      where: {
-        orderDate: { gte: start, lt: end },
-        status: { not: OrderStatus.CANCELLED },
-        salesEmployeeId: { not: null },
-      },
-      _sum: { totalValue: true },
+      where: { poDate: { gte: start, lt: end }, salesEmployeeId: { not: null } },
+      _sum: { poValue: true },
     }),
   ]);
 
   const targetMap = new Map(targets.map((t) => [t.employeeId, Number(t.targetRevenue)]));
-  const revenueMap = new Map(
-    deliveredByEmployee.map((r) => [r.salesEmployeeId as string, Number(r._sum.deltaValue ?? 0)])
-  );
-  const poMap = new Map(poByEmployee.map((r) => [r.salesEmployeeId as string, Number(r._sum.totalValue ?? 0)]));
+  const revenueMap = new Map(deliveredByEmployee.map((r) => [r.salesEmployeeId as string, Number(r._sum.value ?? 0)]));
+  const poMap = new Map(poByEmployee.map((r) => [r.salesEmployeeId as string, Number(r._sum.poValue ?? 0)]));
 
   return employees.map((e) => {
     const targetRevenue = targetMap.get(e.id) ?? 0;
@@ -131,57 +127,49 @@ export async function getSalesPlanLinesWithActual(
   });
   if (lines.length === 0) return [];
 
-  // "Thực hiện" ở mọi basis (PRODUCT/PRODUCT_GROUP/EMPLOYEE_TOTAL) đều tính theo tổng delta
-  // giá trị đã giao PHÁT HIỆN trong tháng này (OrderDeliveryEvent — xem
-  // getEmployeeTargetVsActual/model để hiểu lý do không dùng trực tiếp actualDeliveryDate).
-  const employeeTotals = await prisma.orderDeliveryEvent.groupBy({
+  // "Thực hiện" ở mọi basis (PRODUCT/PRODUCT_GROUP/EMPLOYEE_TOTAL) đều tính theo tổng giá trị
+  // các đợt giao THẬT trong tháng này (PoDeliveryEvent — xem getEmployeeTargetVsActual).
+  const employeeTotals = await prisma.poDeliveryEvent.groupBy({
     by: ["salesEmployeeId"],
-    where: { occurredAt: { gte: start, lt: end }, salesEmployeeId: { not: null } },
-    _sum: { deltaValue: true },
+    where: { eventDate: { gte: start, lt: end }, salesEmployeeId: { not: null } },
+    _sum: { value: true },
   });
-  const employeeTotalMap = new Map(
-    employeeTotals.map((r) => [r.salesEmployeeId as string, Number(r._sum.deltaValue ?? 0)])
-  );
+  const employeeTotalMap = new Map(employeeTotals.map((r) => [r.salesEmployeeId as string, Number(r._sum.value ?? 0)]));
 
-  // Không có delta riêng theo từng dòng hàng (OrderItem) — AMIS chỉ trả deliveredValue luỹ kế
-  // của cả đơn, không tách theo mã hàng. Nên với mỗi delta phát hiện trong tháng, phân bổ theo
-  // TỶ LỆ giá trị từng dòng hàng trên tổng giá trị đơn (item.totalPrice / order.totalValue) —
-  // xấp xỉ hợp lý khi không có dữ liệu chi tiết hơn, và luôn đảm bảo tổng các dòng hàng phân bổ
-  // đúng bằng delta của đơn (không phồng/hụt so với getEmployeeTargetVsActual).
-  const events = await prisma.orderDeliveryEvent.findMany({
-    where: { occurredAt: { gte: start, lt: end }, salesEmployeeId: { not: null } },
+  // Mỗi PoDeliveryEvent đã gắn liền với đúng 1 dòng PO (1 mã hàng) — không cần suy đoán/phân
+  // bổ theo tỷ lệ như dữ liệu AMIS trước đây, cộng dồn trực tiếp theo mã hàng.
+  const events = await prisma.poDeliveryEvent.findMany({
+    where: { eventDate: { gte: start, lt: end }, salesEmployeeId: { not: null } },
     select: {
-      deltaValue: true,
+      value: true,
+      quantity: true,
       salesEmployeeId: true,
-      order: { select: { totalValue: true, items: { select: { itemCode: true, quantity: true, totalPrice: true } } } },
+      line: { select: { itemCode: true } },
     },
   });
   const productMap = new Map<string, { revenue: number; quantity: number }>();
   // Doanh số thực hiện theo nhân viên x Nhóm hàng, phân loại theo đúng quy tắc thật của công
-  // ty: mã hàng bắt đầu bằng SI hoặc SB là hàng sản xuất, còn lại là hàng thương mại.
+  // ty: mã hàng bắt đầu bằng SI hoặc SB là hàng sản xuất, còn lại là hàng thương mại. Dòng
+  // không có mã hàng (khá phổ biến trong file theo dõi PO) bị bỏ qua ở đây — vẫn được tính
+  // vào EMPLOYEE_TOTAL ở trên.
   const employeeGroupMap = new Map<string, { production: number; trading: number }>();
   for (const ev of events) {
     const salesEmployeeId = ev.salesEmployeeId;
-    const orderTotal = Number(ev.order.totalValue);
-    if (!salesEmployeeId || orderTotal <= 0) continue;
-    const delta = Number(ev.deltaValue);
-    for (const it of ev.order.items) {
-      if (!it.itemCode) continue;
-      const share = Number(it.totalPrice) / orderTotal;
-      const itemDelta = delta * share;
-      const key = `${salesEmployeeId}::${it.itemCode}`;
-      const cur = productMap.get(key) ?? { revenue: 0, quantity: 0 };
-      cur.revenue += itemDelta;
-      cur.quantity += Number(it.quantity) * share;
-      productMap.set(key, cur);
+    const itemCode = ev.line.itemCode;
+    if (!salesEmployeeId || !itemCode) continue;
+    const value = Number(ev.value);
+    const key = `${salesEmployeeId}::${itemCode}`;
+    const cur = productMap.get(key) ?? { revenue: 0, quantity: 0 };
+    cur.revenue += value;
+    cur.quantity += Number(ev.quantity);
+    productMap.set(key, cur);
 
-      const upperCode = it.itemCode.toUpperCase();
-      const isProduction = upperCode.startsWith("SI") || upperCode.startsWith("SB");
-      const g = employeeGroupMap.get(salesEmployeeId) ?? { production: 0, trading: 0 };
-      if (isProduction) g.production += itemDelta;
-      else g.trading += itemDelta;
-      employeeGroupMap.set(salesEmployeeId, g);
-    }
+    const upperCode = itemCode.toUpperCase();
+    const isProduction = upperCode.startsWith("SI") || upperCode.startsWith("SB");
+    const g = employeeGroupMap.get(salesEmployeeId) ?? { production: 0, trading: 0 };
+    if (isProduction) g.production += value;
+    else g.trading += value;
+    employeeGroupMap.set(salesEmployeeId, g);
   }
 
   return lines.map((l) => {
