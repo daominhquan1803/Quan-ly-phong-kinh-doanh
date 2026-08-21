@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn, formatCurrencyVND, formatDateVN } from "@/lib/utils";
 import { Pencil, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
@@ -66,6 +66,16 @@ function pct(n: number | null): string {
   return n != null ? `${Math.round(n * 100)}%` : "—";
 }
 
+// targetProfitPct/actualProfitPct/debtOverduePct/debtCollectionRatePct đã lưu sẵn dạng số
+// nguyên phần trăm (vd 25 = 25%) — chỉ hiện thêm "%", không nhân 100 như pct() ở trên.
+function pctRaw(n: number | null): string {
+  return n != null ? `${n}%` : "—";
+}
+
+function numOrDash(n: number | null): string {
+  return n != null ? String(n) : "—";
+}
+
 export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
@@ -109,11 +119,11 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
               <th rowSpan={2} className="text-left font-medium px-3 py-2 align-bottom">Nhân viên</th>
               <th colSpan={2} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">Doanh số (20đ)</th>
               <th colSpan={2} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">DS Sản xuất (10đ)</th>
-              <th className="text-center font-medium px-3 py-1.5 border-l border-gray-200">Lợi nhuận (10đ)</th>
-              <th className="text-center font-medium px-3 py-1.5 border-l border-gray-200">KH mới (10đ)</th>
-              <th colSpan={2} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">Công nợ (20đ)</th>
-              <th colSpan={2} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">CSKH & Chất lượng (20đ)</th>
-              <th className="text-center font-medium px-3 py-1.5 border-l border-gray-200">Thái độ (10đ)</th>
+              <th colSpan={3} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">Lợi nhuận (10đ)</th>
+              <th colSpan={3} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">KH mới (10đ)</th>
+              <th colSpan={4} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">Công nợ (20đ)</th>
+              <th colSpan={3} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">CSKH & Chất lượng (20đ)</th>
+              <th colSpan={3} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">Thái độ (10đ)</th>
               <th colSpan={3} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">Tổng hợp</th>
               {isAdmin && <th rowSpan={2} className="px-3 py-2 align-bottom"></th>}
             </tr>
@@ -122,13 +132,22 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
               <th className="text-right font-normal px-3 py-1.5">Điểm</th>
               <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">%</th>
               <th className="text-right font-normal px-3 py-1.5">Điểm</th>
-              <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Điểm</th>
-              <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Điểm</th>
-              <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Quá hạn</th>
-              <th className="text-right font-normal px-3 py-1.5">Thu hồi</th>
-              <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Đi gặp KH</th>
+              <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Chỉ tiêu</th>
+              <th className="text-right font-normal px-3 py-1.5">Thực tế</th>
               <th className="text-right font-normal px-3 py-1.5">Điểm</th>
-              <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Điểm</th>
+              <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Chỉ tiêu</th>
+              <th className="text-right font-normal px-3 py-1.5">Thực tế</th>
+              <th className="text-right font-normal px-3 py-1.5">Điểm</th>
+              <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Quá hạn</th>
+              <th className="text-right font-normal px-3 py-1.5">Điểm</th>
+              <th className="text-right font-normal px-3 py-1.5">Thu hồi</th>
+              <th className="text-right font-normal px-3 py-1.5">Điểm</th>
+              <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Đi gặp KH</th>
+              <th className="text-right font-normal px-3 py-1.5">Hàng lỗi</th>
+              <th className="text-right font-normal px-3 py-1.5">Điểm</th>
+              <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Chuyên cần</th>
+              <th className="text-right font-normal px-3 py-1.5">Vi phạm</th>
+              <th className="text-right font-normal px-3 py-1.5">Điểm</th>
               <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Điểm tổng</th>
               <th className="text-center font-normal px-3 py-1.5">Xếp loại</th>
               <th className="text-left font-normal px-3 py-1.5">Đề xuất thưởng</th>
@@ -137,21 +156,21 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
           <tbody className="divide-y divide-gray-100">
             {isLoading && (
               <tr>
-                <td colSpan={16} className="px-4 py-6 text-center text-gray-500">
+                <td colSpan={25} className="px-4 py-6 text-center text-gray-500">
                   Đang tải...
                 </td>
               </tr>
             )}
             {!isLoading && (data?.rows.length ?? 0) === 0 && (
               <tr>
-                <td colSpan={16} className="px-4 py-6 text-center text-gray-500">
+                <td colSpan={25} className="px-4 py-6 text-center text-gray-500">
                   Chưa có dữ liệu nhân viên.
                 </td>
               </tr>
             )}
             {data?.rows.map((r) => (
-              <>
-                <tr key={r.employeeId} className="hover:bg-gray-50">
+              <Fragment key={r.employeeId}>
+                <tr className="hover:bg-gray-50">
                   <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{r.employeeName}</td>
                   <td
                     className="px-3 py-2 text-right border-l border-gray-100"
@@ -167,15 +186,24 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
                     {pct(r.revenueSXPct)}
                   </td>
                   <td className="px-3 py-2 text-right font-medium">{r.scoreRevenueSX}</td>
-                  <td className="px-3 py-2 text-right border-l border-gray-100 font-medium">{r.scoreProfit}</td>
-                  <td className="px-3 py-2 text-right border-l border-gray-100 font-medium">{r.scoreNewCustomers}</td>
-                  <td className="px-3 py-2 text-right border-l border-gray-100 font-medium">{r.scoreDebtOverdue}</td>
+                  <td className="px-3 py-2 text-right border-l border-gray-100">{pctRaw(r.targetProfitPct)}</td>
+                  <td className="px-3 py-2 text-right">{pctRaw(r.actualProfitPct)}</td>
+                  <td className="px-3 py-2 text-right font-medium">{r.scoreProfit}</td>
+                  <td className="px-3 py-2 text-right border-l border-gray-100">{numOrDash(r.targetNewCustomers)}</td>
+                  <td className="px-3 py-2 text-right">{numOrDash(r.actualNewCustomers)}</td>
+                  <td className="px-3 py-2 text-right font-medium">{r.scoreNewCustomers}</td>
+                  <td className="px-3 py-2 text-right border-l border-gray-100">{pctRaw(r.debtOverduePct)}</td>
+                  <td className="px-3 py-2 text-right font-medium">{r.scoreDebtOverdue}</td>
+                  <td className="px-3 py-2 text-right">{pctRaw(r.debtCollectionRatePct)}</td>
                   <td className="px-3 py-2 text-right font-medium">{r.scoreDebtCollection}</td>
                   <td className="px-3 py-2 text-right border-l border-gray-100">
                     {r.approvedVisitCount}/{r.visitTarget}
                   </td>
+                  <td className="px-3 py-2 text-right">{r.defectCount}</td>
                   <td className="px-3 py-2 text-right font-medium">{r.scoreCskh}</td>
-                  <td className="px-3 py-2 text-right border-l border-gray-100 font-medium">{r.scoreAttitude}</td>
+                  <td className="px-3 py-2 text-right border-l border-gray-100">{numOrDash(r.attendanceDays)}</td>
+                  <td className="px-3 py-2 text-right">{r.violationCount}</td>
+                  <td className="px-3 py-2 text-right font-medium">{r.scoreAttitude}</td>
                   <td className="px-3 py-2 text-right border-l border-gray-100 font-bold text-navy-900">{r.totalScore}</td>
                   <td className="px-3 py-2 text-center">
                     <span className={cn("status-badge", GRADE_STYLE[r.grade])}>{r.gradeLabel}</span>
@@ -195,7 +223,7 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
                 </tr>
                 {isAdmin && editingId === r.employeeId && (
                   <tr>
-                    <td colSpan={16} className="bg-navy-50/40 px-4 py-4">
+                    <td colSpan={25} className="bg-navy-50/40 px-4 py-4">
                       <KpiEditForm
                         row={r}
                         year={year}
@@ -209,7 +237,7 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
                     </td>
                   </tr>
                 )}
-              </>
+              </Fragment>
             ))}
           </tbody>
         </table>
