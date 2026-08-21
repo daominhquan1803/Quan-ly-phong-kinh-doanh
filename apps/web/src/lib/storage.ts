@@ -75,3 +75,40 @@ export async function readResizedAsBase64(absoluteResizedPath: string): Promise<
   const buf = await readFile(absoluteResizedPath);
   return buf.toString("base64");
 }
+
+export function isTextFile(file: { type?: string; name?: string }): boolean {
+  if (file.type === "text/plain") return true;
+  return !!file.name?.toLowerCase().endsWith(".txt");
+}
+
+export interface SavedTextFile {
+  /** Đường dẫn URL public tới file .txt gốc — dùng cho link "Xem file gốc". */
+  filePath: string;
+  textContent: string;
+}
+
+/**
+ * Lưu phiếu đi hàng dạng text thuần (vd xuất/copy trực tiếp từ hệ thống kho, không phải ảnh
+ * chụp/PDF) — không cần resize/Vision, đọc thẳng nội dung để gửi Claude trích xuất theo cùng
+ * schema (xem lib/anthropic.ts, extractShipmentSlipFromText).
+ */
+export async function saveShipmentSlipTextFile(file: File): Promise<SavedTextFile> {
+  if (file.size > MAX_IMAGE_BYTES) {
+    throw new UploadTooLargeError(`File vượt quá giới hạn ${MAX_IMAGE_BYTES / 1024 / 1024}MB`);
+  }
+
+  const rawBuffer = Buffer.from(await file.arrayBuffer());
+  const textContent = rawBuffer.toString("utf-8");
+
+  const id = randomUUID();
+  const relDir = subdir();
+  const absDir = path.join(UPLOAD_ROOT, relDir);
+  await mkdir(absDir, { recursive: true });
+
+  const originalName = `${id}-original.txt`;
+  const absOriginal = path.join(absDir, originalName);
+  await writeFile(absOriginal, rawBuffer);
+
+  const toUrl = (name: string) => `/uploads/${relDir.split(path.sep).join("/")}/${name}`;
+  return { filePath: toUrl(originalName), textContent };
+}

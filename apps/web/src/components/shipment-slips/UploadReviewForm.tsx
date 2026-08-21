@@ -178,12 +178,12 @@ export function UploadReviewForm() {
         <label className="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-gray-200 bg-white py-16 cursor-pointer hover:border-navy-900 transition-colors">
           <UploadCloud className="h-10 w-10 text-navy-900" />
           <div className="text-center">
-            <p className="font-medium text-gray-900">Chụp ảnh, chọn ảnh, hoặc chọn file PDF phiếu đi hàng</p>
+            <p className="font-medium text-gray-900">Chụp ảnh, chọn ảnh, chọn file PDF, hoặc file .txt phiếu đi hàng</p>
             <p className="text-sm text-gray-500">AI sẽ tự đọc và điền sẵn form để anh kiểm tra lại</p>
           </div>
           <input
             type="file"
-            accept="image/*,application/pdf"
+            accept="image/*,application/pdf,text/plain,.txt"
             capture="environment"
             className="hidden"
             onChange={(e) => {
@@ -354,9 +354,16 @@ export function UploadReviewForm() {
             // eslint-disable-next-line @next/next/no-img-element
             <img src={imageThumbPath} alt="Phiếu đi hàng" className="w-full rounded-md" />
           )}
+          {!imageThumbPath && imagePath?.toLowerCase().endsWith(".txt") && (
+            <p className="text-sm text-gray-500 text-center py-6">Phiếu dạng text — không có ảnh xem trước</p>
+          )}
           {imagePath && (
             <a href={imagePath} target="_blank" rel="noreferrer" className="block text-center text-xs text-navy-900 mt-2 hover:underline">
-              {imagePath.toLowerCase().endsWith(".pdf") ? "Xem file PDF gốc" : "Xem ảnh gốc kích thước đầy đủ"}
+              {imagePath.toLowerCase().endsWith(".pdf")
+                ? "Xem file PDF gốc"
+                : imagePath.toLowerCase().endsWith(".txt")
+                ? "Xem file text gốc"
+                : "Xem ảnh gốc kích thước đầy đủ"}
             </a>
           )}
         </div>

@@ -125,3 +125,50 @@ export async function extractShipmentSlipFromImage(base64Jpeg: string): Promise<
 
   return { result, rawResponse: response };
 }
+
+/**
+ * Trích xuất phiếu đi hàng từ nội dung TEXT thuần (vd xuất/copy trực tiếp từ hệ thống kho,
+ * không phải ảnh chụp) — cùng schema/tool với bản đọc ảnh, chỉ khác đầu vào là text nên không
+ * cần bước resize/Vision, đáng tin cậy hơn hẳn vì không có rủi ro đọc nhầm chữ mờ/viết tay.
+ */
+export async function extractShipmentSlipFromText(text: string): Promise<{
+  result: OcrShipmentSlipResult;
+  rawResponse: unknown;
+}> {
+  const anthropic = getClient();
+  const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
+
+  const response = await anthropic.messages.create({
+    model,
+    max_tokens: 2048,
+    tools: [EXTRACT_TOOL],
+    tool_choice: { type: "tool", name: "extract_shipment_slip" },
+    messages: [
+      {
+        role: "user",
+        content:
+          "Đây là nội dung text của 1 'Phiếu xuất kho bán hàng' (phiếu đi hàng) của công ty Hoàng Gia Packaging " +
+          "(xuất/copy trực tiếp từ hệ thống, không phải OCR từ ảnh). Hãy đọc và trích xuất chính xác thông tin " +
+          "theo schema đã cho. Với mỗi dòng hàng hoá trong bảng, lấy đủ mã hàng, tên hàng, kho, số PO bán, đơn vị " +
+          "tính, số lượng yêu cầu và số lượng thực xuất — chú ý số liệu Việt Nam dùng dấu chấm ngăn cách hàng " +
+          "nghìn, dấu phẩy cho phần thập phân (vd 1.000.000,00 = một triệu). Vì là text (không phải ảnh mờ/viết " +
+          "tay) nên hầu như không có trường nào cần liệt kê vào lowConfidenceFields, trừ khi bố cục thật sự mơ hồ.\n\n" +
+          "--- NỘI DUNG PHIẾU ---\n" +
+          text,
+      },
+    ],
+  });
+
+  const toolUse = response.content.find(
+    (block): block is Anthropic.ToolUseBlock => block.type === "tool_use"
+  );
+  if (!toolUse) {
+    throw new Error("AI không trả về dữ liệu trích xuất hợp lệ. Vui lòng thử lại hoặc nhập tay.");
+  }
+
+  const result = toolUse.input as OcrShipmentSlipResult;
+  if (!Array.isArray(result.items)) result.items = [];
+  if (!Array.isArray(result.lowConfidenceFields)) result.lowConfidenceFields = [];
+
+  return { result, rawResponse: response };
+}
