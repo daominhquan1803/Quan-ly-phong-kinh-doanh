@@ -2,7 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@hoanggia/db";
 import { auth } from "@/lib/auth";
-import { formatDateVN } from "@/lib/utils";
+import { cn, formatDateVN } from "@/lib/utils";
 
 export default async function ShipmentSlipDetailPage({ params }: { params: { id: string } }) {
   const session = await auth();
@@ -41,7 +41,7 @@ export default async function ShipmentSlipDetailPage({ params }: { params: { id:
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className={cn("grid grid-cols-1 gap-6", slip.imagePath && "lg:grid-cols-2")}>
         <div className="space-y-4">
           <div className="rounded-lg border border-gray-200 bg-white p-5 grid grid-cols-2 gap-4 text-sm">
             <Info label="Người nhận hàng" value={slip.receiverName} />
@@ -81,18 +81,20 @@ export default async function ShipmentSlipDetailPage({ params }: { params: { id:
           </div>
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={slip.imageThumbPath ?? slip.imagePath} alt={slip.slipNumber} className="w-full rounded-md" />
-          <a
-            href={slip.imagePath}
-            target="_blank"
-            rel="noreferrer"
-            className="block text-center text-xs text-navy-900 mt-2 hover:underline"
-          >
-            {slip.imagePath.toLowerCase().endsWith(".pdf") ? "Xem file PDF gốc" : "Xem ảnh gốc kích thước đầy đủ"}
-          </a>
-        </div>
+        {slip.imagePath && (
+          <div className="rounded-lg border border-gray-200 bg-white p-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={slip.imageThumbPath ?? slip.imagePath} alt={slip.slipNumber} className="w-full rounded-md" />
+            <a
+              href={slip.imagePath}
+              target="_blank"
+              rel="noreferrer"
+              className="block text-center text-xs text-navy-900 mt-2 hover:underline"
+            >
+              {slip.imagePath.toLowerCase().endsWith(".pdf") ? "Xem file PDF gốc" : "Xem ảnh gốc kích thước đầy đủ"}
+            </a>
+          </div>
+        )}
       </div>
     </div>
   );

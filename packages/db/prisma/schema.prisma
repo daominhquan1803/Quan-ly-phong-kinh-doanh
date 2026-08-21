@@ -85,6 +85,7 @@ model User {
   defectsCreated   DefectReport[]         @relation("DefectCreatedBy")
   poTrackingLines  PoTrackingLine[]
   poTrackingBatches PoTrackingImportBatch[]
+  shipmentSlipBatches ShipmentSlipImportBatch[]
 
   @@map("users")
 }
@@ -244,16 +245,18 @@ model OrderItem {
 // ---------- Phiếu đi hàng (upload ảnh + OCR) ----------
 
 model ShipmentSlip {
-  id                String     @id @default(cuid())
-  slipNumber        String     @unique
-  slipDate          DateTime?
-  receiverName      String?
-  customerName      String?
-  deliveryAddress   String?
-  description       String?
-  paymentMethod     String?
-  preparedBy        String?
-  imagePath         String
+  id              String  @id @default(cuid())
+  slipNumber      String  @unique
+  slipDate        DateTime?
+  receiverName    String?
+  customerName    String?
+  deliveryAddress String?
+  description     String?
+  paymentMethod   String?
+  preparedBy      String?
+  // Null cho phiếu nhập từ Excel hàng loạt (không có ảnh/PDF gốc) — chỉ có giá trị khi phiếu
+  // được tạo qua đường chụp ảnh/AI đọc (xem imageThumbPath).
+  imagePath         String?
   imageThumbPath    String?
   orderId           String?
   order             Order?     @relation(fields: [orderId], references: [id])
@@ -262,14 +265,40 @@ model ShipmentSlip {
   status            SlipStatus @default(DRAFT)
   createdById       String
   createdBy         User       @relation("SlipCreatedBy", fields: [createdById], references: [id])
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
+  // Phiếu tạo qua nhập Excel hàng loạt — giữ vết batch để đối chiếu/audit, null nếu tạo qua
+  // đường ảnh/thủ công như trước.
+  importBatchId String?
+  importBatch   ShipmentSlipImportBatch? @relation(fields: [importBatchId], references: [id])
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
 
   items ShipmentSlipItem[]
 
   @@index([orderId])
   @@index([slipDate])
   @@map("shipment_slips")
+}
+
+// Nhập hàng loạt phiếu đi hàng từ Excel (thay cho AI đọc ảnh — chưa cấu hình được
+// ANTHROPIC_API_KEY) — cùng cơ chế wizard chọn cột với Đơn hàng/Kế hoạch kinh doanh. 1 dòng
+// Excel = 1 mã hàng của 1 phiếu; các dòng cùng Số phiếu được gộp lại thành 1 ShipmentSlip +
+// nhiều ShipmentSlipItem. Upload lại cùng Số phiếu sẽ CẬP NHẬT (thay toàn bộ dòng hàng),
+// không tạo trùng.
+model ShipmentSlipImportBatch {
+  id           String   @id @default(cuid())
+  fileName     String
+  totalRows    Int
+  createdCount Int
+  updatedCount Int
+  errorCount   Int
+  errorReport  Json?
+  createdById  String
+  createdBy    User     @relation(fields: [createdById], references: [id])
+  createdAt    DateTime @default(now())
+
+  slips ShipmentSlip[]
+
+  @@map("shipment_slip_import_batches")
 }
 
 model ShipmentSlipItem {

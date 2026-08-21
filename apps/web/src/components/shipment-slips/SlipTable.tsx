@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { formatDateVN } from "@/lib/utils";
-import { Search, Plus } from "lucide-react";
+import { Search, Plus, Upload } from "lucide-react";
 
 interface SlipRow {
   id: string;
@@ -43,13 +43,23 @@ export function SlipTable() {
             className="pl-8 pr-3 py-2 text-sm rounded-md border border-gray-200 w-64 focus:outline-none focus:ring-2 focus:ring-navy-900"
           />
         </div>
-        <Link
-          href="/shipment-slips/new"
-          className="flex items-center gap-1.5 rounded-md bg-brandRed-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brandRed-700"
-        >
-          <Plus className="h-4 w-4" />
-          Nhập phiếu đi hàng
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/shipment-slips/import"
+            className="flex items-center gap-1.5 rounded-md bg-brandRed-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brandRed-700"
+          >
+            <Upload className="h-4 w-4" />
+            Nhập Excel phiếu đi hàng
+          </Link>
+          <Link
+            href="/shipment-slips/new"
+            className="flex items-center gap-1.5 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            title="Cần cấu hình ANTHROPIC_API_KEY mới dùng được"
+          >
+            <Plus className="h-4 w-4" />
+            Chụp ảnh / AI đọc phiếu
+          </Link>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">

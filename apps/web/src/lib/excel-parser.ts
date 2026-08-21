@@ -57,7 +57,7 @@ export function previewExcel(buffer: Buffer, sheetName?: string, sampleSize = 5)
   return { sheetName: resolvedName, headers, sampleRows, totalRows: dataRows.length };
 }
 
-function parseExcelDate(value: unknown): Date | null {
+export function parseExcelDate(value: unknown): Date | null {
   if (!value && value !== 0) return null;
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
   if (typeof value === "number") {
