@@ -14,10 +14,15 @@
  * trong schema.prisma để hiểu lý do) — mỗi dòng hàng có thể sinh tối đa 3 PoDeliveryEvent
  * (1 event/đợt giao có ngày+giá trị), dùng để cộng dồn doanh số đúng theo tháng thật.
  *
+ * Từ khi có "Phiếu đi hàng" (nhập Excel riêng, xem api/shipment-slips/import), các cột "Ngày/SL/
+ * GT giao lần 1/2/3" ở đây trở thành "nền" (baseline) — phần đã giao qua Phiếu đi hàng được
+ * CỘNG THÊM vào nền này khi tính deliveredValue/remainingValue/totalDeliveredQty/remainingQty/
+ * statusRaw hiển thị, không bị mất khi file này được gửi lại (xem @hoanggia/db/po-delivery-sync).
+ *
  * Cách chạy: npx tsx scripts/import-po-tracking.ts <file.xlsx> <email người chạy> [--dry-run]
  */
 import * as XLSX from "xlsx";
-import { prisma } from "@hoanggia/db";
+import { prisma, getSlipAggForAllLines, computeLineDeliveryFields, normPoStatus, PO_CLOSED_STATUS } from "@hoanggia/db";
 import path from "path";
 
 const args = process.argv.slice(2).filter((a) => !a.startsWith("--"));
@@ -171,6 +176,11 @@ async function main() {
   const existing = await prisma.poTrackingLine.findMany({ select: { id: true, naturalKey: true } });
   const existingByKey = new Map(existing.map((e) => [e.naturalKey, e.id]));
 
+  // Tổng đợt giao do Phiếu đi hàng sinh ra của từng dòng (nếu có) — 1 query duy nhất, để cộng
+  // vào baseline đọc từ file này mà không mất phần đã giao qua Phiếu đi hàng (xem
+  // lib po-delivery-sync.ts trong @hoanggia/db).
+  const slipAggByLine = await getSlipAggForAllLines();
+
   let created = 0;
   let updated = 0;
   let errorCount = 0;
@@ -196,6 +206,21 @@ async function main() {
       const amisCode = nvkdNorm ? NVKD_TO_AMIS_CODE[nvkdNorm] : undefined;
       const salesEmployeeId = amisCode ? employeeByAmisCode.get(amisCode) ?? null : null;
 
+      const existingId = existingByKey.get(naturalKey);
+      // "Nền" = đúng nguyên giá trị các cột giao hàng trong file này — CỘNG THÊM phần đã giao
+      // qua Phiếu đi hàng (nếu dòng đã tồn tại và có) để không bị mất khi file này ghi đè nền.
+      const slipAgg = existingId ? slipAggByLine.get(existingId) ?? { qty: 0, value: 0 } : { qty: 0, value: 0 };
+      const computed = computeLineDeliveryFields(
+        {
+          poValue: r.poValue,
+          poQuantity: r.poQuantity,
+          baselineDeliveredValue: r.deliveredValue,
+          baselineDeliveredQty: r.totalDeliveredQty,
+          baselineClosed: normPoStatus(r.statusRaw) === PO_CLOSED_STATUS,
+        },
+        slipAgg
+      );
+
       const data = {
         nvkdCodeRaw: nvkdNorm,
         salesEmployeeId,
@@ -214,14 +239,13 @@ async function main() {
         contractPrice: r.contractPrice,
         requestedDeliveryDate: r.requestedDeliveryDate,
         note: r.note,
-        statusRaw: r.statusRaw,
-        totalDeliveredQty: r.totalDeliveredQty,
-        remainingQty: r.remainingQty,
         poValue: r.poValue,
-        deliveredValue: r.deliveredValue,
-        remainingValue: r.remainingValue,
         content: r.content,
         importBatchId: batch?.id,
+        baselineDeliveredValue: r.deliveredValue,
+        baselineDeliveredQty: r.totalDeliveredQty,
+        baselineClosed: normPoStatus(r.statusRaw) === PO_CLOSED_STATUS,
+        ...computed,
       };
 
       if (dryRun) {
@@ -230,7 +254,6 @@ async function main() {
         continue;
       }
 
-      const existingId = existingByKey.get(naturalKey);
       const line = existingId
         ? await prisma.poTrackingLine.update({ where: { id: existingId }, data })
         : await prisma.poTrackingLine.create({ data: { ...data, naturalKey } });
@@ -238,10 +261,11 @@ async function main() {
       if (existingId) updated++;
       else created++;
 
-      // Mỗi lần import là 1 bản snapshot đầy đủ của dòng PO này — xoá hết event cũ rồi ghi
-      // lại đúng theo dữ liệu hiện tại (không cần suy đoán delta như dữ liệu AMIS, vì file đã
-      // cho biết chính xác ngày/SL/giá trị từng đợt).
-      await prisma.poDeliveryEvent.deleteMany({ where: { lineId: line.id } });
+      // Mỗi lần import là 1 bản snapshot đầy đủ CỦA RIÊNG FILE NÀY cho dòng PO này — xoá hết
+      // event do CHÍNH FILE PO TRACKING sinh ra (sequence 1/2/3, sourceShipmentSlipId = null)
+      // rồi ghi lại theo dữ liệu hiện tại — KHÔNG đụng tới các đợt giao do Phiếu đi hàng sinh
+      // ra (sourceShipmentSlipId khác null), tránh xoá nhầm dữ liệu giao hàng mới hơn.
+      await prisma.poDeliveryEvent.deleteMany({ where: { lineId: line.id, sourceShipmentSlipId: null } });
       const slots: [ParsedRow["delivery1"], number][] = [
         [r.delivery1, 1],
         [r.delivery2, 2],

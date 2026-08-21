@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { SHIPMENT_SLIP_FIELDS, ShipmentSlipFieldKey } from "@/lib/shipment-slip-fields";
-import { UploadCloud, CheckCircle2 } from "lucide-react";
+import { UploadCloud, CheckCircle2, AlertTriangle } from "lucide-react";
 
 interface PreviewResponse {
   sheetName: string;
@@ -21,6 +21,8 @@ interface CommitResponse {
   updatedCount: number;
   errorCount: number;
   errors: { rowNumber: number; message: string }[];
+  deliveryMatchedCount: number;
+  deliveryUnmatchedItems: string[];
 }
 
 export function ShipmentSlipImportWizard() {
@@ -244,6 +246,25 @@ export function ShipmentSlipImportWizard() {
           <div className="flex items-center gap-2 rounded-md bg-success-600/10 text-success-600 text-sm px-4 py-2.5">
             <CheckCircle2 className="h-4 w-4" /> Đã lưu vào danh sách Phiếu đi hàng.
           </div>
+          <div className="flex items-center gap-2 rounded-md bg-success-600/10 text-success-600 text-sm px-4 py-2.5">
+            <CheckCircle2 className="h-4 w-4" />
+            Đã tự động ghi nhận {result.deliveryMatchedCount} dòng hàng vào Tiến độ giao hàng/Doanh số (khớp theo Số PO
+            + Mã hàng).
+          </div>
+          {result.deliveryUnmatchedItems.length > 0 && (
+            <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm">
+              <p className="flex items-center gap-2 font-medium text-warning-500 mb-2">
+                <AlertTriangle className="h-4 w-4" />
+                {result.deliveryUnmatchedItems.length} dòng hàng không tự khớp được với PO tracking (chưa cập nhật
+                vào Tiến độ giao hàng/Doanh số — kiểm tra lại Số PO/Mã hàng, hoặc dòng PO đó chưa có đơn giá):
+              </p>
+              <ul className="space-y-1 text-gray-700">
+                {result.deliveryUnmatchedItems.slice(0, 20).map((m, i) => (
+                  <li key={i}>{m}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           <button
             onClick={() => {
               setStep("upload");

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@hoanggia/db";
+import { prisma, applyShipmentSlipDeliveries } from "@hoanggia/db";
 import { parseShipmentSlipsWithMapping } from "@/lib/shipment-slip-parser";
 import { ShipmentSlipFieldKey } from "@/lib/shipment-slip-fields";
 import { requireSession, UnauthorizedError } from "@/lib/rbac";
@@ -45,6 +45,8 @@ export async function POST(req: NextRequest) {
 
     let createdCount = 0;
     let updatedCount = 0;
+    let deliveryMatchedCount = 0;
+    const deliveryUnmatchedItems: string[] = [];
 
     for (const slip of slips) {
       // Tự khớp đơn hàng nếu "Số PO bán" của dòng hàng đầu tiên trùng đúng 1 mã đơn đang có
@@ -97,6 +99,23 @@ export async function POST(req: NextRequest) {
           })),
         });
       }
+
+      // Tự sinh đợt giao (PoDeliveryEvent) cho các dòng PO tracking khớp được — thay cho việc
+      // anh tự điền "Ngày giao lần 1/2/3" trong file PO tracking Excel (xem
+      // @hoanggia/db/po-delivery-sync). Xoá + tạo lại đợt giao của CHÍNH phiếu này mỗi lần nên
+      // nhập lại/sửa phiếu không bị tính trùng.
+      const deliveryResult = await applyShipmentSlipDeliveries(
+        saved.id,
+        slip.slipDate,
+        slip.items.map((it) => ({
+          itemCode: it.itemCode,
+          itemName: it.itemName,
+          poSaleNumber: it.poSaleNumber,
+          qtyActual: it.qtyActual,
+        }))
+      );
+      deliveryMatchedCount += deliveryResult.matchedCount;
+      deliveryUnmatchedItems.push(...deliveryResult.unmatchedItems);
     }
 
     await prisma.shipmentSlipImportBatch.update({
@@ -111,6 +130,8 @@ export async function POST(req: NextRequest) {
       updatedCount,
       errorCount: errors.length,
       errors,
+      deliveryMatchedCount,
+      deliveryUnmatchedItems,
     });
   } catch (err) {
     if (err instanceof UnauthorizedError) return NextResponse.json({ error: err.message }, { status: 401 });

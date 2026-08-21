@@ -272,7 +272,10 @@ model ShipmentSlip {
   createdAt     DateTime                 @default(now())
   updatedAt     DateTime                 @updatedAt
 
-  items ShipmentSlipItem[]
+  items                  ShipmentSlipItem[]
+  // Các đợt giao (PoDeliveryEvent) được TỰ SINH từ phiếu này khi khớp được với dòng PO tracking
+  // — xem PoDeliveryEvent.sourceShipmentSlipId. Xoá phiếu thì xoá luôn các đợt giao tương ứng.
+  generatedDeliveryEvents PoDeliveryEvent[]
 
   @@index([orderId])
   @@index([slipDate])
@@ -561,13 +564,28 @@ model PoTrackingLine {
   note                  String?
   statusRaw             String? // "Trạng thái" (đã trim) — vd "Kết thúc", "Đang thực hiện"
 
-  totalDeliveredQty Decimal? @db.Decimal(14, 2) // "Tổng SL giao"
-  remainingQty      Decimal? @db.Decimal(14, 2) // "SL Chưa giao"
+  // totalDeliveredQty/remainingQty/deliveredValue/remainingValue/statusRaw là các trường TÍNH
+  // LẠI (không ghi trực tiếp từ file Excel nữa) = "nền" từ lần nhập file PO tracking gần nhất
+  // (baselineDeliveredQty/baselineDeliveredValue/baselineClosed) CỘNG THÊM các đợt giao qua
+  // Phiếu đi hàng (PoDeliveryEvent.sourceShipmentSlipId khác null) — xem
+  // lib/po-delivery-sync.ts. Nhờ tách "nền" riêng, gửi lại file PO tracking (ghi đè nền) sẽ
+  // không làm mất phần đã giao qua Phiếu đi hàng đã ghi nhận trước đó.
+  totalDeliveredQty Decimal? @db.Decimal(14, 2) // "Tổng SL giao" (đã tính lại)
+  remainingQty      Decimal? @db.Decimal(14, 2) // "SL Chưa giao" (đã tính lại)
 
   poValue        Decimal @default(0) @db.Decimal(18, 2) // "G.Trị PO"
-  deliveredValue Decimal @default(0) @db.Decimal(18, 2) // "G.Trị Thực giao"
-  remainingValue Decimal @default(0) @db.Decimal(18, 2) // "G.Trị còn lại"
+  deliveredValue Decimal @default(0) @db.Decimal(18, 2) // "G.Trị Thực giao" (đã tính lại)
+  remainingValue Decimal @default(0) @db.Decimal(18, 2) // "G.Trị còn lại" (đã tính lại)
   content        String? // "Nội Dung"
+
+  // "Nền" ghi từ đúng giá trị các cột tương ứng trong file PO tracking Excel tại lần nhập gần
+  // nhất — KHÔNG hiển thị trực tiếp ở đâu, chỉ dùng làm gốc để cộng thêm phần giao qua Phiếu đi
+  // hàng khi tính lại các trường ở trên.
+  baselineDeliveredValue Decimal  @default(0) @db.Decimal(18, 2)
+  baselineDeliveredQty   Decimal? @db.Decimal(14, 2)
+  // true nếu file PO tracking Excel tự báo dòng này "Kết thúc" — 1 khi đã true thì trạng thái
+  // tính lại luôn là "Kết thúc" (không tự mở lại), dù không có thêm đợt giao nào qua Phiếu đi hàng.
+  baselineClosed Boolean @default(false)
 
   importBatchId String?
   importBatch   PoTrackingImportBatch? @relation(fields: [importBatchId], references: [id])
@@ -595,9 +613,20 @@ model PoDeliveryEvent {
   eventDate       DateTime
   quantity        Decimal  @db.Decimal(14, 2)
   value           Decimal  @db.Decimal(18, 2)
-  sequence        Int // đợt giao thứ 1/2/3 trong dòng PO này
+  // đợt giao thứ 1/2/3 trong dòng PO này (từ file Excel) — 0 cho đợt sinh tự động từ Phiếu đi
+  // hàng (xem sourceShipmentSlipId), không có ý nghĩa thứ tự thật.
+  sequence Int
+
+  // Khác null nếu đợt giao này được TỰ SINH khi nhập Phiếu đi hàng (khớp theo Số PO + Mã hàng)
+  // thay vì đọc từ cột "Ngày/SL/GT giao lần 1/2/3" của file PO tracking Excel — dùng để: (1)
+  // xoá đúng các đợt của 1 phiếu khi phiếu đó được nhập lại/sửa (không bị trùng), (2) tách riêng
+  // khỏi các đợt do file PO tracking sinh ra khi tính lại PoTrackingLine (xem
+  // lib/po-delivery-sync.ts).
+  sourceShipmentSlipId String?
+  sourceShipmentSlip   ShipmentSlip? @relation(fields: [sourceShipmentSlipId], references: [id], onDelete: Cascade)
 
   @@index([eventDate])
   @@index([salesEmployeeId, eventDate])
+  @@index([sourceShipmentSlipId])
   @@map("po_delivery_events")
 }
