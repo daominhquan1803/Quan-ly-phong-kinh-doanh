@@ -59,10 +59,30 @@ export async function GET(req: NextRequest) {
       Math.max(Number(o.totalValue) - Number(o.deliveredValue), 0);
     const overdueValue = overdue.reduce((s, o) => s + remainingValue(o), 0);
 
-    // Thống kê theo nhân viên — chỉ có ý nghĩa khi xem toàn đội (ADMIN). "Giá trị đã giao"
-    // cộng dồn field deliveredValue (đồng bộ từ AMIS); "Giá trị chưa giao" = remainingValue —
-    // cả 2 tính trên mọi đơn trong phạm vi đang mở (kể cả phần đã giao của đơn giao 1 phần,
-    // không chỉ đơn đã giao xong 100%).
+    // "Giá trị đã giao" chỉ tính phần giao TRONG THÁNG HIỆN TẠI (theo actualDeliveryDate,
+    // đồng bộ từ delivery_date của AMIS) — không phải luỹ kế từ trước tới nay, để phản ánh
+    // đúng kết quả giao hàng của tháng đang xem thay vì cộng dồn lịch sử. Do AMIS chỉ trả về
+    // deliveredValue luỹ kế của cả đơn (không tách theo từng lần giao), nên với đơn có
+    // actualDeliveryDate rơi vào tháng này, ta lấy trọn deliveredValue của đơn đó — đơn giao
+    // nhiều đợt trải qua nhiều tháng sẽ dồn hết vào tháng của lần giao gần nhất (giới hạn dữ
+    // liệu nguồn, không phải lỗi tính toán). Đơn chưa có actualDeliveryDate (chưa giao, hoặc
+    // nhập tay/Excel chưa có field này) không được tính vào giá trị đã giao tháng này.
+    // "Giá trị chưa giao" vẫn giữ nguyên là remainingValue tính trên TOÀN BỘ đơn đang mở, không
+    // giới hạn theo tháng — vì đây là số nợ giao hàng còn tồn cần theo dõi tới khi giao xong.
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const reportMonthLabel = `${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
+    const deliveredThisMonth = (o: (typeof openOrders)[number]) => {
+      if (!o.actualDeliveryDate) return 0;
+      const d = new Date(o.actualDeliveryDate);
+      if (d < monthStart || d >= monthEnd) return 0;
+      return Number(o.deliveredValue);
+    };
+
+    // Thống kê theo nhân viên — chỉ có ý nghĩa khi xem toàn đội (ADMIN). Cả 2 giá trị tính
+    // trên mọi đơn trong phạm vi đang mở (kể cả phần đã giao của đơn giao 1 phần, không chỉ
+    // đơn đã giao xong 100%).
     const byEmployeeMap = new Map<
       string,
       {
@@ -78,7 +98,7 @@ export async function GET(req: NextRequest) {
     let totalDeliveredValue = 0;
     let totalUndeliveredValue = 0;
     for (const o of openOrders) {
-      const delivered = Number(o.deliveredValue);
+      const delivered = deliveredThisMonth(o);
       const undelivered = remainingValue(o);
       totalDeliveredValue += delivered;
       totalUndeliveredValue += undelivered;
@@ -126,6 +146,7 @@ export async function GET(req: NextRequest) {
       rateWindowDays: RATE_WINDOW_DAYS,
       totalDeliveredValue,
       totalUndeliveredValue,
+      reportMonthLabel,
       byEmployee: Array.from(byEmployeeMap.values()).sort((a, b) => b.overdueCount - a.overdueCount),
       // Quá hạn: đã sắp xếp hạn giao tăng dần từ trước (openOrders) nên phần tử đầu là
       // quá hạn lâu nhất — ưu tiên hiển thị trước, cắt bớt nếu danh sách quá dài.

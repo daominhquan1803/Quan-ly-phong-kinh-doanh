@@ -58,6 +58,7 @@ interface SummaryResponse {
   rateWindowDays: number;
   totalDeliveredValue: number;
   totalUndeliveredValue: number;
+  reportMonthLabel: string;
   byEmployee: EmployeeRow[];
   overdueOrders: OrderRow[];
   overdueOrdersTruncated: boolean;
@@ -251,7 +252,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
                 <th className="text-right font-medium px-4 py-2.5">Đơn đang mở</th>
                 <th className="text-right font-medium px-4 py-2.5">Quá hạn</th>
                 <th className="text-right font-medium px-4 py-2.5">Sắp đến hạn</th>
-                <th className="text-right font-medium px-4 py-2.5">Giá trị đã giao</th>
+                <th className="text-right font-medium px-4 py-2.5">Giá trị đã giao (tháng {data.reportMonthLabel})</th>
                 <th className="text-right font-medium px-4 py-2.5">Giá trị chưa giao</th>
               </tr>
             </thead>
