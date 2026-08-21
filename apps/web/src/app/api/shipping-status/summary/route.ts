@@ -59,12 +59,30 @@ export async function GET(req: NextRequest) {
       Math.max(Number(o.totalValue) - Number(o.deliveredValue), 0);
     const overdueValue = overdue.reduce((s, o) => s + remainingValue(o), 0);
 
-    // Thống kê theo nhân viên — chỉ có ý nghĩa khi xem toàn đội (ADMIN).
+    // Thống kê theo nhân viên — chỉ có ý nghĩa khi xem toàn đội (ADMIN). "Giá trị đã giao"
+    // cộng dồn field deliveredValue (đồng bộ từ AMIS); "Giá trị chưa giao" = remainingValue —
+    // cả 2 tính trên mọi đơn trong phạm vi đang mở (kể cả phần đã giao của đơn giao 1 phần,
+    // không chỉ đơn đã giao xong 100%).
     const byEmployeeMap = new Map<
       string,
-      { employeeId: string; employeeName: string; openCount: number; overdueCount: number; upcomingCount: number }
+      {
+        employeeId: string;
+        employeeName: string;
+        openCount: number;
+        overdueCount: number;
+        upcomingCount: number;
+        deliveredValue: number;
+        undeliveredValue: number;
+      }
     >();
+    let totalDeliveredValue = 0;
+    let totalUndeliveredValue = 0;
     for (const o of openOrders) {
+      const delivered = Number(o.deliveredValue);
+      const undelivered = remainingValue(o);
+      totalDeliveredValue += delivered;
+      totalUndeliveredValue += undelivered;
+
       if (!o.salesEmployee) continue;
       const key = o.salesEmployee.id;
       if (!byEmployeeMap.has(key)) {
@@ -74,10 +92,14 @@ export async function GET(req: NextRequest) {
           openCount: 0,
           overdueCount: 0,
           upcomingCount: 0,
+          deliveredValue: 0,
+          undeliveredValue: 0,
         });
       }
       const row = byEmployeeMap.get(key)!;
       row.openCount++;
+      row.deliveredValue += delivered;
+      row.undeliveredValue += undelivered;
       if (isOrderOverdue(o)) row.overdueCount++;
       if (isUpcomingDeadline(o, UPCOMING_WINDOW_DAYS)) row.upcomingCount++;
     }
@@ -102,6 +124,8 @@ export async function GET(req: NextRequest) {
       upcomingWindowDays: UPCOMING_WINDOW_DAYS,
       onTimeRatePct,
       rateWindowDays: RATE_WINDOW_DAYS,
+      totalDeliveredValue,
+      totalUndeliveredValue,
       byEmployee: Array.from(byEmployeeMap.values()).sort((a, b) => b.overdueCount - a.overdueCount),
       // Quá hạn: đã sắp xếp hạn giao tăng dần từ trước (openOrders) nên phần tử đầu là
       // quá hạn lâu nhất — ưu tiên hiển thị trước, cắt bớt nếu danh sách quá dài.

@@ -44,6 +44,8 @@ interface EmployeeRow {
   openCount: number;
   overdueCount: number;
   upcomingCount: number;
+  deliveredValue: number;
+  undeliveredValue: number;
 }
 
 interface SummaryResponse {
@@ -54,6 +56,8 @@ interface SummaryResponse {
   upcomingWindowDays: number;
   onTimeRatePct: number | null;
   rateWindowDays: number;
+  totalDeliveredValue: number;
+  totalUndeliveredValue: number;
   byEmployee: EmployeeRow[];
   overdueOrders: OrderRow[];
   overdueOrdersTruncated: boolean;
@@ -247,6 +251,8 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
                 <th className="text-right font-medium px-4 py-2.5">Đơn đang mở</th>
                 <th className="text-right font-medium px-4 py-2.5">Quá hạn</th>
                 <th className="text-right font-medium px-4 py-2.5">Sắp đến hạn</th>
+                <th className="text-right font-medium px-4 py-2.5">Giá trị đã giao</th>
+                <th className="text-right font-medium px-4 py-2.5">Giá trị chưa giao</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -260,9 +266,25 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
                   <td className={cn("px-4 py-2.5 text-right", e.upcomingCount > 0 && "text-warning-500 font-medium")}>
                     {e.upcomingCount}
                   </td>
+                  <td className="px-4 py-2.5 text-right text-success-600">{formatCurrencyVND(e.deliveredValue)}</td>
+                  <td className="px-4 py-2.5 text-right text-brandRed-600">{formatCurrencyVND(e.undeliveredValue)}</td>
                 </tr>
               ))}
             </tbody>
+            <tfoot className="border-t-2 border-gray-200 bg-gray-50">
+              <tr>
+                <td className="px-4 py-2.5 font-semibold text-gray-900">Tổng phòng</td>
+                <td className="px-4 py-2.5 text-right font-semibold text-gray-900">{data.openCount}</td>
+                <td className="px-4 py-2.5 text-right font-semibold text-gray-900">{data.overdueCount}</td>
+                <td className="px-4 py-2.5 text-right font-semibold text-gray-900">{data.upcomingCount}</td>
+                <td className="px-4 py-2.5 text-right font-semibold text-success-600">
+                  {formatCurrencyVND(data.totalDeliveredValue)}
+                </td>
+                <td className="px-4 py-2.5 text-right font-semibold text-brandRed-600">
+                  {formatCurrencyVND(data.totalUndeliveredValue)}
+                </td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       )}
