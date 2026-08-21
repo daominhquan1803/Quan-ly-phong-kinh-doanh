@@ -10,6 +10,7 @@ const updateUserSchema = z.object({
   amisEmployeeCode: z.string().trim().max(50).optional().nullable(),
   role: z.enum(["ADMIN", "SALES"]).optional(),
   active: z.boolean().optional(),
+  includeInSalesStats: z.boolean().optional(),
   password: z.string().min(6, "Mật khẩu tối thiểu 6 ký tự").optional(),
 });
 
@@ -29,6 +30,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       amisEmployeeCode?: string | null;
       role?: "ADMIN" | "SALES";
       active?: boolean;
+      includeInSalesStats?: boolean;
       passwordHash?: string;
     } = {};
 
@@ -45,6 +47,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     if (parsed.data.role !== undefined) data.role = parsed.data.role;
     if (parsed.data.active !== undefined) data.active = parsed.data.active;
+    if (parsed.data.includeInSalesStats !== undefined) data.includeInSalesStats = parsed.data.includeInSalesStats;
     if (parsed.data.password) data.passwordHash = await bcrypt.hash(parsed.data.password, 10);
 
     // Không cho phép thao tác làm hệ thống mất hết quản trị viên đang hoạt động
@@ -68,7 +71,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const user = await prisma.user.update({
       where: { id: params.id },
       data,
-      select: { id: true, name: true, email: true, role: true, active: true, amisEmployeeCode: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        active: true,
+        amisEmployeeCode: true,
+        includeInSalesStats: true,
+      },
     });
 
     return NextResponse.json({ user });

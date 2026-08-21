@@ -60,6 +60,12 @@ model User {
   // Mã nhân viên trên AMIS (vd "DANGTAN") — dùng để khớp đơn hàng đồng bộ tự động từ AMIS
   // API chính xác hơn khớp theo tên. Điền tại trang Nhân viên.
   amisEmployeeCode String?  @unique
+  // Có tính vào phần thống kê doanh số theo nhân viên (Kế hoạch kinh doanh, Tổng quan) hay
+  // không — mặc định true cho mọi nhân viên có amisEmployeeCode. Dùng để ẩn các tài khoản có
+  // gán mã AMIS nhưng không phải nhân viên kinh doanh thật (vd tài khoản quản trị hệ thống
+  // được gán mã để nhận đồng bộ đơn của 1 mã AMIS không thuộc nhân viên nào) khỏi thống kê,
+  // mà vẫn giữ nguyên việc đồng bộ đơn hàng của mã đó.
+  includeInSalesStats Boolean @default(true)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 

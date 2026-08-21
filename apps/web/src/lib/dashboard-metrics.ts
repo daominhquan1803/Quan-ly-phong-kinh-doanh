@@ -30,8 +30,17 @@ export async function getEmployeeTargetVsActual(
   // Lấy theo "có gán mã AMIS" (tức đang thực sự bán hàng, được đồng bộ đơn) chứ không lọc
   // theo vai trò SALES — vì chủ tài khoản có thể vừa là ADMIN vừa trực tiếp bán hàng (vd
   // chủ doanh nghiệp), vẫn cần theo dõi chỉ tiêu cá nhân như một nhân viên kinh doanh.
+  // includeInSalesStats: true loại các tài khoản có gán mã AMIS chỉ để nhận đồng bộ đơn (vd
+  // tài khoản quản trị hệ thống) chứ không phải nhân viên kinh doanh thật — nếu không sẽ bị
+  // cộng nhầm doanh số vào tổng, gây lệch số với trang Tiến độ giao hàng (chỉ tính đúng nhân
+  // viên thật).
   const employees = await prisma.user.findMany({
-    where: { active: true, amisEmployeeCode: { not: null }, ...(onlyEmployeeId ? { id: onlyEmployeeId } : {}) },
+    where: {
+      active: true,
+      amisEmployeeCode: { not: null },
+      includeInSalesStats: true,
+      ...(onlyEmployeeId ? { id: onlyEmployeeId } : {}),
+    },
     select: { id: true, name: true },
   });
 

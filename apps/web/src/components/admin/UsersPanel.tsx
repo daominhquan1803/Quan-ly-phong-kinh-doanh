@@ -11,6 +11,7 @@ interface UserRow {
   role: "ADMIN" | "SALES";
   active: boolean;
   amisEmployeeCode: string | null;
+  includeInSalesStats: boolean;
 }
 interface AliasRow {
   aliasName: string;
@@ -90,6 +91,10 @@ export function UsersPanel() {
 
   async function handleToggleActive(userId: string, active: boolean) {
     await patchUser(userId, { active });
+  }
+
+  async function handleToggleIncludeInStats(userId: string, includeInSalesStats: boolean) {
+    await patchUser(userId, { includeInSalesStats });
   }
 
   async function handleSubmitResetPassword(userId: string) {
@@ -185,6 +190,7 @@ export function UsersPanel() {
                 <th className="text-left font-medium px-4 py-2.5">Vai trò</th>
                 <th className="text-left font-medium px-4 py-2.5">Trạng thái</th>
                 <th className="text-left font-medium px-4 py-2.5">Mã nhân viên AMIS</th>
+                <th className="text-left font-medium px-4 py-2.5">Thống kê doanh số</th>
                 <th className="text-left font-medium px-4 py-2.5">Mật khẩu</th>
               </tr>
             </thead>
@@ -235,6 +241,18 @@ export function UsersPanel() {
                     </div>
                   </td>
                   <td className="px-4 py-2.5">
+                    <button
+                      onClick={() => handleToggleIncludeInStats(u.id, !u.includeInSalesStats)}
+                      disabled={rowBusy === u.id || !u.amisEmployeeCode}
+                      title={!u.amisEmployeeCode ? "Chưa gán mã AMIS nên không tính vào thống kê" : undefined}
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium disabled:opacity-40 ${
+                        u.includeInSalesStats ? "bg-success-600/10 text-success-600" : "bg-gray-200 text-gray-600"
+                      }`}
+                    >
+                      {u.includeInSalesStats ? "Có tính" : "Không tính"}
+                    </button>
+                  </td>
+                  <td className="px-4 py-2.5">
                     {resetPasswordFor === u.id ? (
                       <div className="flex items-center gap-2">
                         <input
@@ -282,7 +300,9 @@ export function UsersPanel() {
         <p className="text-xs text-gray-500 mt-2">
           Mã nhân viên AMIS (vd DANGTAN) dùng để đồng bộ đơn hàng tự động khớp đúng người phụ trách — xem tại
           AMIS CRM, thông tin nhân viên. Đổi vai trò/khoá tài khoản áp dụng ngay lập tức; hệ thống luôn giữ lại
-          ít nhất 1 quản trị viên đang hoạt động.
+          ít nhất 1 quản trị viên đang hoạt động. Cột &quot;Thống kê doanh số&quot;: bật cho tài khoản nào thì doanh số
+          của mã AMIS đó mới cộng vào Kế hoạch kinh doanh/Tổng quan — tắt đi nếu mã AMIS này không phải nhân
+          viên kinh doanh thật (đơn hàng vẫn đồng bộ về bình thường, chỉ không tính vào thống kê).
         </p>
       </div>
 

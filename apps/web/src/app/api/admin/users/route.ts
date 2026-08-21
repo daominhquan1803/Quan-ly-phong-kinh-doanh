@@ -11,7 +11,16 @@ export async function GET() {
     await requireAdmin();
     const users = await prisma.user.findMany({
       orderBy: { createdAt: "asc" },
-      select: { id: true, name: true, email: true, role: true, active: true, amisEmployeeCode: true, createdAt: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        active: true,
+        amisEmployeeCode: true,
+        includeInSalesStats: true,
+        createdAt: true,
+      },
     });
     return NextResponse.json({ users });
   } catch (err) {
