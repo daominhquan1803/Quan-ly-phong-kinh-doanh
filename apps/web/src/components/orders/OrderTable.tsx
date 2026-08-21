@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { OrderStatusBadge } from "./StatusBadge";
 import { cn, formatCurrencyVND, formatDateVN } from "@/lib/utils";
+import { normalizeVN } from "@/lib/text-normalize";
 import { ORDER_STATUS_LABEL } from "@/lib/order-status";
 import { EmployeeFilterSelect } from "@/components/shared/EmployeeFilterSelect";
-import { Search, Upload, RefreshCw, CheckCircle2, XCircle } from "lucide-react";
+import { FilterInput, SortableTh, toggleSort, type SortState } from "@/components/shared/SortableFilterableTable";
+import { Upload, RefreshCw, CheckCircle2, XCircle, X } from "lucide-react";
 
 interface SyncLog {
   status: "RUNNING" | "SUCCESS" | "FAILED";
@@ -35,20 +37,28 @@ function isOverdue(o: OrderRow) {
   return new Date(o.expectedDeliveryDate).setHours(0, 0, 0, 0) < new Date().setHours(0, 0, 0, 0);
 }
 
+function employeeDisplayName(o: OrderRow): string {
+  return o.salesEmployee?.name ?? o.salesEmployeeNameRaw ?? "";
+}
+
+type SortField = "orderDate" | "expectedDeliveryDate" | "totalValue";
+
 export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
-  const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [employeeId, setEmployeeId] = useState("");
+  const [filterOrderCode, setFilterOrderCode] = useState("");
+  const [filterCustomer, setFilterCustomer] = useState("");
+  const [filterEmployeeName, setFilterEmployeeName] = useState("");
+  const [sort, setSort] = useState<SortState<SortField>>({ field: null, dir: "asc" });
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["orders", q, status, overdueOnly, employeeId],
+    queryKey: ["orders", status, overdueOnly, employeeId],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (q) params.set("q", q);
       if (status) params.set("status", status);
       if (overdueOnly) params.set("overdue", "1");
       if (employeeId) params.set("employeeId", employeeId);
@@ -86,19 +96,48 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
     }
   }
 
+  const hasActiveFilter = !!(filterOrderCode || filterCustomer || filterEmployeeName);
+
+  const visibleOrders = useMemo(() => {
+    let list = data?.orders ?? [];
+    if (filterOrderCode.trim()) {
+      const q = normalizeVN(filterOrderCode);
+      list = list.filter((o) => normalizeVN(o.orderCode).includes(q));
+    }
+    if (filterCustomer.trim()) {
+      const q = normalizeVN(filterCustomer);
+      list = list.filter((o) => normalizeVN(o.customerName).includes(q));
+    }
+    if (filterEmployeeName.trim()) {
+      const q = normalizeVN(filterEmployeeName);
+      list = list.filter((o) => normalizeVN(employeeDisplayName(o)).includes(q));
+    }
+    if (sort.field) {
+      const field = sort.field;
+      const dir = sort.dir === "asc" ? 1 : -1;
+      list = [...list].sort((a, b) => {
+        const av = field === "totalValue" ? Number(a.totalValue) : a[field] ? new Date(a[field] as string).getTime() : -Infinity;
+        const bv = field === "totalValue" ? Number(b.totalValue) : b[field] ? new Date(b[field] as string).getTime() : -Infinity;
+        return (av - bv) * dir;
+      });
+    }
+    return list;
+  }, [data, filterOrderCode, filterCustomer, filterEmployeeName, sort]);
+
+  function handleSort(field: SortField) {
+    setSort((prev) => toggleSort(prev, field));
+  }
+
+  function clearFilters() {
+    setFilterOrderCode("");
+    setFilterCustomer("");
+    setFilterEmployeeName("");
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Tìm mã đơn, khách hàng, PO..."
-              className="pl-8 pr-3 py-2 text-sm rounded-md border border-gray-200 w-64 focus:outline-none focus:ring-2 focus:ring-navy-900"
-            />
-          </div>
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value)}
@@ -167,10 +206,37 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
               <th className="text-left font-medium px-4 py-2.5">Mã đơn</th>
               <th className="text-left font-medium px-4 py-2.5">Khách hàng</th>
               <th className="text-left font-medium px-4 py-2.5">NVKD</th>
-              <th className="text-left font-medium px-4 py-2.5">Ngày đặt</th>
-              <th className="text-left font-medium px-4 py-2.5">Giao dự kiến</th>
+              <SortableTh field="orderDate" sort={sort} onSort={handleSort}>
+                Ngày đặt
+              </SortableTh>
+              <SortableTh field="expectedDeliveryDate" sort={sort} onSort={handleSort}>
+                Giao dự kiến
+              </SortableTh>
               <th className="text-left font-medium px-4 py-2.5">Trạng thái</th>
-              <th className="text-right font-medium px-4 py-2.5">Giá trị</th>
+              <SortableTh field="totalValue" sort={sort} onSort={handleSort} align="right">
+                Giá trị
+              </SortableTh>
+            </tr>
+            <tr className="bg-white border-t border-gray-100">
+              <th className="px-4 py-2 font-normal">
+                <FilterInput value={filterOrderCode} onChange={setFilterOrderCode} placeholder="Tìm mã đơn..." />
+              </th>
+              <th className="px-4 py-2 font-normal">
+                <FilterInput value={filterCustomer} onChange={setFilterCustomer} placeholder="Tìm khách hàng..." />
+              </th>
+              <th className="px-4 py-2 font-normal">
+                <FilterInput value={filterEmployeeName} onChange={setFilterEmployeeName} placeholder="Tìm NVKD..." />
+              </th>
+              <th colSpan={4} className="px-4 py-2 text-right">
+                {hasActiveFilter && (
+                  <button
+                    onClick={clearFilters}
+                    className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-brandRed-600"
+                  >
+                    <X className="h-3 w-3" /> Xoá lọc
+                  </button>
+                )}
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -181,20 +247,20 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
                 </td>
               </tr>
             )}
-            {!isLoading && (data?.orders.length ?? 0) === 0 && (
+            {!isLoading && visibleOrders.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-4 py-6 text-center text-gray-500">
-                  Chưa có đơn hàng nào.
+                  {hasActiveFilter ? "Không tìm thấy đơn phù hợp" : "Chưa có đơn hàng nào."}
                 </td>
               </tr>
             )}
-            {data?.orders.map((o) => (
+            {visibleOrders.map((o) => (
               <tr key={o.id} className="hover:bg-gray-50">
                 <td className="px-4 py-2.5 font-medium text-navy-900">
                   <Link href={`/orders/${o.id}`}>{o.orderCode}</Link>
                 </td>
                 <td className="px-4 py-2.5">{o.customerName}</td>
-                <td className="px-4 py-2.5">{o.salesEmployee?.name ?? o.salesEmployeeNameRaw ?? "—"}</td>
+                <td className="px-4 py-2.5">{employeeDisplayName(o) || "—"}</td>
                 <td className="px-4 py-2.5">{formatDateVN(o.orderDate)}</td>
                 <td className="px-4 py-2.5">{formatDateVN(o.expectedDeliveryDate)}</td>
                 <td className="px-4 py-2.5">
@@ -206,6 +272,11 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
           </tbody>
         </table>
       </div>
+      {hasActiveFilter && !isLoading && (
+        <p className="text-xs text-gray-500">
+          Đang hiển thị {visibleOrders.length} / {data?.orders.length ?? 0} đơn theo bộ lọc hiện tại.
+        </p>
+      )}
     </div>
   );
 }

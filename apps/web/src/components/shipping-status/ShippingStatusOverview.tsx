@@ -6,16 +6,13 @@ import Link from "next/link";
 import { cn, formatCurrencyVND, formatDateVN } from "@/lib/utils";
 import { normalizeVN } from "@/lib/text-normalize";
 import { EmployeeFilterSelect } from "@/components/shared/EmployeeFilterSelect";
+import { FilterInput, SortableTh, toggleSort, type SortState } from "@/components/shared/SortableFilterableTable";
 import {
   AlertTriangle,
-  ArrowDown,
-  ArrowUp,
-  ArrowUpDown,
   CheckCircle2,
   Clock,
   PackageCheck,
   RefreshCw,
-  Search,
   TrendingUp,
   X,
   XCircle,
@@ -72,10 +69,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
   const [filterOrderCode, setFilterOrderCode] = useState("");
   const [filterCustomer, setFilterCustomer] = useState("");
   const [filterEmployeeName, setFilterEmployeeName] = useState("");
-  const [sort, setSort] = useState<{ field: SortField | null; dir: "asc" | "desc" }>({
-    field: null,
-    dir: "asc",
-  });
+  const [sort, setSort] = useState<SortState<SortField>>({ field: null, dir: "asc" });
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -167,7 +161,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
   }, [rows, filterOrderCode, filterCustomer, filterEmployeeName, sort]);
 
   function handleSort(field: SortField) {
-    setSort((prev) => (prev.field === field ? { field, dir: prev.dir === "asc" ? "desc" : "asc" } : { field, dir: "asc" }));
+    setSort((prev) => toggleSort(prev, field));
   }
 
   function clearFilters() {
@@ -381,58 +375,5 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
         )}
       </div>
     </div>
-  );
-}
-
-function FilterInput({
-  value,
-  onChange,
-  placeholder,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder: string;
-}) {
-  return (
-    <div className="relative">
-      <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="w-full pl-7 pr-2 py-1.5 text-xs font-normal rounded-md border border-gray-200 focus:outline-none focus:ring-2 focus:ring-navy-900"
-      />
-    </div>
-  );
-}
-
-function SortableTh({
-  field,
-  sort,
-  onSort,
-  align = "left",
-  children,
-}: {
-  field: "expectedDeliveryDate" | "daysUntilDeadline" | "remainingValue";
-  sort: { field: string | null; dir: "asc" | "desc" };
-  onSort: (field: "expectedDeliveryDate" | "daysUntilDeadline" | "remainingValue") => void;
-  align?: "left" | "right";
-  children: React.ReactNode;
-}) {
-  const isActive = sort.field === field;
-  const Icon = !isActive ? ArrowUpDown : sort.dir === "asc" ? ArrowUp : ArrowDown;
-  return (
-    <th className={cn("font-medium px-4 py-2.5 select-none", align === "right" ? "text-right" : "text-left")}>
-      <button
-        onClick={() => onSort(field)}
-        className={cn(
-          "inline-flex items-center gap-1 hover:text-navy-900",
-          align === "right" && "flex-row-reverse"
-        )}
-      >
-        {children}
-        <Icon className={cn("h-3.5 w-3.5", isActive ? "text-navy-900" : "text-gray-300")} />
-      </button>
-    </th>
   );
 }

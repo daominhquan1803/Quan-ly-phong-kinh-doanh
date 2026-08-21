@@ -33,7 +33,11 @@ export async function GET(req: NextRequest) {
       where,
       include: { salesEmployee: { select: { id: true, name: true } } },
       orderBy: { orderDate: "desc" },
-      take: 500,
+      // Bảng đơn hàng lọc/sắp xếp theo từng cột ở client (mã đơn, khách hàng, NVKD, ngày,
+      // giá trị) nên cần thấy toàn bộ danh sách khớp bộ lọc server (trạng thái/nhân
+      // viên/quá hạn), không chỉ trang đầu — chặn ở mức rất cao để tránh phình dữ liệu
+      // bất thường làm treo trang (xem cùng lý do ở /api/shipping-status/summary).
+      take: 2000,
     });
 
     const filtered = overdueOnly ? orders.filter(isOrderOverdue) : orders;
