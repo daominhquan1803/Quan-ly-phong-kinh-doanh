@@ -57,9 +57,16 @@ export async function GET() {
       },
       include: { salesEmployee: { select: { name: true } } },
       orderBy: { expectedDeliveryDate: "asc" },
-      take: 500,
+      // Nâng lên 2000 (giống /api/orders và /api/shipping-status/summary) để overdueOrderCount
+      // luôn đếm đúng trên toàn bộ đơn quá hạn thật, không bị cắt ngầm khi số đơn tăng cao.
+      take: 2000,
     });
-    const overdueOrders = openOrders.filter(isOrderOverdue).slice(0, 20);
+    // Đếm quá hạn phải tính trên TOÀN BỘ danh sách trước khi cắt bớt để hiển thị — trước đây
+    // overdueOrderCount vô tình lấy .length của mảng đã .slice(0, 20), nên card "Đơn hàng quá
+    // hạn" luôn hiện tối đa 20 dù thực tế nhiều hơn (khác với trang Tiến độ giao hàng tính
+    // đúng số quá hạn thật, gây lệch số liệu giữa 2 trang).
+    const allOverdueOrders = openOrders.filter(isOrderOverdue);
+    const overdueOrders = allOverdueOrders.slice(0, 20);
 
     // Công nợ là số liệu tổng của cả phòng (không gắn được theo từng nhân viên) — chỉ
     // ADMIN mới thấy, đúng yêu cầu "chỉ Quản trị viên xem được thông tin tổng của cả phòng".
@@ -103,7 +110,7 @@ export async function GET() {
       completionTrendPts,
       perEmployee,
       byProductGroup,
-      overdueOrderCount: overdueOrders.length,
+      overdueOrderCount: allOverdueOrders.length,
       overdueOrders: overdueOrders.map((o) => ({
         id: o.id,
         orderCode: o.orderCode,
