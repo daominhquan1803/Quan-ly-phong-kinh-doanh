@@ -1,88 +1,160 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma, OrderStatus } from "@hoanggia/db";
+import { prisma } from "@hoanggia/db";
 import { requireSession, scopeByOwner, UnauthorizedError } from "@/lib/rbac";
-import { isOrderOverdue, isUpcomingDeadline, daysUntilDeadline } from "@/lib/order-status";
+import { daysUntilDeadline } from "@/lib/order-status";
 
 export const dynamic = "force-dynamic";
 
 const UPCOMING_WINDOW_DAYS = 3;
-const RATE_WINDOW_DAYS = 90; // tính tỷ lệ giao đúng hạn dựa trên đơn có hạn giao trong 90 ngày qua
-// Trả nguyên danh sách (không cắt bớt) để bảng có tìm kiếm/sắp xếp ở client tìm được đúng
-// mọi đơn — quy mô thực tế (vài trăm đơn quá hạn) vẫn nhẹ để render, chỉ chặn ở mức rất cao
-// để tránh trường hợp bất thường dữ liệu phình to đột biến làm treo trang.
+const RATE_WINDOW_DAYS = 90; // tính tỷ lệ giao đúng hạn dựa trên PO có hạn giao trong 90 ngày qua
+// Trả nguyên danh sách (không cắt bớt) để bảng có tìm kiếm/sắp xếp ở client tìm được đúng mọi
+// PO — quy mô thực tế (vài trăm PO quá hạn) vẫn nhẹ để render, chỉ chặn ở mức rất cao để tránh
+// trường hợp bất thường dữ liệu phình to đột biến làm treo trang.
 const MAX_ROWS = 2000;
+const CLOSED_STATUS = "kết thúc";
 
+function normStatus(s: string | null): string {
+  return (s ?? "").trim().toLowerCase();
+}
+
+interface PoAgg {
+  poCode: string;
+  salesEmployeeId: string | null;
+  salesEmployeeName: string;
+  customerCode: string | null;
+  isOpen: boolean;
+  earliestOpenDeadline: Date | null;
+  latestDeadlineAll: Date | null;
+  latestDeliveryDate: Date | null; // đợt giao gần nhất của cả PO — dùng tính tỷ lệ đúng hạn
+  remainingValue: number;
+  poValue: number;
+}
+
+/**
+ * Tiến độ giao hàng — NGUỒN DỮ LIỆU ĐỘC LẬP VỚI AMIS: từ file Excel theo dõi PO anh Quân nhập
+ * tay (PoTrackingLine/PoDeliveryEvent), KHÔNG còn dùng bảng Order đồng bộ AMIS nữa (trang
+ * "Đơn hàng" vẫn tiếp tục đồng bộ AMIS như cũ, đây là 2 nguồn tách biệt). "Đơn" ở trang này =
+ * 1 PO (gộp mọi dòng hàng cùng Số PO) — 1 PO được coi là ĐANG MỞ nếu còn ít nhất 1 dòng hàng
+ * chưa "Kết thúc"; hạn giao của PO lấy hạn SỚM NHẤT trong các dòng còn mở (dòng nào gấp nhất
+ * quyết định PO có quá hạn hay không).
+ */
 export async function GET(req: NextRequest) {
   try {
     const session = await requireSession();
     const scope = scopeByOwner(session, "salesEmployeeId");
     const employeeId = req.nextUrl.searchParams.get("employeeId");
 
-    const openOrders = await prisma.order.findMany({
+    const lines = await prisma.poTrackingLine.findMany({
       where: {
-        status: { notIn: [OrderStatus.CANCELLED] },
-        expectedDeliveryDate: { not: null },
+        salesEmployeeId: { not: null },
         ...scope,
         // Chỉ ADMIN được lọc theo nhân viên bất kỳ — SALES đã bị scopeByOwner giới hạn.
         ...(employeeId && session.user.role === "ADMIN" ? { salesEmployeeId: employeeId } : {}),
       },
-      include: { salesEmployee: { select: { id: true, name: true } } },
-      orderBy: { expectedDeliveryDate: "asc" },
+      select: {
+        poCode: true,
+        salesEmployeeId: true,
+        salesEmployee: { select: { id: true, name: true } },
+        customerCode: true,
+        requestedDeliveryDate: true,
+        statusRaw: true,
+        remainingValue: true,
+        poValue: true,
+        deliveryEvents: { select: { eventDate: true }, orderBy: { eventDate: "desc" }, take: 1 },
+      },
     });
 
-    const overdue = openOrders.filter(isOrderOverdue);
-    const upcoming = openOrders.filter((o) => isUpcomingDeadline(o, UPCOMING_WINDOW_DAYS));
+    const poMap = new Map<string, PoAgg>();
+    for (const l of lines) {
+      let agg = poMap.get(l.poCode);
+      if (!agg) {
+        agg = {
+          poCode: l.poCode,
+          salesEmployeeId: l.salesEmployeeId,
+          salesEmployeeName: l.salesEmployee?.name ?? "—",
+          customerCode: l.customerCode,
+          isOpen: false,
+          earliestOpenDeadline: null,
+          latestDeadlineAll: null,
+          latestDeliveryDate: null,
+          remainingValue: 0,
+          poValue: 0,
+        };
+        poMap.set(l.poCode, agg);
+      }
 
+      const isLineOpen = normStatus(l.statusRaw) !== CLOSED_STATUS;
+      if (isLineOpen) {
+        agg.isOpen = true;
+        if (l.requestedDeliveryDate && (!agg.earliestOpenDeadline || l.requestedDeliveryDate < agg.earliestOpenDeadline)) {
+          agg.earliestOpenDeadline = l.requestedDeliveryDate;
+        }
+      }
+      if (l.requestedDeliveryDate && (!agg.latestDeadlineAll || l.requestedDeliveryDate > agg.latestDeadlineAll)) {
+        agg.latestDeadlineAll = l.requestedDeliveryDate;
+      }
+      const lastEvent = l.deliveryEvents[0]?.eventDate ?? null;
+      if (lastEvent && (!agg.latestDeliveryDate || lastEvent > agg.latestDeliveryDate)) {
+        agg.latestDeliveryDate = lastEvent;
+      }
+      // Kẹp về 0 ở mức từng dòng — 1 số dòng "Kết thúc" có G.Trị còn lại âm trong file gốc (đã
+      // giao vượt giá trị PO, do điều chỉnh/nhập bù), cộng thẳng sẽ kéo tổng cả PO xuống âm dù
+      // các dòng khác vẫn còn nợ thật — không phản ánh đúng "còn lại phải giao".
+      agg.remainingValue += Math.max(0, Number(l.remainingValue ?? 0));
+      agg.poValue += Number(l.poValue ?? 0);
+    }
+
+    const allPos = Array.from(poMap.values());
+    const openPos = allPos.filter((p) => p.isOpen);
+
+    const isPoOverdue = (p: PoAgg) => {
+      if (!p.isOpen || !p.earliestOpenDeadline) return false;
+      const days = daysUntilDeadline(p.earliestOpenDeadline);
+      return days != null && days < 0;
+    };
+    const isPoUpcoming = (p: PoAgg) => {
+      if (!p.isOpen || !p.earliestOpenDeadline) return false;
+      const days = daysUntilDeadline(p.earliestOpenDeadline);
+      return days != null && days >= 0 && days <= UPCOMING_WINDOW_DAYS;
+    };
+
+    const overdue = openPos.filter(isPoOverdue);
+    const upcoming = openPos.filter(isPoUpcoming);
+    const overdueValue = overdue.reduce((s, p) => s + p.remainingValue, 0);
+
+    // Tỷ lệ giao đúng hạn: trong các PO đã "Kết thúc" có hạn giao (lấy hạn muộn nhất trong các
+    // dòng, vì hạn thường đồng nhất theo PO) rơi trong 90 ngày qua, bao nhiêu % có đợt giao GẦN
+    // NHẤT không muộn hơn hạn. PO đã đóng nhưng không có đợt giao nào ghi nhận (dữ liệu thiếu)
+    // bị loại khỏi mẫu tính, không suy đoán.
     const rateCutoff = new Date();
     rateCutoff.setDate(rateCutoff.getDate() - RATE_WINDOW_DAYS);
-    const dueInWindow = openOrders.filter(
-      (o) => o.expectedDeliveryDate && new Date(o.expectedDeliveryDate) >= rateCutoff && new Date(o.expectedDeliveryDate) <= new Date()
+    const now = new Date();
+    const closedPos = allPos.filter((p) => !p.isOpen);
+    const dueInWindow = closedPos.filter(
+      (p) => p.latestDeadlineAll && p.latestDeadlineAll >= rateCutoff && p.latestDeadlineAll <= now && p.latestDeliveryDate
     );
-    // "Đúng hạn" = có ngày giao thực tế (actualDeliveryDate, đồng bộ từ field delivery_date
-    // của AMIS) và ngày đó không muộn hơn hạn giao — chính xác hơn hẳn so với suy đoán qua
-    // trạng thái. Đơn chưa có actualDeliveryDate (đồng bộ trước khi có field này, hoặc nhập
-    // tay/Excel) thì tạm coi trạng thái "Đã giao" là đúng hạn, giữ hành vi cũ để không làm
-    // tụt tỷ lệ do thiếu dữ liệu lịch sử.
-    const onTimeInWindow = dueInWindow.filter((o) => {
-      if (o.actualDeliveryDate && o.expectedDeliveryDate) {
-        return new Date(o.actualDeliveryDate) <= new Date(o.expectedDeliveryDate);
-      }
-      return o.status === OrderStatus.DELIVERED;
-    }).length;
+    const onTimeInWindow = dueInWindow.filter((p) => p.latestDeliveryDate! <= p.latestDeadlineAll!).length;
     const onTimeRatePct = dueInWindow.length > 0 ? Math.round((onTimeInWindow / dueInWindow.length) * 100) : null;
 
-    // Giá trị còn lại CHƯA giao = tổng đơn - đã giao (deliveredValue, đồng bộ từ
-    // total_amount_delivered_summary của AMIS) — đơn giao 1 phần chỉ tính đúng phần còn nợ,
-    // không tính cả giá trị đơn (đơn nhập tay/Excel chưa có deliveredValue thì mặc định 0,
-    // tức toàn bộ giá trị đơn coi như chưa giao — đúng thực tế vì chưa có gì đối chiếu).
-    const remainingValue = (o: (typeof openOrders)[number]) =>
-      Math.max(Number(o.totalValue) - Number(o.deliveredValue), 0);
-    const overdueValue = overdue.reduce((s, o) => s + remainingValue(o), 0);
-
-    // "Giá trị đã giao" chỉ tính phần giao TRONG THÁNG HIỆN TẠI (theo actualDeliveryDate,
-    // đồng bộ từ delivery_date của AMIS) — không phải luỹ kế từ trước tới nay, để phản ánh
-    // đúng kết quả giao hàng của tháng đang xem thay vì cộng dồn lịch sử. Do AMIS chỉ trả về
-    // deliveredValue luỹ kế của cả đơn (không tách theo từng lần giao), nên với đơn có
-    // actualDeliveryDate rơi vào tháng này, ta lấy trọn deliveredValue của đơn đó — đơn giao
-    // nhiều đợt trải qua nhiều tháng sẽ dồn hết vào tháng của lần giao gần nhất (giới hạn dữ
-    // liệu nguồn, không phải lỗi tính toán). Đơn chưa có actualDeliveryDate (chưa giao, hoặc
-    // nhập tay/Excel chưa có field này) không được tính vào giá trị đã giao tháng này.
-    // "Giá trị chưa giao" vẫn giữ nguyên là remainingValue tính trên TOÀN BỘ đơn đang mở, không
-    // giới hạn theo tháng — vì đây là số nợ giao hàng còn tồn cần theo dõi tới khi giao xong.
-    const now = new Date();
+    // "Giá trị đã giao (tháng)" và tổng theo nhân viên lấy CHUNG 1 nguồn với Tổng quan/Kế
+    // hoạch kinh doanh (PoDeliveryEvent theo eventDate trong tháng) — đảm bảo số liệu khớp
+    // tuyệt đối giữa các trang, không còn lệch như khi 1 bên tính theo ngày đặt, 1 bên tính
+    // theo ngày giao của AMIS.
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
     const reportMonthLabel = `${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
-    const deliveredThisMonth = (o: (typeof openOrders)[number]) => {
-      if (!o.actualDeliveryDate) return 0;
-      const d = new Date(o.actualDeliveryDate);
-      if (d < monthStart || d >= monthEnd) return 0;
-      return Number(o.deliveredValue);
-    };
+    const deliveredByEmployee = await prisma.poDeliveryEvent.groupBy({
+      by: ["salesEmployeeId"],
+      where: {
+        eventDate: { gte: monthStart, lt: monthEnd },
+        salesEmployeeId: { not: null },
+        ...(employeeId && session.user.role === "ADMIN" ? { salesEmployeeId: employeeId } : {}),
+        ...(session.user.role !== "ADMIN" ? { salesEmployeeId: session.user.id } : {}),
+      },
+      _sum: { value: true },
+    });
+    const deliveredMap = new Map(deliveredByEmployee.map((r) => [r.salesEmployeeId as string, Number(r._sum.value ?? 0)]));
 
-    // Thống kê theo nhân viên — chỉ có ý nghĩa khi xem toàn đội (ADMIN). Cả 2 giá trị tính
-    // trên mọi đơn trong phạm vi đang mở (kể cả phần đã giao của đơn giao 1 phần, không chỉ
-    // đơn đã giao xong 100%).
     const byEmployeeMap = new Map<
       string,
       {
@@ -95,49 +167,61 @@ export async function GET(req: NextRequest) {
         undeliveredValue: number;
       }
     >();
-    let totalDeliveredValue = 0;
-    let totalUndeliveredValue = 0;
-    for (const o of openOrders) {
-      const delivered = deliveredThisMonth(o);
-      const undelivered = remainingValue(o);
-      totalDeliveredValue += delivered;
-      totalUndeliveredValue += undelivered;
-
-      if (!o.salesEmployee) continue;
-      const key = o.salesEmployee.id;
+    for (const p of openPos) {
+      if (!p.salesEmployeeId) continue;
+      const key = p.salesEmployeeId;
       if (!byEmployeeMap.has(key)) {
         byEmployeeMap.set(key, {
           employeeId: key,
-          employeeName: o.salesEmployee.name,
+          employeeName: p.salesEmployeeName,
           openCount: 0,
           overdueCount: 0,
           upcomingCount: 0,
-          deliveredValue: 0,
+          deliveredValue: deliveredMap.get(key) ?? 0,
           undeliveredValue: 0,
         });
       }
       const row = byEmployeeMap.get(key)!;
       row.openCount++;
-      row.deliveredValue += delivered;
-      row.undeliveredValue += undelivered;
-      if (isOrderOverdue(o)) row.overdueCount++;
-      if (isUpcomingDeadline(o, UPCOMING_WINDOW_DAYS)) row.upcomingCount++;
+      row.undeliveredValue += p.remainingValue;
+      if (isPoOverdue(p)) row.overdueCount++;
+      if (isPoUpcoming(p)) row.upcomingCount++;
     }
+    // Nhân viên có doanh số đã giao trong tháng nhưng không có PO nào đang mở (vd đã giao hết)
+    // vẫn cần xuất hiện trong bảng — bổ sung các trường hợp còn thiếu.
+    for (const [empId, delivered] of deliveredMap) {
+      if (!byEmployeeMap.has(empId)) {
+        const name = allPos.find((p) => p.salesEmployeeId === empId)?.salesEmployeeName ?? "—";
+        byEmployeeMap.set(empId, {
+          employeeId: empId,
+          employeeName: name,
+          openCount: 0,
+          overdueCount: 0,
+          upcomingCount: 0,
+          deliveredValue: delivered,
+          undeliveredValue: 0,
+        });
+      }
+    }
+    const totalDeliveredValue = Array.from(byEmployeeMap.values()).reduce((s, r) => s + r.deliveredValue, 0);
+    const totalUndeliveredValue = openPos.reduce((s, p) => s + p.remainingValue, 0);
 
-    const toRow = (o: (typeof openOrders)[number]) => ({
-      id: o.id,
-      orderCode: o.orderCode,
-      customerName: o.customerName,
-      salesEmployeeName: o.salesEmployee?.name ?? o.salesEmployeeNameRaw,
-      expectedDeliveryDate: o.expectedDeliveryDate,
-      // Giá trị còn lại chưa giao — không phải tổng giá trị đơn (xem remainingValue ở trên).
-      remainingValue: remainingValue(o).toString(),
-      daysUntilDeadline: daysUntilDeadline(o.expectedDeliveryDate),
-      status: o.status,
+    const toRow = (p: PoAgg) => ({
+      id: p.poCode,
+      orderCode: p.poCode,
+      customerName: p.customerCode ?? "—",
+      salesEmployeeName: p.salesEmployeeName,
+      expectedDeliveryDate: p.earliestOpenDeadline,
+      remainingValue: p.remainingValue.toString(),
+      daysUntilDeadline: daysUntilDeadline(p.earliestOpenDeadline),
+      status: p.isOpen ? "OPEN" : "CLOSED",
     });
 
+    overdue.sort((a, b) => (a.earliestOpenDeadline?.getTime() ?? 0) - (b.earliestOpenDeadline?.getTime() ?? 0));
+    upcoming.sort((a, b) => (a.earliestOpenDeadline?.getTime() ?? 0) - (b.earliestOpenDeadline?.getTime() ?? 0));
+
     return NextResponse.json({
-      openCount: openOrders.length,
+      openCount: openPos.length,
       overdueCount: overdue.length,
       overdueValue,
       upcomingCount: upcoming.length,
@@ -148,8 +232,6 @@ export async function GET(req: NextRequest) {
       totalUndeliveredValue,
       reportMonthLabel,
       byEmployee: Array.from(byEmployeeMap.values()).sort((a, b) => b.overdueCount - a.overdueCount),
-      // Quá hạn: đã sắp xếp hạn giao tăng dần từ trước (openOrders) nên phần tử đầu là
-      // quá hạn lâu nhất — ưu tiên hiển thị trước, cắt bớt nếu danh sách quá dài.
       overdueOrders: overdue.slice(0, MAX_ROWS).map(toRow),
       overdueOrdersTruncated: overdue.length > MAX_ROWS,
       upcomingOrders: upcoming.slice(0, MAX_ROWS).map(toRow),

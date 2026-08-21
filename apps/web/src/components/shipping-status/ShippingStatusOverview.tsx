@@ -1,29 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 import { cn, formatCurrencyVND, formatDateVN } from "@/lib/utils";
 import { normalizeVN } from "@/lib/text-normalize";
 import { EmployeeFilterSelect } from "@/components/shared/EmployeeFilterSelect";
 import { FilterInput, SortableTh, toggleSort, type SortState } from "@/components/shared/SortableFilterableTable";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Clock,
-  PackageCheck,
-  RefreshCw,
-  TrendingUp,
-  X,
-  XCircle,
-} from "lucide-react";
-
-interface SyncLog {
-  status: "RUNNING" | "SUCCESS" | "FAILED";
-  startedAt: string;
-  message: string | null;
-  recordsSynced: number | null;
-}
+import { AlertTriangle, Clock, PackageCheck, TrendingUp, X } from "lucide-react";
 
 interface OrderRow {
   id: string;
@@ -75,9 +58,6 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
   const [filterCustomer, setFilterCustomer] = useState("");
   const [filterEmployeeName, setFilterEmployeeName] = useState("");
   const [sort, setSort] = useState<SortState<SortField>>({ field: null, dir: "asc" });
-  const [syncing, setSyncing] = useState(false);
-  const [syncError, setSyncError] = useState<string | null>(null);
-  const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
     queryKey: ["shipping-status-summary", employeeId],
@@ -89,36 +69,6 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
       return res.json() as Promise<SummaryResponse>;
     },
   });
-
-  // Đơn hàng đồng bộ tự động từ AMIS 1 lần/ngày (06:00) — nút này để đồng bộ thủ công ngay
-  // khi cần, không phải đợi lịch. Dùng chung API/trạng thái với trang Đơn hàng.
-  const { data: syncData } = useQuery({
-    queryKey: ["orders-sync-status"],
-    queryFn: async () => {
-      const res = await fetch("/api/orders/sync");
-      if (!res.ok) throw new Error("Không tải được trạng thái đồng bộ");
-      return res.json() as Promise<{ lastSync: SyncLog | null }>;
-    },
-    refetchInterval: 30_000,
-  });
-
-  async function handleSyncAmis() {
-    setSyncing(true);
-    setSyncError(null);
-    try {
-      const res = await fetch("/api/orders/sync", { method: "POST" });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Đồng bộ thất bại");
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["shipping-status-summary"] }),
-        queryClient.invalidateQueries({ queryKey: ["orders-sync-status"] }),
-      ]);
-    } catch (e) {
-      setSyncError(e instanceof Error ? e.message : "Có lỗi xảy ra");
-    } finally {
-      setSyncing(false);
-    }
-  }
 
   const rows = tab === "overdue" ? data?.overdueOrders : data?.upcomingOrders;
   const totalCount = tab === "overdue" ? data?.overdueCount : data?.upcomingCount;
@@ -178,39 +128,11 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          {syncData?.lastSync && (
-            <>
-              {syncData.lastSync.status === "SUCCESS" ? (
-                <CheckCircle2 className="h-4 w-4 text-success-600" />
-              ) : syncData.lastSync.status === "FAILED" ? (
-                <XCircle className="h-4 w-4 text-brandRed-600" />
-              ) : (
-                <RefreshCw className="h-4 w-4 animate-spin" />
-              )}
-              Đồng bộ AMIS gần nhất: {formatDateVN(syncData.lastSync.startedAt)}
-              {syncData.lastSync.recordsSynced != null && ` — ${syncData.lastSync.recordsSynced} đơn`}
-              {syncData.lastSync.status === "FAILED" && syncData.lastSync.message && (
-                <span className="text-brandRed-600">— {syncData.lastSync.message}</span>
-              )}
-            </>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {isAdmin && (
-            <button
-              onClick={handleSyncAmis}
-              disabled={syncing}
-              className="flex items-center gap-1.5 rounded-md bg-navy-900 px-3 py-2 text-sm font-semibold text-white hover:bg-navy-700 disabled:opacity-60"
-            >
-              <RefreshCw className={cn("h-4 w-4", syncing && "animate-spin")} />
-              {syncing ? "Đang đồng bộ..." : "Đồng bộ AMIS"}
-            </button>
-          )}
-          {isAdmin && <EmployeeFilterSelect value={employeeId} onChange={setEmployeeId} />}
-        </div>
+        <p className="text-sm text-gray-500">
+          Dữ liệu độc lập với AMIS — theo dõi từ file Excel PO anh nhập, không tự động đồng bộ.
+        </p>
+        <div className="flex items-center gap-2">{isAdmin && <EmployeeFilterSelect value={employeeId} onChange={setEmployeeId} />}</div>
       </div>
-      {syncError && <div className="rounded-md bg-brandRed-50 text-brandRed-600 text-sm px-4 py-2.5">{syncError}</div>}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="kpi-card kpi-card--navy">
@@ -365,9 +287,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
               )}
               {visibleRows.map((o) => (
                 <tr key={o.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-2.5 font-medium text-navy-900">
-                    <Link href={`/orders/${o.id}`}>{o.orderCode}</Link>
-                  </td>
+                  <td className="px-4 py-2.5 font-medium text-navy-900">{o.orderCode}</td>
                   <td className="px-4 py-2.5">{o.customerName}</td>
                   <td className="px-4 py-2.5">{o.salesEmployeeName ?? "—"}</td>
                   <td className="px-4 py-2.5">{formatDateVN(o.expectedDeliveryDate)}</td>
