@@ -26,14 +26,17 @@ interface SummaryResponse {
   month: number;
   totalTarget: number;
   totalActual: number;
+  totalPoValue: number;
   completionPct: number | null;
   actualTrendPct: number | null;
+  poTrendPct: number | null;
   completionTrendPts: number | null;
   perEmployee: {
     employeeId: string;
     employeeName: string;
     targetRevenue: number;
     actualRevenue: number;
+    poValue: number;
     completionPct: number | null;
   }[];
   byProductGroup: {
@@ -125,7 +128,7 @@ export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
       <div
         className={cn(
           "grid grid-cols-1 sm:grid-cols-2 gap-4",
-          isAdmin ? "lg:grid-cols-4" : "lg:grid-cols-3"
+          isAdmin ? "lg:grid-cols-5" : "lg:grid-cols-4"
         )}
       >
         <div className="kpi-card kpi-card--navy">
@@ -133,7 +136,16 @@ export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
           <p className="text-2xl font-bold text-navy-900 mt-1">
             {isLoading ? "—" : formatCurrencyVND(data?.totalActual ?? 0)}
           </p>
+          <p className="text-xs text-gray-400 mt-1">Theo giá trị đã giao trong tháng</p>
           <TrendLine delta={data?.actualTrendPct ?? null} unit="%" />
+        </div>
+        <div className="kpi-card kpi-card--navy">
+          <p className="text-sm text-gray-500">{isAdmin ? "Giá trị PO đặt hàng" : "Giá trị PO bạn đặt hàng"}</p>
+          <p className="text-2xl font-bold text-navy-900 mt-1">
+            {isLoading ? "—" : formatCurrencyVND(data?.totalPoValue ?? 0)}
+          </p>
+          <p className="text-xs text-gray-400 mt-1">Theo ngày đặt hàng trong tháng</p>
+          <TrendLine delta={data?.poTrendPct ?? null} unit="%" />
         </div>
         <div className="kpi-card kpi-card--navy">
           <p className="text-sm text-gray-500">% hoàn thành kế hoạch</p>

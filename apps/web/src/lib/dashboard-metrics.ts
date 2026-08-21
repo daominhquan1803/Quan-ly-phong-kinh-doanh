@@ -12,7 +12,12 @@ export interface EmployeeTargetVsActual {
   year: number;
   month: number;
   targetRevenue: number;
+  // "Doanh số" thực hiện — tính theo GIÁ TRỊ ĐÃ GIAO trong tháng (actualDeliveryDate rơi vào
+  // tháng đang xem), không phải theo ngày đặt hàng. Đây là số dùng để so KPI/chỉ tiêu.
   actualRevenue: number;
+  // Giá trị PO đặt hàng trong tháng — tính theo ngày ĐẶT hàng (orderDate), bất kể đã giao hay
+  // chưa. Tách riêng khỏi "Doanh số" vì 2 số đo 2 việc khác nhau: đặt hàng vs giao hàng.
+  poValue: number;
   completionPct: number | null;
 }
 
@@ -44,8 +49,23 @@ export async function getEmployeeTargetVsActual(
     select: { id: true, name: true },
   });
 
-  const [targets, revenueByEmployee] = await Promise.all([
+  const [targets, deliveredByEmployee, poByEmployee] = await Promise.all([
     prisma.salesTarget.findMany({ where: { year, month } }),
+    // "Doanh số" = giá trị ĐÃ GIAO trong tháng (deliveredValue, đồng bộ từ AMIS
+    // total_amount_delivered_summary) của đơn có actualDeliveryDate rơi vào tháng này — đơn
+    // giao nhiều đợt trải nhiều tháng sẽ dồn hết giá trị đã giao vào tháng của lần giao gần
+    // nhất (hạn chế từ dữ liệu nguồn AMIS, đã ghi chú tương tự ở trang Tiến độ giao hàng).
+    prisma.order.groupBy({
+      by: ["salesEmployeeId"],
+      where: {
+        actualDeliveryDate: { gte: start, lt: end },
+        status: { not: OrderStatus.CANCELLED },
+        salesEmployeeId: { not: null },
+      },
+      _sum: { deliveredValue: true },
+    }),
+    // "Giá trị PO đặt hàng" = tổng giá trị đơn ĐẶT trong tháng (orderDate), không quan tâm đã
+    // giao hay chưa — chỉ tiêu tham khảo riêng, không dùng để so KPI.
     prisma.order.groupBy({
       by: ["salesEmployeeId"],
       where: {
@@ -58,11 +78,15 @@ export async function getEmployeeTargetVsActual(
   ]);
 
   const targetMap = new Map(targets.map((t) => [t.employeeId, Number(t.targetRevenue)]));
-  const revenueMap = new Map(revenueByEmployee.map((r) => [r.salesEmployeeId as string, Number(r._sum.totalValue ?? 0)]));
+  const revenueMap = new Map(
+    deliveredByEmployee.map((r) => [r.salesEmployeeId as string, Number(r._sum.deliveredValue ?? 0)])
+  );
+  const poMap = new Map(poByEmployee.map((r) => [r.salesEmployeeId as string, Number(r._sum.totalValue ?? 0)]));
 
   return employees.map((e) => {
     const targetRevenue = targetMap.get(e.id) ?? 0;
     const actualRevenue = revenueMap.get(e.id) ?? 0;
+    const poValue = poMap.get(e.id) ?? 0;
     return {
       employeeId: e.id,
       employeeName: e.name,
@@ -70,6 +94,7 @@ export async function getEmployeeTargetVsActual(
       month,
       targetRevenue,
       actualRevenue,
+      poValue,
       completionPct: targetRevenue > 0 ? Math.round((actualRevenue / targetRevenue) * 100) : null,
     };
   });
@@ -110,20 +135,33 @@ export async function getSalesPlanLinesWithActual(
   });
   if (lines.length === 0) return [];
 
+  // "Thực hiện" ở mọi basis (PRODUCT/PRODUCT_GROUP/EMPLOYEE_TOTAL) đều tính theo GIÁ TRỊ ĐÃ
+  // GIAO trong tháng (đơn có actualDeliveryDate rơi vào tháng này), khớp cách tính "Doanh số"
+  // dùng chung toàn app (xem getEmployeeTargetVsActual) — không còn theo ngày đặt hàng.
   const employeeTotals = await prisma.order.groupBy({
     by: ["salesEmployeeId"],
     where: {
-      orderDate: { gte: start, lt: end },
+      actualDeliveryDate: { gte: start, lt: end },
       status: { not: OrderStatus.CANCELLED },
       salesEmployeeId: { not: null },
     },
-    _sum: { totalValue: true },
+    _sum: { deliveredValue: true },
   });
-  const employeeTotalMap = new Map(employeeTotals.map((r) => [r.salesEmployeeId as string, Number(r._sum.totalValue ?? 0)]));
+  const employeeTotalMap = new Map(
+    employeeTotals.map((r) => [r.salesEmployeeId as string, Number(r._sum.deliveredValue ?? 0)])
+  );
 
+  // Không có deliveredValue riêng ở mức từng dòng hàng (OrderItem) — AMIS chỉ trả tổng đã
+  // giao của cả đơn. Nên khi đơn có actualDeliveryDate rơi vào tháng này, tạm lấy trọn
+  // totalPrice của từng dòng hàng làm giá trị "đã giao" của dòng đó (đơn giao 1 phần sẽ hơi
+  // cao hơn thực tế phần đã giao — cùng hạn chế dữ liệu nguồn như ở mức đơn hàng).
   const items = await prisma.orderItem.findMany({
     where: {
-      order: { orderDate: { gte: start, lt: end }, status: { not: OrderStatus.CANCELLED }, salesEmployeeId: { not: null } },
+      order: {
+        actualDeliveryDate: { gte: start, lt: end },
+        status: { not: OrderStatus.CANCELLED },
+        salesEmployeeId: { not: null },
+      },
     },
     select: { itemCode: true, quantity: true, totalPrice: true, order: { select: { salesEmployeeId: true } } },
   });

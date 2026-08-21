@@ -21,6 +21,7 @@ export async function GET() {
 
     const totalTarget = perEmployee.reduce((s, r) => s + r.targetRevenue, 0);
     const totalActual = perEmployee.reduce((s, r) => s + r.actualRevenue, 0);
+    const totalPoValue = perEmployee.reduce((s, r) => s + r.poValue, 0);
     const completionPct = totalTarget > 0 ? Math.round((totalActual / totalTarget) * 100) : null;
 
     const byProductGroup = await getProductGroupTargetVsActual(
@@ -44,9 +45,11 @@ export async function GET() {
     );
     const prevTotalTarget = prevPerEmployee.reduce((s, r) => s + r.targetRevenue, 0);
     const prevTotalActual = prevPerEmployee.reduce((s, r) => s + r.actualRevenue, 0);
+    const prevTotalPoValue = prevPerEmployee.reduce((s, r) => s + r.poValue, 0);
     const prevCompletionPct = prevTotalTarget > 0 ? Math.round((prevTotalActual / prevTotalTarget) * 100) : null;
 
     const actualTrendPct = prevTotalActual > 0 ? Math.round(((totalActual - prevTotalActual) / prevTotalActual) * 100) : null;
+    const poTrendPct = prevTotalPoValue > 0 ? Math.round(((totalPoValue - prevTotalPoValue) / prevTotalPoValue) * 100) : null;
     const completionTrendPts = completionPct != null && prevCompletionPct != null ? completionPct - prevCompletionPct : null;
 
     const openOrders = await prisma.order.findMany({
@@ -105,8 +108,10 @@ export async function GET() {
       month,
       totalTarget,
       totalActual,
+      totalPoValue,
       completionPct,
       actualTrendPct,
+      poTrendPct,
       completionTrendPts,
       perEmployee,
       byProductGroup,

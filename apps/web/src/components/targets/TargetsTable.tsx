@@ -12,6 +12,7 @@ interface TargetRow {
   month: number;
   targetRevenue: number;
   actualRevenue: number;
+  poValue: number;
   completionPct: number | null;
 }
 
@@ -62,14 +63,15 @@ export function TargetsTable() {
             <tr>
               <th className="text-left font-medium px-4 py-2.5">Nhân viên</th>
               <th className="text-right font-medium px-4 py-2.5">Chỉ tiêu</th>
-              <th className="text-right font-medium px-4 py-2.5">Thực hiện</th>
+              <th className="text-right font-medium px-4 py-2.5">Thực hiện (đã giao)</th>
               <th className="text-right font-medium px-4 py-2.5">% Hoàn thành</th>
+              <th className="text-right font-medium px-4 py-2.5">Giá trị PO đặt hàng</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {isLoading && (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-gray-500">
+                <td colSpan={5} className="px-4 py-6 text-center text-gray-500">
                   Đang tải...
                 </td>
               </tr>
@@ -91,6 +93,7 @@ export function TargetsTable() {
                 >
                   {r.completionPct != null ? `${r.completionPct}%` : "—"}
                 </td>
+                <td className="px-4 py-2.5 text-right text-gray-500">{formatCurrencyVND(r.poValue)}</td>
               </tr>
             ))}
           </tbody>

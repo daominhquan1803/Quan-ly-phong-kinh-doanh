@@ -41,7 +41,10 @@ export function SalesPlanDetailSection({ isAdmin }: { isAdmin: boolean }) {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h2 className="font-medium text-gray-900">Kế hoạch chi tiết theo sản phẩm</h2>
-          <p className="text-xs text-gray-500">Nhập từ Excel: doanh số mục tiêu theo Nhân viên x Sản phẩm x Nhóm hàng</p>
+          <p className="text-xs text-gray-500">
+            Nhập từ Excel: doanh số mục tiêu theo Nhân viên x Sản phẩm x Nhóm hàng. Thực hiện tính theo giá trị đã
+            giao trong tháng.
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="text-sm rounded-md border border-gray-200 py-2 px-2">
