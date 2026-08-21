@@ -6,7 +6,10 @@ import { logger } from "./logger";
 
 const PORT = Number(process.env.WORKER_PORT || 4001);
 const HIENVI_CRON = process.env.HIENVI_SYNC_CRON || "30 6 * * *"; // 06:30 hàng ngày
-const AMIS_CRON = process.env.AMIS_SYNC_CRON || "*/15 * * * *"; // mỗi 15 phút
+// Đồng bộ đơn hàng AMIS 1 lần/ngày (trước đây mỗi 15 phút) — có nút "Đồng bộ AMIS" ở trang
+// Đơn hàng/Tiến độ giao hàng để đồng bộ thủ công ngay khi cần, không phải đợi lịch.
+const AMIS_CRON = process.env.AMIS_SYNC_CRON || "0 6 * * *"; // 06:00 giờ Việt Nam hàng ngày
+const AMIS_CRON_TIMEZONE = process.env.AMIS_SYNC_CRON_TIMEZONE || "Asia/Ho_Chi_Minh";
 
 async function main() {
   const app = buildServer();
@@ -20,11 +23,15 @@ async function main() {
   logger.info(`Đã lên lịch đồng bộ công nợ: "${HIENVI_CRON}"`);
 
   if (process.env.AMIS_APP_ID && process.env.AMIS_CLIENT_SECRET) {
-    cron.schedule(AMIS_CRON, () => {
-      logger.info("Cron kích hoạt đồng bộ đơn hàng AMIS");
-      runAmisOrderSync("CRON").catch((err) => logger.error("Lỗi cron đồng bộ đơn hàng AMIS:", err));
-    });
-    logger.info(`Đã lên lịch đồng bộ đơn hàng AMIS: "${AMIS_CRON}"`);
+    cron.schedule(
+      AMIS_CRON,
+      () => {
+        logger.info("Cron kích hoạt đồng bộ đơn hàng AMIS");
+        runAmisOrderSync("CRON").catch((err) => logger.error("Lỗi cron đồng bộ đơn hàng AMIS:", err));
+      },
+      { timezone: AMIS_CRON_TIMEZONE }
+    );
+    logger.info(`Đã lên lịch đồng bộ đơn hàng AMIS: "${AMIS_CRON}" (múi giờ ${AMIS_CRON_TIMEZONE})`);
   } else {
     logger.warn("Chưa cấu hình AMIS_APP_ID/AMIS_CLIENT_SECRET — bỏ qua lịch đồng bộ đơn hàng AMIS.");
   }
