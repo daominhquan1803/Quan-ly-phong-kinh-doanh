@@ -223,6 +223,14 @@ export function allocateQtyAcrossLines(qty: number, candidates: AllocationCandid
   return results;
 }
 
+/** Bỏ hậu tố ".N" (số phiên bản, vd "SB00286.1" → "SB00286") khỏi mã hàng — 1 số nguồn dữ liệu
+ * (Phiếu đi hàng, đơn AMIS) ghi mã hàng kèm hậu tố phiên bản mà nguồn khác (file PO tracking
+ * Excel cũ) không có, dù cùng chỉ 1 sản phẩm. Dùng chung cho cả khớp Phiếu đi hàng
+ * (findCandidateLines) lẫn đồng bộ PO từ AMIS (po-tracking-from-orders.ts). */
+export function stripItemCodeVersionSuffix(itemCode: string): string {
+  return itemCode.replace(/\.\d+$/, "");
+}
+
 const CANDIDATE_LINE_SELECT = {
   id: true,
   naturalKey: true,
@@ -250,7 +258,7 @@ async function findCandidateLines(poCode: string, itemCode: string | null, itemN
   const byName = await prisma.poTrackingLine.findMany({ where: { poCode, itemName }, select: CANDIDATE_LINE_SELECT });
   if (byName.length > 0) return byName;
   if (itemCode) {
-    const stripped = itemCode.replace(/\.\d+$/, "");
+    const stripped = stripItemCodeVersionSuffix(itemCode);
     if (stripped !== itemCode) {
       const byStrippedCode = await prisma.poTrackingLine.findMany({
         where: { poCode, itemCode: stripped },

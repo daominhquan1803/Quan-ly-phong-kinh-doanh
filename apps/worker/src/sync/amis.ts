@@ -6,6 +6,7 @@ import {
   extractNameFromAmisLabel,
   getManagedAmisEmployeeCodes,
   normalizeVN,
+  syncPoTrackingFromOrders,
 } from "@hoanggia/db";
 import { logger } from "../logger";
 
@@ -316,6 +317,44 @@ export async function runAmisOrderSync(triggeredBy: string): Promise<SyncOutcome
       page++;
     }
 
+    logger.info(`Đồng bộ đơn hàng AMIS thành công: ${processed}/${scanned} đơn thuộc phạm vi quản lý`);
+
+    // Đồng bộ tiếp Tiến độ giao hàng (PoTrackingLine) từ Order/OrderItem vừa cập nhật ở trên —
+    // thay cho việc anh gửi lại file Excel PO tracking (từ nay chỉ dùng làm dữ liệu gốc ban
+    // đầu). Chạy như 1 bước riêng NGAY TRONG cùng lần đồng bộ này (không cần thao tác thêm) —
+    // lỗi ở bước này không làm hỏng kết quả đồng bộ Đơn hàng đã thành công ở trên, chỉ gộp vào
+    // message chung để anh thấy ngay trên trang Đơn hàng, đồng thời ghi 1 SyncLog riêng
+    // (jobType AMIS_PO_TRACKING_SYNC) để có audit trail chi tiết hơn khi cần tra cứu.
+    const poTrackingLog = await prisma.syncLog.create({
+      data: { jobType: "AMIS_PO_TRACKING_SYNC", status: "RUNNING", triggeredBy },
+    });
+    let poTrackingMessage: string;
+    try {
+      const r = await syncPoTrackingFromOrders();
+      poTrackingMessage = `Tiến độ giao hàng: rà soát ${r.ordersScanned} đơn, tạo mới ${r.linesCreated}, cập nhật ${r.linesUpdated}, gộp lại ${r.linesMigrated} dòng từ dữ liệu Excel cũ${
+        r.ambiguousGroups.length > 0 ? `, ${r.ambiguousGroups.length} nhóm cần rà soát tay (mã hàng trùng số dòng không khớp)` : ""
+      }.`;
+      await prisma.syncLog.update({
+        where: { id: poTrackingLog.id },
+        data: {
+          status: "SUCCESS",
+          finishedAt: new Date(),
+          recordsSynced: r.linesCreated + r.linesUpdated + r.linesMigrated,
+          message: r.ambiguousGroups.length > 0 ? `${poTrackingMessage} ${r.ambiguousGroups.slice(0, 20).join("; ")}` : poTrackingMessage,
+        },
+      });
+      logger.info(`Đồng bộ Tiến độ giao hàng từ AMIS thành công: ${poTrackingMessage}`);
+    } catch (poErr) {
+      const poMessage = poErr instanceof Error ? poErr.message : "Lỗi không xác định";
+      logger.error("Đồng bộ Tiến độ giao hàng từ AMIS thất bại:", poMessage);
+      await prisma.syncLog.update({
+        where: { id: poTrackingLog.id },
+        data: { status: "FAILED", finishedAt: new Date(), message: poMessage },
+      });
+      poTrackingMessage = `Tiến độ giao hàng: đồng bộ thất bại (${poMessage}).`;
+    }
+
+    const combinedMessage = `Đã quét ${scanned} đơn trên AMIS, đồng bộ ${processed} đơn thuộc phạm vi quản lý. ${poTrackingMessage}`;
     await prisma.syncLog.update({
       where: { id: syncLog.id },
       data: {
@@ -323,12 +362,11 @@ export async function runAmisOrderSync(triggeredBy: string): Promise<SyncOutcome
         finishedAt: new Date(),
         recordsSynced: processed,
         cursor: (newestModified ?? cursorDate ?? new Date(0)).toISOString(),
-        message: `Đã quét ${scanned} đơn trên AMIS, đồng bộ ${processed} đơn thuộc phạm vi quản lý`,
+        message: combinedMessage,
       },
     });
 
-    logger.info(`Đồng bộ đơn hàng AMIS thành công: ${processed}/${scanned} đơn thuộc phạm vi quản lý`);
-    return { status: "SUCCESS", recordsSynced: processed };
+    return { status: "SUCCESS", recordsSynced: processed, message: combinedMessage };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Lỗi không xác định";
     logger.error("Đồng bộ đơn hàng AMIS thất bại:", message);
