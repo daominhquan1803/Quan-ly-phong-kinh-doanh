@@ -1,12 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn, formatCurrencyVND, formatDateVN } from "@/lib/utils";
 import { normalizeVN } from "@/lib/text-normalize";
 import { EmployeeFilterSelect } from "@/components/shared/EmployeeFilterSelect";
 import { FilterInput, SortableTh, toggleSort, type SortState } from "@/components/shared/SortableFilterableTable";
-import { AlertTriangle, CalendarDays, Clock, PackageCheck, TrendingUp, X } from "lucide-react";
+import { AlertTriangle, CalendarDays, CheckCircle2, Clock, PackageCheck, TrendingUp, X } from "lucide-react";
 
 interface OrderRow {
   id: string;
@@ -42,6 +42,14 @@ interface DailyDeliveryRow {
   byEmployee: Record<string, number>;
 }
 
+interface ManuallyClosedOrderRow {
+  poCode: string;
+  customerName: string;
+  salesEmployeeName: string;
+  manuallyClosedAt: string;
+  manuallyClosedByName: string | null;
+}
+
 interface SummaryResponse {
   openCount: number;
   overdueCount: number;
@@ -57,6 +65,7 @@ interface SummaryResponse {
   dailyEmployees: EmployeeMeta[];
   dailyDelivery: DailyDeliveryRow[];
   byEmployee: EmployeeRow[];
+  manuallyClosedOrders: ManuallyClosedOrderRow[];
   overdueOrders: OrderRow[];
   overdueOrdersTruncated: boolean;
   upcomingOrders: OrderRow[];
@@ -79,6 +88,8 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
   const [filterCustomer, setFilterCustomer] = useState("");
   const [filterEmployeeName, setFilterEmployeeName] = useState("");
   const [sort, setSort] = useState<SortState<SortField>>({ field: null, dir: "asc" });
+  const [pendingCodes, setPendingCodes] = useState<Set<string>>(new Set());
+  const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
     queryKey: ["shipping-status-summary", employeeId],
@@ -90,6 +101,32 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
       return res.json() as Promise<SummaryResponse>;
     },
   });
+
+  async function setPoClosed(poCode: string, closed: boolean) {
+    if (closed && !window.confirm(`Xác nhận kết thúc đơn ${poCode}? Đơn sẽ được coi là đã hoàn tất, không cần giao thêm và không tính vào giá trị/quá hạn chưa giao nữa. Có thể bấm "Mở lại đơn" sau nếu bấm nhầm.`)) {
+      return;
+    }
+    setPendingCodes((prev) => new Set(prev).add(poCode));
+    try {
+      const res = await fetch("/api/shipping-status/close", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ poCode, closed }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        window.alert(json.error ?? "Không cập nhật được trạng thái đơn");
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: ["shipping-status-summary"] });
+    } finally {
+      setPendingCodes((prev) => {
+        const next = new Set(prev);
+        next.delete(poCode);
+        return next;
+      });
+    }
+  }
 
   const rows = tab === "overdue" ? data?.overdueOrders : data?.upcomingOrders;
   const totalCount = tab === "overdue" ? data?.overdueCount : data?.upcomingCount;
@@ -321,6 +358,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
                 <SortableTh field="remainingValue" sort={sort} onSort={handleSort} align="right">
                   Giá trị còn lại
                 </SortableTh>
+                <th className="px-4 py-2.5" />
               </tr>
               <tr className="bg-white border-t border-gray-100">
                 <th className="px-4 py-2 font-normal">
@@ -332,7 +370,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
                 <th className="px-4 py-2 font-normal">
                   <FilterInput value={filterEmployeeName} onChange={setFilterEmployeeName} placeholder="Tìm NVKD..." />
                 </th>
-                <th colSpan={3} className="px-4 py-2 text-right">
+                <th colSpan={4} className="px-4 py-2 text-right">
                   {hasActiveFilter && (
                     <button
                       onClick={clearFilters}
@@ -347,7 +385,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
             <tbody className="divide-y divide-gray-100">
               {!isLoading && visibleRows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-gray-500">
+                  <td colSpan={7} className="px-4 py-6 text-center text-gray-500">
                     {hasActiveFilter
                       ? "Không tìm thấy đơn phù hợp"
                       : tab === "overdue"
@@ -377,6 +415,15 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
                       : "—"}
                   </td>
                   <td className="px-4 py-2.5 text-right">{formatCurrencyVND(o.remainingValue)}</td>
+                  <td className="px-4 py-2.5 text-right">
+                    <button
+                      onClick={() => setPoClosed(o.orderCode, true)}
+                      disabled={pendingCodes.has(o.orderCode)}
+                      className="rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-700 hover:border-brandRed-600 hover:text-brandRed-600 disabled:opacity-50"
+                    >
+                      {pendingCodes.has(o.orderCode) ? "Đang xử lý..." : "Kết thúc đơn"}
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -388,6 +435,51 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
           </p>
         )}
       </div>
+
+      {data && data.manuallyClosedOrders.length > 0 && (
+        <div className="rounded-lg border border-gray-200 bg-white overflow-x-auto">
+          <div className="flex items-center gap-1.5 px-4 pt-3 text-sm font-medium text-gray-900">
+            <CheckCircle2 className="h-4 w-4 text-success-600" />
+            Đơn đã đóng thủ công gần đây
+          </div>
+          <p className="px-4 pb-2 text-xs text-gray-500">
+            Các đơn đã bấm &quot;Kết thúc đơn&quot; — không còn tính vào Quá hạn/Sắp đến hạn/Giá trị chưa giao. Bấm
+            &quot;Mở lại đơn&quot; nếu đóng nhầm.
+          </p>
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-50 text-gray-500">
+              <tr>
+                <th className="text-left font-medium px-4 py-2">Mã đơn</th>
+                <th className="text-left font-medium px-4 py-2">Khách hàng</th>
+                <th className="text-left font-medium px-4 py-2">NVKD</th>
+                <th className="text-left font-medium px-4 py-2">Đóng lúc</th>
+                <th className="text-left font-medium px-4 py-2">Người đóng</th>
+                <th className="px-4 py-2" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {data.manuallyClosedOrders.map((o) => (
+                <tr key={o.poCode} className="hover:bg-gray-50">
+                  <td className="px-4 py-2.5 font-medium text-navy-900">{o.poCode}</td>
+                  <td className="px-4 py-2.5">{o.customerName}</td>
+                  <td className="px-4 py-2.5">{o.salesEmployeeName}</td>
+                  <td className="px-4 py-2.5">{formatDateVN(o.manuallyClosedAt)}</td>
+                  <td className="px-4 py-2.5">{o.manuallyClosedByName ?? "—"}</td>
+                  <td className="px-4 py-2.5 text-right">
+                    <button
+                      onClick={() => setPoClosed(o.poCode, false)}
+                      disabled={pendingCodes.has(o.poCode)}
+                      className="rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-700 hover:border-navy-900 hover:text-navy-900 disabled:opacity-50"
+                    >
+                      {pendingCodes.has(o.poCode) ? "Đang xử lý..." : "Mở lại đơn"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

@@ -86,6 +86,7 @@ model User {
   poTrackingLines  PoTrackingLine[]
   poTrackingBatches PoTrackingImportBatch[]
   shipmentSlipBatches ShipmentSlipImportBatch[]
+  manuallyClosedPoLines PoTrackingLine[] @relation("PoLineManuallyClosedBy")
 
   @@map("users")
 }
@@ -586,6 +587,15 @@ model PoTrackingLine {
   // true nếu file PO tracking Excel tự báo dòng này "Kết thúc" — 1 khi đã true thì trạng thái
   // tính lại luôn là "Kết thúc" (không tự mở lại), dù không có thêm đợt giao nào qua Phiếu đi hàng.
   baselineClosed Boolean @default(false)
+
+  // Đóng thủ công qua nút "Kết thúc đơn" ở trang Tiến độ giao hàng — dùng khi PO không cần
+  // giao tiếp dù chưa giao đủ SL/giá trị (vd khách huỷ bớt/không lấy nữa nhưng file PO tracking
+  // Excel gốc chưa kịp cập nhật). Khác baselineClosed (chỉ đến từ file Excel): cờ này KHÔNG bị
+  // 1 lần nhập lại file Excel ghi đè/mở lại — chỉ đổi qua đúng nút "Kết thúc đơn"/"Mở lại đơn".
+  manuallyClosed         Boolean   @default(false)
+  manuallyClosedAt       DateTime?
+  manuallyClosedByUserId String?
+  manuallyClosedByUser   User?     @relation("PoLineManuallyClosedBy", fields: [manuallyClosedByUserId], references: [id])
 
   importBatchId String?
   importBatch   PoTrackingImportBatch? @relation(fields: [importBatchId], references: [id])

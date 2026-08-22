@@ -52,6 +52,10 @@ export function computeLineDeliveryFields(
     baselineDeliveredValue: number;
     baselineDeliveredQty: number | null;
     baselineClosed: boolean;
+    // Đóng thủ công qua nút "Kết thúc đơn" (xem setPoManualClosed) — có hiệu lực TƯƠNG ĐƯƠNG
+    // baselineClosed (ép statusRaw = "Kết thúc" dù chưa giao đủ), nhưng khác ở chỗ chỉ đổi qua
+    // nút bấm, không bị 1 lần nhập lại file PO tracking Excel ghi đè/mở lại.
+    manuallyClosed: boolean;
   },
   slipAgg: SlipAgg
 ): LineDeliveryFields {
@@ -60,16 +64,24 @@ export function computeLineDeliveryFields(
   const remainingValue = Math.max(line.poValue - deliveredValue, 0);
   const remainingQty = line.poQuantity != null ? Math.max(line.poQuantity - totalDeliveredQty, 0) : null;
   const fullyDelivered = line.poQuantity != null ? totalDeliveredQty >= line.poQuantity : deliveredValue >= line.poValue;
-  const statusRaw = line.baselineClosed || fullyDelivered ? "Kết thúc" : "Đang thực hiện";
+  const statusRaw = line.baselineClosed || line.manuallyClosed || fullyDelivered ? "Kết thúc" : "Đang thực hiện";
   return { deliveredValue, remainingValue, totalDeliveredQty, remainingQty, statusRaw };
 }
 
 /** Tính lại và ghi đè các trường tình trạng giao hàng của 1 dòng PO — dùng sau khi 1 Phiếu đi
- * hàng sinh/xoá đợt giao gắn với dòng đó. */
+ * hàng sinh/xoá đợt giao gắn với dòng đó, hoặc sau khi đổi cờ manuallyClosed. */
 export async function recomputeLineDeliveryFields(lineId: string): Promise<void> {
   const line = await prisma.poTrackingLine.findUnique({
     where: { id: lineId },
-    select: { id: true, poValue: true, poQuantity: true, baselineDeliveredValue: true, baselineDeliveredQty: true, baselineClosed: true },
+    select: {
+      id: true,
+      poValue: true,
+      poQuantity: true,
+      baselineDeliveredValue: true,
+      baselineDeliveredQty: true,
+      baselineClosed: true,
+      manuallyClosed: true,
+    },
   });
   if (!line) return;
   const slipAgg = await getSlipAggForLine(lineId);
@@ -80,10 +92,49 @@ export async function recomputeLineDeliveryFields(lineId: string): Promise<void>
       baselineDeliveredValue: Number(line.baselineDeliveredValue),
       baselineDeliveredQty: line.baselineDeliveredQty != null ? Number(line.baselineDeliveredQty) : null,
       baselineClosed: line.baselineClosed,
+      manuallyClosed: line.manuallyClosed,
     },
     slipAgg
   );
   await prisma.poTrackingLine.update({ where: { id: lineId }, data: fields });
+}
+
+export interface SetPoManualClosedResult {
+  updatedLineCount: number;
+}
+
+/**
+ * Đóng/mở lại thủ công 1 PO (áp dụng cho MỌI dòng hàng cùng Số PO) — nút "Kết thúc đơn"/"Mở
+ * lại đơn" ở trang Tiến độ giao hàng, dùng khi PO không cần giao tiếp dù chưa giao đủ SL/giá
+ * trị. `lineWhere` dùng để giới hạn phạm vi theo quyền (vd chỉ đúng nhân viên sở hữu) — nếu
+ * không có dòng nào khớp (PO không tồn tại hoặc không thuộc quyền), trả về updatedLineCount 0,
+ * không update gì, để route gọi trả 404/403 phù hợp.
+ */
+export async function setPoManualClosed(
+  poCode: string,
+  closed: boolean,
+  userId: string | null,
+  lineWhere: Record<string, unknown> = {}
+): Promise<SetPoManualClosedResult> {
+  const lines = await prisma.poTrackingLine.findMany({
+    where: { poCode, ...lineWhere },
+    select: { id: true },
+  });
+  if (lines.length === 0) return { updatedLineCount: 0 };
+
+  const lineIds = lines.map((l) => l.id);
+  await prisma.poTrackingLine.updateMany({
+    where: { id: { in: lineIds } },
+    data: {
+      manuallyClosed: closed,
+      manuallyClosedAt: closed ? new Date() : null,
+      manuallyClosedByUserId: closed ? userId : null,
+    },
+  });
+  for (const lineId of lineIds) {
+    await recomputeLineDeliveryFields(lineId);
+  }
+  return { updatedLineCount: lineIds.length };
 }
 
 export interface ShipmentSlipDeliveryItem {

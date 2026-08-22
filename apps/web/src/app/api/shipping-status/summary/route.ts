@@ -29,6 +29,8 @@ interface PoAgg {
   latestDeliveryDate: Date | null; // đợt giao gần nhất của cả PO — dùng tính tỷ lệ đúng hạn
   remainingValue: number;
   poValue: number;
+  manuallyClosedAt: Date | null;
+  manuallyClosedByName: string | null;
 }
 
 /**
@@ -61,6 +63,8 @@ export async function GET(req: NextRequest) {
         statusRaw: true,
         remainingValue: true,
         poValue: true,
+        manuallyClosedAt: true,
+        manuallyClosedByUser: { select: { name: true } },
         deliveryEvents: { select: { eventDate: true }, orderBy: { eventDate: "desc" }, take: 1 },
       },
     });
@@ -80,8 +84,14 @@ export async function GET(req: NextRequest) {
           latestDeliveryDate: null,
           remainingValue: 0,
           poValue: 0,
+          manuallyClosedAt: null,
+          manuallyClosedByName: null,
         };
         poMap.set(l.poCode, agg);
+      }
+      if (l.manuallyClosedAt && (!agg.manuallyClosedAt || l.manuallyClosedAt > agg.manuallyClosedAt)) {
+        agg.manuallyClosedAt = l.manuallyClosedAt;
+        agg.manuallyClosedByName = l.manuallyClosedByUser?.name ?? null;
       }
 
       const isLineOpen = normStatus(l.statusRaw) !== CLOSED_STATUS;
@@ -248,6 +258,21 @@ export async function GET(req: NextRequest) {
       select: { id: true, name: true },
     });
 
+    // Đơn đã đóng thủ công (nút "Kết thúc đơn") gần đây — để anh xem lại/bấm "Mở lại đơn" nếu
+    // bấm nhầm. Đơn đã đóng thủ công không còn nằm trong openPos nên sẽ biến mất khỏi các bảng
+    // Quá hạn/Sắp đến hạn ở trên — danh sách này là nơi duy nhất còn thấy lại được các đơn đó.
+    const manuallyClosedOrders = allPos
+      .filter((p) => p.manuallyClosedAt)
+      .sort((a, b) => (b.manuallyClosedAt?.getTime() ?? 0) - (a.manuallyClosedAt?.getTime() ?? 0))
+      .slice(0, 50)
+      .map((p) => ({
+        poCode: p.poCode,
+        customerName: p.customerCode ?? "—",
+        salesEmployeeName: p.salesEmployeeName,
+        manuallyClosedAt: p.manuallyClosedAt,
+        manuallyClosedByName: p.manuallyClosedByName,
+      }));
+
     const toRow = (p: PoAgg) => ({
       id: p.poCode,
       orderCode: p.poCode,
@@ -277,6 +302,7 @@ export async function GET(req: NextRequest) {
       dailyEmployees,
       dailyDelivery: Array.from(dayBuckets.values()),
       byEmployee: Array.from(byEmployeeMap.values()).sort((a, b) => b.overdueCount - a.overdueCount),
+      manuallyClosedOrders,
       overdueOrders: overdue.slice(0, MAX_ROWS).map(toRow),
       overdueOrdersTruncated: overdue.length > MAX_ROWS,
       upcomingOrders: upcoming.slice(0, MAX_ROWS).map(toRow),

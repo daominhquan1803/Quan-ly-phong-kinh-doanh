@@ -173,8 +173,12 @@ async function main() {
 
   // Load toàn bộ naturalKey đã có sẵn trong DB để phân biệt tạo mới/cập nhật mà không cần
   // 1 query riêng cho từng dòng.
-  const existing = await prisma.poTrackingLine.findMany({ select: { id: true, naturalKey: true } });
+  const existing = await prisma.poTrackingLine.findMany({ select: { id: true, naturalKey: true, manuallyClosed: true } });
   const existingByKey = new Map(existing.map((e) => [e.naturalKey, e.id]));
+  // Cờ "Kết thúc đơn" bấm tay ở trang Tiến độ giao hàng KHÔNG được để file này ghi đè/mở lại —
+  // phải đọc lại đúng giá trị hiện có của từng dòng đã tồn tại để giữ nguyên khi tính lại
+  // statusRaw (xem computeLineDeliveryFields).
+  const manuallyClosedById = new Map(existing.map((e) => [e.id, e.manuallyClosed]));
 
   // Tổng đợt giao do Phiếu đi hàng sinh ra của từng dòng (nếu có) — 1 query duy nhất, để cộng
   // vào baseline đọc từ file này mà không mất phần đã giao qua Phiếu đi hàng (xem
@@ -217,6 +221,7 @@ async function main() {
           baselineDeliveredValue: r.deliveredValue,
           baselineDeliveredQty: r.totalDeliveredQty,
           baselineClosed: normPoStatus(r.statusRaw) === PO_CLOSED_STATUS,
+          manuallyClosed: existingId ? manuallyClosedById.get(existingId) ?? false : false,
         },
         slipAgg
       );
