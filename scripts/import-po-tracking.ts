@@ -22,7 +22,14 @@
  * Cách chạy: npx tsx scripts/import-po-tracking.ts <file.xlsx> <email người chạy> [--dry-run]
  */
 import * as XLSX from "xlsx";
-import { prisma, getSlipAggForAllLines, computeLineDeliveryFields, normPoStatus, PO_CLOSED_STATUS } from "@hoanggia/db";
+import {
+  prisma,
+  getSlipAggForAllLines,
+  computeLineDeliveryFields,
+  normPoStatus,
+  PO_CLOSED_STATUS,
+  contentIndicatesNoLongerNeeded,
+} from "@hoanggia/db";
 import path from "path";
 
 const args = process.argv.slice(2).filter((a) => !a.startsWith("--"));
@@ -214,13 +221,18 @@ async function main() {
       // "Nền" = đúng nguyên giá trị các cột giao hàng trong file này — CỘNG THÊM phần đã giao
       // qua Phiếu đi hàng (nếu dòng đã tồn tại và có) để không bị mất khi file này ghi đè nền.
       const slipAgg = existingId ? slipAggByLine.get(existingId) ?? { qty: 0, value: 0 } : { qty: 0, value: 0 };
+      // Đóng ("Kết thúc") nếu cột Trạng thái báo vậy, HOẶC cột Nội Dung nhắc huỷ/kết thúc — cả
+      // 2 đều là tín hiệu từ chính file gốc rằng PO không cần giao tiếp (xem
+      // contentIndicatesNoLongerNeeded).
+      const baselineClosed =
+        normPoStatus(r.statusRaw) === PO_CLOSED_STATUS || contentIndicatesNoLongerNeeded(r.content);
       const computed = computeLineDeliveryFields(
         {
           poValue: r.poValue,
           poQuantity: r.poQuantity,
           baselineDeliveredValue: r.deliveredValue,
           baselineDeliveredQty: r.totalDeliveredQty,
-          baselineClosed: normPoStatus(r.statusRaw) === PO_CLOSED_STATUS,
+          baselineClosed,
           manuallyClosed: existingId ? manuallyClosedById.get(existingId) ?? false : false,
         },
         slipAgg
@@ -249,7 +261,7 @@ async function main() {
         importBatchId: batch?.id,
         baselineDeliveredValue: r.deliveredValue,
         baselineDeliveredQty: r.totalDeliveredQty,
-        baselineClosed: normPoStatus(r.statusRaw) === PO_CLOSED_STATUS,
+        baselineClosed,
         ...computed,
       };
 

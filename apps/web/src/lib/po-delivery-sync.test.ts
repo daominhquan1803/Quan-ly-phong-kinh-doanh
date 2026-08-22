@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeLineDeliveryFields } from "@hoanggia/db";
+import { computeLineDeliveryFields, contentIndicatesNoLongerNeeded } from "@hoanggia/db";
 
 describe("computeLineDeliveryFields", () => {
   it("cộng phần giao qua Phiếu đi hàng lên trên nền từ file PO tracking", () => {
@@ -68,5 +68,33 @@ describe("computeLineDeliveryFields", () => {
       remainingQty: 0,
       statusRaw: "Kết thúc",
     });
+  });
+
+  it("tự chuyển 'Kết thúc' khi hết giá trị còn lại (remainingValue = 0), kể cả khi SL PO chưa khớp đúng số đã giao", () => {
+    const result = computeLineDeliveryFields(
+      { poValue: 1_000_000, poQuantity: 100, baselineDeliveredValue: 1_000_000, baselineDeliveredQty: 90, baselineClosed: false, manuallyClosed: false },
+      { qty: 0, value: 0 }
+    );
+    expect(result.remainingValue).toBe(0);
+    expect(result.totalDeliveredQty).toBe(90); // vẫn còn lệch 10 so với SL PO
+    expect(result.statusRaw).toBe("Kết thúc"); // nhưng hết giá trị chưa giao thì vẫn coi là xong
+  });
+});
+
+describe("contentIndicatesNoLongerNeeded", () => {
+  it("nhận diện 'Huỷ' và 'Kết thúc' viết hoa/thường, có/không dấu câu kèm theo", () => {
+    expect(contentIndicatesNoLongerNeeded("Huỷ")).toBe(true);
+    expect(contentIndicatesNoLongerNeeded("hủy")).toBe(true); // cách gõ dấu khác, cùng nghĩa
+    expect(contentIndicatesNoLongerNeeded("KH huỷ 50sp còn lại")).toBe(true);
+    expect(contentIndicatesNoLongerNeeded("Kết thúc")).toBe(true);
+    expect(contentIndicatesNoLongerNeeded("Đơn đã kết thúc, không giao nữa")).toBe(true);
+  });
+
+  it("không khớp nhầm các ghi chú khác không liên quan", () => {
+    expect(contentIndicatesNoLongerNeeded("Để tồn")).toBe(false);
+    expect(contentIndicatesNoLongerNeeded("T08")).toBe(false);
+    expect(contentIndicatesNoLongerNeeded("Kết chuyển sang PO khác")).toBe(false); // "kết" không đi liền "thúc"
+    expect(contentIndicatesNoLongerNeeded(null)).toBe(false);
+    expect(contentIndicatesNoLongerNeeded("")).toBe(false);
   });
 });

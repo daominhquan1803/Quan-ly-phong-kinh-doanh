@@ -5,6 +5,33 @@ export function normPoStatus(s: string | null | undefined): string {
   return (s ?? "").trim().toLowerCase();
 }
 
+/** Bỏ dấu tiếng Việt + hạ chữ thường — dùng để so khớp ghi chú tự do trong cột "Nội Dung"
+ * không phân biệt cách gõ dấu (vd "huỷ" và "hủy" đều về "huy"). */
+function stripDiacriticsVN(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/đ/gi, "d")
+    .toLowerCase();
+}
+
+/**
+ * true nếu cột "Nội Dung" (ghi chú tự do, khác cột "Trạng thái") của dòng PO có nhắc đến
+ * huỷ/kết thúc — dấu hiệu PO không cần giao tiếp dù cột "Trạng thái" trong file chưa kịp cập
+ * nhật (theo anh Quân xác nhận: nội dung ghi huỷ/kết thúc thì cũng coi như xong). So khớp theo
+ * TỪNG TỪ sau khi bỏ dấu (không phải chuỗi con), để tránh khớp nhầm các từ tình cờ chứa "huy"/
+ * "ket"/"thuc" khi ghép cùng chữ khác.
+ */
+export function contentIndicatesNoLongerNeeded(content: string | null | undefined): boolean {
+  if (!content) return false;
+  const tokens = stripDiacriticsVN(content).split(/[^a-z0-9]+/).filter(Boolean);
+  if (tokens.includes("huy")) return true;
+  for (let i = 0; i < tokens.length - 1; i++) {
+    if (tokens[i] === "ket" && tokens[i + 1] === "thuc") return true;
+  }
+  return false;
+}
+
 export interface SlipAgg {
   qty: number;
   value: number;
@@ -64,7 +91,12 @@ export function computeLineDeliveryFields(
   const remainingValue = Math.max(line.poValue - deliveredValue, 0);
   const remainingQty = line.poQuantity != null ? Math.max(line.poQuantity - totalDeliveredQty, 0) : null;
   const fullyDelivered = line.poQuantity != null ? totalDeliveredQty >= line.poQuantity : deliveredValue >= line.poValue;
-  const statusRaw = line.baselineClosed || line.manuallyClosed || fullyDelivered ? "Kết thúc" : "Đang thực hiện";
+  // Hết giá trị còn lại (remainingValue = 0) thì cũng coi là xong, KỂ CẢ khi SL PO (nếu có)
+  // chưa khớp đúng số đã giao — 1 số dòng lệch SL nhỏ do làm tròn/điều chỉnh giá không còn ý
+  // nghĩa về tiền, theo anh Quân xác nhận: hết giá trị chưa giao thì không cần giao tiếp nữa.
+  const noRemainingValue = remainingValue === 0;
+  const statusRaw =
+    line.baselineClosed || line.manuallyClosed || fullyDelivered || noRemainingValue ? "Kết thúc" : "Đang thực hiện";
   return { deliveredValue, remainingValue, totalDeliveredQty, remainingQty, statusRaw };
 }
 
