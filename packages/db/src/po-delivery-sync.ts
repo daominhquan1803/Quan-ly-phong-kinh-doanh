@@ -208,7 +208,17 @@ export async function applyShipmentSlipDeliveries(
   let matchedCount = 0;
 
   for (const item of items) {
-    if (!item.poSaleNumber || !item.qtyActual || item.qtyActual <= 0) continue;
+    // Trước đây 2 trường hợp này bị BỎ QUA ÂM THẦM (không ghi vào unmatchedItems) — người
+    // upload không thấy cảnh báo gì dù toàn bộ dòng hàng không được ghi nhận, chỉ phát hiện ra
+    // khi thấy số liệu giao hàng không đổi. Nay báo rõ lý do để biết ngay cần map lại cột nào.
+    if (!item.poSaleNumber) {
+      unmatchedItems.push(`${item.itemCode ?? item.itemName} (thiếu Số PO — kiểm tra lại cột đã map)`);
+      continue;
+    }
+    if (!item.qtyActual || item.qtyActual <= 0) {
+      unmatchedItems.push(`${item.poSaleNumber} / ${item.itemCode ?? item.itemName} (thiếu SL thực xuất — kiểm tra lại cột đã map)`);
+      continue;
+    }
 
     const candidates = await prisma.poTrackingLine.findMany({
       where: {
@@ -256,4 +266,50 @@ export async function applyShipmentSlipDeliveries(
   }
 
   return { matchedCount, unmatchedItems };
+}
+
+export interface ResyncAllShipmentSlipsResult {
+  totalSlips: number;
+  totalMatched: number;
+  totalUnmatchedItems: number;
+  unmatchedSamples: string[];
+}
+
+/**
+ * Nút "Đồng bộ lại giao hàng" ở trang Phiếu đi hàng — chạy lại applyShipmentSlipDeliveries cho
+ * TOÀN BỘ phiếu đã có trong DB, dùng khi anh nghi ngờ số liệu giao hàng chưa cập nhật đúng sau
+ * khi upload (vd dòng PO tương ứng được nhập/sửa SAU khi phiếu đã upload, hoặc phiếu trước đó
+ * chưa khớp được do thiếu dữ liệu Số PO/SL thực xuất mà nay đã bổ sung). An toàn để chạy lặp
+ * lại nhiều lần — mỗi phiếu chỉ xoá+tạo lại đúng phần đợt giao CỦA CHÍNH NÓ (sourceShipmentSlipId
+ * = slip.id), không đụng đợt giao của phiếu khác hay của file PO tracking Excel.
+ */
+export async function resyncAllShipmentSlipDeliveries(): Promise<ResyncAllShipmentSlipsResult> {
+  const slips = await prisma.shipmentSlip.findMany({
+    select: {
+      id: true,
+      slipDate: true,
+      items: { select: { itemCode: true, itemName: true, poSaleNumber: true, qtyActual: true } },
+    },
+  });
+
+  let totalMatched = 0;
+  let totalUnmatchedItems = 0;
+  const unmatchedSamples: string[] = [];
+
+  for (const slip of slips) {
+    const items: ShipmentSlipDeliveryItem[] = slip.items.map((i) => ({
+      itemCode: i.itemCode,
+      itemName: i.itemName,
+      poSaleNumber: i.poSaleNumber,
+      qtyActual: i.qtyActual != null ? Number(i.qtyActual) : null,
+    }));
+    const result = await applyShipmentSlipDeliveries(slip.id, slip.slipDate, items);
+    totalMatched += result.matchedCount;
+    totalUnmatchedItems += result.unmatchedItems.length;
+    for (const u of result.unmatchedItems) {
+      if (unmatchedSamples.length < 50) unmatchedSamples.push(u);
+    }
+  }
+
+  return { totalSlips: slips.length, totalMatched, totalUnmatchedItems, unmatchedSamples };
 }
