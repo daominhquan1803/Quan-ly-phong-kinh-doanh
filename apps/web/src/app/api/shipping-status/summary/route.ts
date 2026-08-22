@@ -90,6 +90,13 @@ export async function GET(req: NextRequest) {
         if (l.requestedDeliveryDate && (!agg.earliestOpenDeadline || l.requestedDeliveryDate < agg.earliestOpenDeadline)) {
           agg.earliestOpenDeadline = l.requestedDeliveryDate;
         }
+        // Kẹp về 0 ở mức từng dòng — 1 số dòng "Kết thúc" có G.Trị còn lại âm trong file gốc
+        // (đã giao vượt giá trị PO, do điều chỉnh/nhập bù), cộng thẳng sẽ kéo tổng cả PO xuống
+        // âm dù các dòng khác vẫn còn nợ thật — không phản ánh đúng "còn lại phải giao". Chỉ
+        // cộng dòng CÒN MỞ — dòng đã "Kết thúc" trên file gốc nghĩa là PO đã đóng, không cần
+        // giao tiếp dù chưa giao đủ số lượng, nên không tính vào "còn lại chưa giao" (theo anh
+        // Quân xác nhận).
+        agg.remainingValue += Math.max(0, Number(l.remainingValue ?? 0));
       }
       if (l.requestedDeliveryDate && (!agg.latestDeadlineAll || l.requestedDeliveryDate > agg.latestDeadlineAll)) {
         agg.latestDeadlineAll = l.requestedDeliveryDate;
@@ -98,10 +105,6 @@ export async function GET(req: NextRequest) {
       if (lastEvent && (!agg.latestDeliveryDate || lastEvent > agg.latestDeliveryDate)) {
         agg.latestDeliveryDate = lastEvent;
       }
-      // Kẹp về 0 ở mức từng dòng — 1 số dòng "Kết thúc" có G.Trị còn lại âm trong file gốc (đã
-      // giao vượt giá trị PO, do điều chỉnh/nhập bù), cộng thẳng sẽ kéo tổng cả PO xuống âm dù
-      // các dòng khác vẫn còn nợ thật — không phản ánh đúng "còn lại phải giao".
-      agg.remainingValue += Math.max(0, Number(l.remainingValue ?? 0));
       agg.poValue += Number(l.poValue ?? 0);
     }
 
