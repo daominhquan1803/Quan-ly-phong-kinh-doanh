@@ -223,9 +223,49 @@ export function allocateQtyAcrossLines(qty: number, candidates: AllocationCandid
   return results;
 }
 
+const CANDIDATE_LINE_SELECT = {
+  id: true,
+  naturalKey: true,
+  contractPrice: true,
+  poValue: true,
+  poQuantity: true,
+  salesEmployeeId: true,
+  baselineDeliveredQty: true,
+} as const;
+
+/**
+ * Tìm dòng PO khớp 1 dòng hàng của Phiếu đi hàng — thử lần lượt nhiều cách trước khi báo
+ * "không tìm thấy" (không suy đoán mờ, chỉ thử các cách khớp CHÍNH XÁC):
+ * 1) Theo đúng Mã hàng (nếu có).
+ * 2) Không khớp Mã hàng (hoặc thiếu Mã hàng) → thử theo đúng Tên hàng.
+ * 3) Mã hàng có hậu tố ".N" (số phiên bản, vd "SB00286.1") mà cách 1/2 vẫn không ra kết quả —
+ *    thử lại với mã đã BỎ hậu tố (vd "SB00286") — 1 số nguồn xuất (Phiếu đi hàng) thêm hậu tố
+ *    phiên bản mà file PO tracking gốc không có. Chỉ thử khi mã thật sự có hậu tố (khác mã gốc).
+ */
+async function findCandidateLines(poCode: string, itemCode: string | null, itemName: string) {
+  if (itemCode) {
+    const byCode = await prisma.poTrackingLine.findMany({ where: { poCode, itemCode }, select: CANDIDATE_LINE_SELECT });
+    if (byCode.length > 0) return byCode;
+  }
+  const byName = await prisma.poTrackingLine.findMany({ where: { poCode, itemName }, select: CANDIDATE_LINE_SELECT });
+  if (byName.length > 0) return byName;
+  if (itemCode) {
+    const stripped = itemCode.replace(/\.\d+$/, "");
+    if (stripped !== itemCode) {
+      const byStrippedCode = await prisma.poTrackingLine.findMany({
+        where: { poCode, itemCode: stripped },
+        select: CANDIDATE_LINE_SELECT,
+      });
+      if (byStrippedCode.length > 0) return byStrippedCode;
+    }
+  }
+  return [] as Awaited<ReturnType<typeof prisma.poTrackingLine.findMany<{ where: { poCode: string }; select: typeof CANDIDATE_LINE_SELECT }>>>;
+}
+
 /**
  * Đồng bộ đợt giao từ 1 Phiếu đi hàng vào các dòng PO tracking tương ứng — khớp theo Số PO
- * (poSaleNumber = PoTrackingLine.poCode) + Mã hàng (hoặc Tên hàng nếu thiếu mã). Nếu khớp đúng
+ * (poSaleNumber = PoTrackingLine.poCode) + Mã hàng (hoặc Tên hàng nếu thiếu mã, xem
+ * findCandidateLines để biết đầy đủ thứ tự thử khớp). Nếu khớp đúng
  * 1 dòng thì ghi thẳng; nếu khớp NHIỀU dòng cùng Mã hàng (PO tách nhiều dòng cùng mã) thì phân
  * bổ SL trừ dần lần lượt theo đúng thứ tự trong file gốc (xem allocateQtyAcrossLines) — chỉ áp
  * dụng khi MỌI dòng khớp đều có SL PO (mới tính được "còn nhận được bao nhiêu"), nếu không thì
@@ -294,13 +334,7 @@ export async function applyShipmentSlipDeliveries(
       continue;
     }
 
-    const candidates = await prisma.poTrackingLine.findMany({
-      where: {
-        poCode: item.poSaleNumber,
-        ...(item.itemCode ? { itemCode: item.itemCode } : { itemName: item.itemName }),
-      },
-      select: { id: true, naturalKey: true, contractPrice: true, poValue: true, poQuantity: true, salesEmployeeId: true, baselineDeliveredQty: true },
-    });
+    const candidates = await findCandidateLines(item.poSaleNumber, item.itemCode, item.itemName);
 
     if (candidates.length === 0) {
       unmatchedItems.push(`${item.poSaleNumber} / ${item.itemCode ?? item.itemName} (không tìm thấy dòng PO khớp)`);
