@@ -97,6 +97,29 @@ export function TargetsTable() {
               </tr>
             ))}
           </tbody>
+          {data && data.rows.length > 0 && (
+            <tfoot className="border-t-2 border-gray-200 bg-gray-50">
+              <tr>
+                <td className="px-4 py-2.5 font-semibold text-gray-900">Tổng</td>
+                <td className="px-4 py-2.5 text-right font-semibold text-gray-900">
+                  {formatCurrencyVND(data.rows.reduce((s, r) => s + r.targetRevenue, 0))}
+                </td>
+                <td className="px-4 py-2.5 text-right font-semibold text-gray-900">
+                  {formatCurrencyVND(data.rows.reduce((s, r) => s + r.actualRevenue, 0))}
+                </td>
+                <td className="px-4 py-2.5 text-right font-semibold text-navy-900">
+                  {(() => {
+                    const totalTarget = data.rows.reduce((s, r) => s + r.targetRevenue, 0);
+                    const totalActual = data.rows.reduce((s, r) => s + r.actualRevenue, 0);
+                    return totalTarget > 0 ? `${Math.round((totalActual / totalTarget) * 100)}%` : "—";
+                  })()}
+                </td>
+                <td className="px-4 py-2.5 text-right font-semibold text-gray-900">
+                  {formatCurrencyVND(data.rows.reduce((s, r) => s + r.poValue, 0))}
+                </td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
     </div>

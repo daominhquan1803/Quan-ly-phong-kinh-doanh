@@ -142,6 +142,20 @@ export function SalesPlanDetailSection({ isAdmin }: { isAdmin: boolean }) {
                     </tr>
                   ))}
                 </tbody>
+                <tfoot className="border-t-2 border-gray-200 bg-gray-50">
+                  <tr>
+                    <td className="px-4 py-2.5 font-semibold text-gray-900">Tổng</td>
+                    <td className="px-4 py-2.5 text-right font-semibold text-gray-900">
+                      {formatCurrencyVND(group.targetRevenue)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-semibold text-gray-900">
+                      {formatCurrencyVND(group.actualRevenue)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-semibold text-navy-900">
+                      {group.completionPct != null ? `${group.completionPct}%` : "—"}
+                    </td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </div>
