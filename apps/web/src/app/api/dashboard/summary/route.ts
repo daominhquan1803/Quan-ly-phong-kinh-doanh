@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
-import { prisma, OrderStatus } from "@hoanggia/db";
+import { prisma, getPoAggregates } from "@hoanggia/db";
 import { requireSession, scopeByOwner, UnauthorizedError } from "@/lib/rbac";
 import { getEmployeeTargetVsActual, getProductGroupTargetVsActual } from "@/lib/dashboard-metrics";
-import { isOrderOverdue } from "@/lib/order-status";
+import { daysUntilDeadline } from "@/lib/order-status";
+
+const TOP_OVERDUE_COUNT = 10;
 
 export const dynamic = "force-dynamic";
 
@@ -52,24 +54,20 @@ export async function GET() {
     const poTrendPct = prevTotalPoValue > 0 ? Math.round(((totalPoValue - prevTotalPoValue) / prevTotalPoValue) * 100) : null;
     const completionTrendPts = completionPct != null && prevCompletionPct != null ? completionPct - prevCompletionPct : null;
 
-    const openOrders = await prisma.order.findMany({
-      where: {
-        status: { notIn: [OrderStatus.DELIVERED, OrderStatus.CANCELLED] },
-        expectedDeliveryDate: { not: null },
-        ...scopeByOwner(session, "salesEmployeeId"),
-      },
-      include: { salesEmployee: { select: { name: true } } },
-      orderBy: { expectedDeliveryDate: "asc" },
-      // Nâng lên 2000 (giống /api/orders và /api/shipping-status/summary) để overdueOrderCount
-      // luôn đếm đúng trên toàn bộ đơn quá hạn thật, không bị cắt ngầm khi số đơn tăng cao.
-      take: 2000,
-    });
-    // Đếm quá hạn phải tính trên TOÀN BỘ danh sách trước khi cắt bớt để hiển thị — trước đây
-    // overdueOrderCount vô tình lấy .length của mảng đã .slice(0, 20), nên card "Đơn hàng quá
-    // hạn" luôn hiện tối đa 20 dù thực tế nhiều hơn (khác với trang Tiến độ giao hàng tính
-    // đúng số quá hạn thật, gây lệch số liệu giữa 2 trang).
-    const allOverdueOrders = openOrders.filter(isOrderOverdue);
-    const overdueOrders = allOverdueOrders.slice(0, 20);
+    // Đơn hàng quá hạn — lấy CHUNG nguồn PoTrackingLine với trang Tiến độ giao hàng (xem
+    // getPoAggregates) thay vì bảng Order đồng bộ AMIS trực tiếp như trước — trước đây 2 nơi
+    // dùng 2 nguồn khác nhau nên có thể lệch số, và Order không có sẵn "giá trị còn lại" để
+    // sắp xếp top 10 theo giá trị cao nhất như anh yêu cầu.
+    const allPos = await getPoAggregates(scopeByOwner(session, "salesEmployeeId"));
+    const isPoOverdue = (p: (typeof allPos)[number]) => {
+      if (!p.isOpen || !p.earliestOpenDeadline) return false;
+      const days = daysUntilDeadline(p.earliestOpenDeadline);
+      return days != null && days < 0;
+    };
+    const allOverduePos = allPos.filter(isPoOverdue);
+    // Chỉ hiện top 10 đơn có giá trị chưa giao cao nhất — đúng theo yêu cầu, thay vì sắp theo
+    // hạn giao gần nhất như trước.
+    const overduePos = [...allOverduePos].sort((a, b) => b.remainingValue - a.remainingValue).slice(0, TOP_OVERDUE_COUNT);
 
     // Công nợ là số liệu tổng của cả phòng (không gắn được theo từng nhân viên) — chỉ
     // ADMIN mới thấy, đúng yêu cầu "chỉ Quản trị viên xem được thông tin tổng của cả phòng".
@@ -115,13 +113,13 @@ export async function GET() {
       completionTrendPts,
       perEmployee,
       byProductGroup,
-      overdueOrderCount: allOverdueOrders.length,
-      overdueOrders: overdueOrders.map((o) => ({
-        id: o.id,
-        orderCode: o.orderCode,
-        customerName: o.customerName,
-        salesEmployeeName: o.salesEmployee?.name ?? o.salesEmployeeNameRaw,
-        expectedDeliveryDate: o.expectedDeliveryDate,
+      overdueOrderCount: allOverduePos.length,
+      overdueOrders: overduePos.map((p) => ({
+        poCode: p.poCode,
+        customerName: p.customerCode ?? "—",
+        salesEmployeeName: p.salesEmployeeName,
+        expectedDeliveryDate: p.earliestOpenDeadline,
+        remainingValue: p.remainingValue,
       })),
       debtTotal,
       debtOverdue,

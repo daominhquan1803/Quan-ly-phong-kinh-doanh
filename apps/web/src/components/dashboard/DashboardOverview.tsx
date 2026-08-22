@@ -20,6 +20,7 @@ import {
 import { formatCurrencyVND, formatDateVN } from "@/lib/utils";
 import { AlertTriangle, Minus, TrendingDown, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { OrderTrendChart } from "./OrderTrendChart";
 
 interface SummaryResponse {
   year: number;
@@ -47,11 +48,11 @@ interface SummaryResponse {
   }[];
   overdueOrderCount: number;
   overdueOrders: {
-    id: string;
-    orderCode: string;
+    poCode: string;
     customerName: string;
     salesEmployeeName: string | null;
     expectedDeliveryDate: string | null;
+    remainingValue: number;
   }[];
   // null cho nhân viên kinh doanh — công nợ là số liệu tổng cả phòng, chỉ ADMIN xem được.
   debtTotal: number | null;
@@ -169,6 +170,8 @@ export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
         )}
       </div>
 
+      <OrderTrendChart isAdmin={isAdmin} />
+
       {chartData && chartData.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 rounded-lg border border-gray-200 bg-white p-5">
@@ -278,31 +281,42 @@ export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
 
       <div className={cn("grid grid-cols-1 gap-6", isAdmin && "lg:grid-cols-2")}>
         <div className="rounded-lg border border-gray-200 bg-white p-5">
-          <div className="flex items-center gap-2 mb-3">
-            <AlertTriangle className="h-4 w-4 text-brandRed-600" />
-            <h2 className="font-medium text-gray-900">
-              {isAdmin ? "Đơn hàng quá hạn giao" : "Đơn hàng của bạn quá hạn giao"}
-            </h2>
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-brandRed-600" />
+              <h2 className="font-medium text-gray-900">
+                {isAdmin ? "Đơn hàng quá hạn giao" : "Đơn hàng của bạn quá hạn giao"}
+              </h2>
+            </div>
+            {data && data.overdueOrderCount > 0 && (
+              <span className="text-xs text-gray-400">Top {data.overdueOrders.length}/{data.overdueOrderCount} theo giá trị</span>
+            )}
           </div>
           {(!data || data.overdueOrders.length === 0) && (
             <p className="text-sm text-gray-500">{isLoading ? "Đang tải..." : "Không có đơn hàng quá hạn 🎉"}</p>
           )}
           <ul className="divide-y divide-gray-100 text-sm">
             {data?.overdueOrders.map((o) => (
-              <li key={o.id} className="py-2 flex items-center justify-between gap-3">
+              <li key={o.poCode} className="py-2 flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <Link href={`/orders/${o.id}`} className="font-medium text-navy-900">
-                    {o.orderCode}
-                  </Link>
+                  <p className="font-medium text-navy-900">{o.poCode}</p>
                   <p className="text-gray-500 truncate">{o.customerName}</p>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-brandRed-600 font-medium">{formatDateVN(o.expectedDeliveryDate)}</p>
-                  {isAdmin && <p className="text-gray-500 text-xs">{o.salesEmployeeName ?? "—"}</p>}
+                  <p className="text-brandRed-600 font-medium">{formatCurrencyVND(o.remainingValue)}</p>
+                  <p className="text-gray-500 text-xs">
+                    {formatDateVN(o.expectedDeliveryDate)}
+                    {isAdmin && ` — ${o.salesEmployeeName ?? "—"}`}
+                  </p>
                 </div>
               </li>
             ))}
           </ul>
+          {data && data.overdueOrders.length > 0 && (
+            <Link href="/shipping-status" className="mt-3 inline-block text-sm text-navy-900 hover:underline">
+              Xem toàn bộ tại Tiến độ giao hàng →
+            </Link>
+          )}
         </div>
 
         {isAdmin && (

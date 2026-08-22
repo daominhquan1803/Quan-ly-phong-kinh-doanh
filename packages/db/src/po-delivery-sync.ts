@@ -5,6 +5,98 @@ export function normPoStatus(s: string | null | undefined): string {
   return (s ?? "").trim().toLowerCase();
 }
 
+export interface PoAggregate {
+  poCode: string;
+  salesEmployeeId: string | null;
+  salesEmployeeName: string;
+  customerCode: string | null;
+  isOpen: boolean;
+  earliestOpenDeadline: Date | null;
+  latestDeadlineAll: Date | null;
+  latestDeliveryDate: Date | null; // đợt giao gần nhất của cả PO — dùng tính tỷ lệ đúng hạn
+  remainingValue: number;
+  poValue: number;
+  manuallyClosedAt: Date | null;
+  manuallyClosedByName: string | null;
+}
+
+/**
+ * Gộp PoTrackingLine theo Số PO thành danh sách PO — dùng CHUNG cho trang Tiến độ giao hàng
+ * và widget "Đơn hàng quá hạn" ở Tổng quan, đảm bảo 2 nơi này LUÔN khớp số liệu tuyệt đối (chỉ
+ * 1 cách tính isOpen/remainingValue duy nhất, không lặp lại logic ở 2 nơi dễ lệch số theo thời
+ * gian). "PO" = gộp mọi dòng hàng cùng Số PO; 1 PO ĐANG MỞ nếu còn ít nhất 1 dòng hàng chưa
+ * "Kết thúc"; hạn giao của PO lấy hạn SỚM NHẤT trong các dòng còn mở. `lineWhere` giới hạn
+ * phạm vi (vd salesEmployeeId cụ thể) — truyền {} lấy toàn bộ theo quyền gọi (áp scope ở phía
+ * gọi hàm này).
+ */
+export async function getPoAggregates(lineWhere: Record<string, unknown> = {}): Promise<PoAggregate[]> {
+  const lines = await prisma.poTrackingLine.findMany({
+    where: { salesEmployeeId: { not: null }, ...lineWhere },
+    select: {
+      poCode: true,
+      salesEmployeeId: true,
+      salesEmployee: { select: { id: true, name: true } },
+      customerCode: true,
+      requestedDeliveryDate: true,
+      statusRaw: true,
+      remainingValue: true,
+      poValue: true,
+      manuallyClosedAt: true,
+      manuallyClosedByUser: { select: { name: true } },
+      deliveryEvents: { select: { eventDate: true }, orderBy: { eventDate: "desc" }, take: 1 },
+    },
+  });
+
+  const poMap = new Map<string, PoAggregate>();
+  for (const l of lines) {
+    let agg = poMap.get(l.poCode);
+    if (!agg) {
+      agg = {
+        poCode: l.poCode,
+        salesEmployeeId: l.salesEmployeeId,
+        salesEmployeeName: l.salesEmployee?.name ?? "—",
+        customerCode: l.customerCode,
+        isOpen: false,
+        earliestOpenDeadline: null,
+        latestDeadlineAll: null,
+        latestDeliveryDate: null,
+        remainingValue: 0,
+        poValue: 0,
+        manuallyClosedAt: null,
+        manuallyClosedByName: null,
+      };
+      poMap.set(l.poCode, agg);
+    }
+    if (l.manuallyClosedAt && (!agg.manuallyClosedAt || l.manuallyClosedAt > agg.manuallyClosedAt)) {
+      agg.manuallyClosedAt = l.manuallyClosedAt;
+      agg.manuallyClosedByName = l.manuallyClosedByUser?.name ?? null;
+    }
+
+    const isLineOpen = normPoStatus(l.statusRaw) !== PO_CLOSED_STATUS;
+    if (isLineOpen) {
+      agg.isOpen = true;
+      if (l.requestedDeliveryDate && (!agg.earliestOpenDeadline || l.requestedDeliveryDate < agg.earliestOpenDeadline)) {
+        agg.earliestOpenDeadline = l.requestedDeliveryDate;
+      }
+      // Kẹp về 0 ở mức từng dòng — 1 số dòng "Kết thúc" có G.Trị còn lại âm trong file gốc (đã
+      // giao vượt giá trị PO, do điều chỉnh/nhập bù), cộng thẳng sẽ kéo tổng cả PO xuống âm dù
+      // các dòng khác vẫn còn nợ thật. Chỉ cộng dòng CÒN MỞ — dòng đã "Kết thúc" nghĩa là không
+      // cần giao tiếp dù chưa giao đủ số lượng, nên không tính vào "còn lại chưa giao".
+      agg.remainingValue += Math.max(0, Number(l.remainingValue ?? 0));
+    }
+    if (l.requestedDeliveryDate && (!agg.latestDeadlineAll || l.requestedDeliveryDate > agg.latestDeadlineAll)) {
+      agg.latestDeadlineAll = l.requestedDeliveryDate;
+    }
+    const lastEvent = l.deliveryEvents[0]?.eventDate ?? null;
+    if (lastEvent && (!agg.latestDeliveryDate || lastEvent > agg.latestDeliveryDate)) {
+      agg.latestDeliveryDate = lastEvent;
+    }
+    agg.poValue += Number(l.poValue ?? 0);
+  }
+
+  return Array.from(poMap.values());
+}
+
 /** Bỏ dấu tiếng Việt + hạ chữ thường — dùng để so khớp ghi chú tự do trong cột "Nội Dung"
  * không phân biệt cách gõ dấu (vd "huỷ" và "hủy" đều về "huy"). */
 function stripDiacriticsVN(s: string): string {

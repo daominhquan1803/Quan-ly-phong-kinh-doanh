@@ -13,6 +13,7 @@ interface TargetRow {
   targetRevenue: number;
   actualRevenue: number;
   poValue: number;
+  oihValue: number;
   completionPct: number | null;
 }
 
@@ -65,37 +66,46 @@ export function TargetsTable() {
               <th className="text-right font-medium px-4 py-2.5">Chỉ tiêu</th>
               <th className="text-right font-medium px-4 py-2.5">Thực hiện (đã giao)</th>
               <th className="text-right font-medium px-4 py-2.5">% Hoàn thành</th>
-              <th className="text-right font-medium px-4 py-2.5">Giá trị PO đặt hàng</th>
+              <th className="text-right font-medium px-4 py-2.5">Giá trị còn thiếu</th>
+              <th className="text-right font-medium px-4 py-2.5" title="Order In Hand — giá trị hàng chưa giao của các PO đặt trong tháng">
+                OIH
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {isLoading && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-gray-500">
+                <td colSpan={6} className="px-4 py-6 text-center text-gray-500">
                   Đang tải...
                 </td>
               </tr>
             )}
-            {data?.rows.map((r) => (
-              <tr key={r.employeeId} className="hover:bg-gray-50">
-                <td className="px-4 py-2.5 font-medium text-gray-900">{r.employeeName}</td>
-                <td className="px-4 py-2.5 text-right">{formatCurrencyVND(r.targetRevenue)}</td>
-                <td className="px-4 py-2.5 text-right">{formatCurrencyVND(r.actualRevenue)}</td>
-                <td
-                  className={cn(
-                    "px-4 py-2.5 text-right font-medium",
-                    r.completionPct != null && r.completionPct >= 100
-                      ? "text-success-600"
-                      : r.completionPct != null && r.completionPct < 60
-                      ? "text-brandRed-600"
-                      : "text-gray-900"
-                  )}
-                >
-                  {r.completionPct != null ? `${r.completionPct}%` : "—"}
-                </td>
-                <td className="px-4 py-2.5 text-right text-gray-500">{formatCurrencyVND(r.poValue)}</td>
-              </tr>
-            ))}
+            {data?.rows.map((r) => {
+              const shortfall = Math.max(0, r.targetRevenue - r.actualRevenue);
+              return (
+                <tr key={r.employeeId} className="hover:bg-gray-50">
+                  <td className="px-4 py-2.5 font-medium text-gray-900">{r.employeeName}</td>
+                  <td className="px-4 py-2.5 text-right">{formatCurrencyVND(r.targetRevenue)}</td>
+                  <td className="px-4 py-2.5 text-right">{formatCurrencyVND(r.actualRevenue)}</td>
+                  <td
+                    className={cn(
+                      "px-4 py-2.5 text-right font-medium",
+                      r.completionPct != null && r.completionPct >= 100
+                        ? "text-success-600"
+                        : r.completionPct != null && r.completionPct < 60
+                        ? "text-brandRed-600"
+                        : "text-gray-900"
+                    )}
+                  >
+                    {r.completionPct != null ? `${r.completionPct}%` : "—"}
+                  </td>
+                  <td className={cn("px-4 py-2.5 text-right", shortfall > 0 ? "text-brandRed-600 font-medium" : "text-gray-500")}>
+                    {shortfall > 0 ? formatCurrencyVND(shortfall) : "—"}
+                  </td>
+                  <td className="px-4 py-2.5 text-right text-gray-500">{formatCurrencyVND(r.oihValue)}</td>
+                </tr>
+              );
+            })}
           </tbody>
           {data && data.rows.length > 0 && (
             <tfoot className="border-t-2 border-gray-200 bg-gray-50">
@@ -114,8 +124,11 @@ export function TargetsTable() {
                     return totalTarget > 0 ? `${Math.round((totalActual / totalTarget) * 100)}%` : "—";
                   })()}
                 </td>
+                <td className="px-4 py-2.5 text-right font-semibold text-brandRed-600">
+                  {formatCurrencyVND(data.rows.reduce((s, r) => s + Math.max(0, r.targetRevenue - r.actualRevenue), 0))}
+                </td>
                 <td className="px-4 py-2.5 text-right font-semibold text-gray-900">
-                  {formatCurrencyVND(data.rows.reduce((s, r) => s + r.poValue, 0))}
+                  {formatCurrencyVND(data.rows.reduce((s, r) => s + r.oihValue, 0))}
                 </td>
               </tr>
             </tfoot>

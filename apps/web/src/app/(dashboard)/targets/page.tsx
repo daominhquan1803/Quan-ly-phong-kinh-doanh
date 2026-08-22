@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { TargetsTable } from "@/components/targets/TargetsTable";
+import { PoValueTrendTable } from "@/components/targets/PoValueTrendTable";
 import { SalesPlanDetailSection } from "@/components/targets/SalesPlanDetailSection";
 
 export default async function TargetsPage() {
@@ -18,6 +19,8 @@ export default async function TargetsPage() {
         </div>
         <TargetsTable />
       </div>
+
+      <PoValueTrendTable />
 
       <SalesPlanDetailSection isAdmin={isAdmin} />
     </div>

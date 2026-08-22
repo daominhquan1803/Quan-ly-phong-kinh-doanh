@@ -1,4 +1,4 @@
-import { prisma } from "@hoanggia/db";
+import { prisma, normPoStatus, PO_CLOSED_STATUS } from "@hoanggia/db";
 
 export function monthRange(year: number, month: number) {
   const start = new Date(year, month - 1, 1);
@@ -20,6 +20,11 @@ export interface EmployeeTargetVsActual {
   // nguồn với "Doanh số" (độc lập AMIS). Tách riêng vì 2 số đo 2 việc khác nhau: đặt hàng vs
   // giao hàng.
   poValue: number;
+  // OIH ("Order In Hand" — giá trị hàng chưa giao) của các PO đặt trong tháng: với đúng tập PO
+  // ở trên (poDate trong tháng), cộng G.Trị còn lại của các dòng CÒN MỞ (loại dòng đã "Kết
+  // thúc" — không cần giao tiếp dù còn dư giá trị, cùng logic với getPoAggregates/Tiến độ giao
+  // hàng, tránh lệch số giữa các trang).
+  oihValue: number;
   completionPct: number | null;
 }
 
@@ -51,7 +56,7 @@ export async function getEmployeeTargetVsActual(
     select: { id: true, name: true },
   });
 
-  const [targets, deliveredByEmployee, poByEmployee] = await Promise.all([
+  const [targets, deliveredByEmployee, poLines] = await Promise.all([
     prisma.salesTarget.findMany({ where: { year, month } }),
     // "Doanh số" = tổng giá trị các đợt giao THẬT trong tháng này (PoDeliveryEvent — nhập tay
     // từ file theo dõi PO độc lập, không qua AMIS). Mỗi đợt giao có ngày riêng nên đơn giao
@@ -62,23 +67,35 @@ export async function getEmployeeTargetVsActual(
       where: { eventDate: { gte: start, lt: end }, salesEmployeeId: { not: null } },
       _sum: { value: true },
     }),
-    // "Giá trị PO đặt hàng" = tổng G.Trị PO của các dòng có ngày đặt PO (poDate) trong tháng —
-    // cùng nguồn file, không quan tâm đã giao hay chưa.
-    prisma.poTrackingLine.groupBy({
-      by: ["salesEmployeeId"],
+    // Lấy raw rows (không groupBy) để tính CẢ "Giá trị PO đặt hàng" (poValue, mọi dòng) LẪN OIH
+    // (remainingValue, chỉ dòng CÒN MỞ) trong 1 lần quét — statusRaw cần so khớp chuẩn hoá
+    // (normPoStatus) nên không lọc được thẳng ở tầng groupBy.
+    prisma.poTrackingLine.findMany({
       where: { poDate: { gte: start, lt: end }, salesEmployeeId: { not: null } },
-      _sum: { poValue: true },
+      select: { salesEmployeeId: true, poValue: true, remainingValue: true, statusRaw: true },
     }),
   ]);
 
   const targetMap = new Map(targets.map((t) => [t.employeeId, Number(t.targetRevenue)]));
   const revenueMap = new Map(deliveredByEmployee.map((r) => [r.salesEmployeeId as string, Number(r._sum.value ?? 0)]));
-  const poMap = new Map(poByEmployee.map((r) => [r.salesEmployeeId as string, Number(r._sum.poValue ?? 0)]));
+
+  const poMap = new Map<string, number>();
+  const oihMap = new Map<string, number>();
+  for (const l of poLines) {
+    const empId = l.salesEmployeeId as string;
+    poMap.set(empId, (poMap.get(empId) ?? 0) + Number(l.poValue));
+    // Dòng đã "Kết thúc" không cần giao tiếp dù còn dư giá trị — không tính vào OIH (giống hệt
+    // cách "Giá trị chưa giao" loại trừ ở getPoAggregates/Tiến độ giao hàng).
+    if (normPoStatus(l.statusRaw) !== PO_CLOSED_STATUS) {
+      oihMap.set(empId, (oihMap.get(empId) ?? 0) + Math.max(0, Number(l.remainingValue)));
+    }
+  }
 
   return employees.map((e) => {
     const targetRevenue = targetMap.get(e.id) ?? 0;
     const actualRevenue = revenueMap.get(e.id) ?? 0;
     const poValue = poMap.get(e.id) ?? 0;
+    const oihValue = oihMap.get(e.id) ?? 0;
     return {
       employeeId: e.id,
       employeeName: e.name,
@@ -87,9 +104,85 @@ export async function getEmployeeTargetVsActual(
       targetRevenue,
       actualRevenue,
       poValue,
+      oihValue,
       completionPct: targetRevenue > 0 ? Math.round((actualRevenue / targetRevenue) * 100) : null,
     };
   });
+}
+
+export interface PoValueTrendMonth {
+  year: number;
+  month: number;
+  label: string;
+}
+export interface PoValueTrendRow {
+  employeeId: string;
+  employeeName: string;
+  // Cùng thứ tự với PoValueTrend.months (CŨ → MỚI, tháng cuối = tháng đang xem).
+  values: number[];
+}
+export interface PoValueTrend {
+  months: PoValueTrendMonth[];
+  rows: PoValueTrendRow[];
+  totals: number[]; // cùng thứ tự months
+}
+
+/**
+ * Bảng "PO lên trong tháng" so sánh tháng đang xem với `monthsBack` tháng trước đó, theo từng
+ * nhân viên — cùng số đo "Giá trị PO đặt hàng" (poDate) đã dùng ở getEmployeeTargetVsActual,
+ * chỉ khác là trải ra nhiều tháng để so sánh thay vì 1 tháng.
+ */
+export async function getPoValueTrendByEmployee(
+  year: number,
+  month: number,
+  monthsBack: number = 2,
+  onlyEmployeeId?: string
+): Promise<PoValueTrend> {
+  const months: { year: number; month: number }[] = [];
+  for (let i = monthsBack; i >= 0; i--) {
+    let y = year;
+    let m = month - i;
+    while (m < 1) {
+      m += 12;
+      y -= 1;
+    }
+    months.push({ year: y, month: m });
+  }
+
+  const earliestStart = monthRange(months[0].year, months[0].month).start;
+  const latestEnd = monthRange(months[months.length - 1].year, months[months.length - 1].month).end;
+
+  const employees = await prisma.user.findMany({
+    where: {
+      active: true,
+      amisEmployeeCode: { not: null },
+      includeInSalesStats: true,
+      ...(onlyEmployeeId ? { id: onlyEmployeeId } : {}),
+    },
+    select: { id: true, name: true },
+  });
+
+  const lines = await prisma.poTrackingLine.findMany({
+    where: { poDate: { gte: earliestStart, lt: latestEnd }, salesEmployeeId: { not: null } },
+    select: { salesEmployeeId: true, poDate: true, poValue: true },
+  });
+
+  const bucket = new Map<string, number>(); // key = `${employeeId}::${year}-${month}`
+  for (const l of lines) {
+    if (!l.poDate) continue;
+    const key = `${l.salesEmployeeId}::${l.poDate.getFullYear()}-${l.poDate.getMonth() + 1}`;
+    bucket.set(key, (bucket.get(key) ?? 0) + Number(l.poValue));
+  }
+
+  const monthMetas = months.map((m) => ({ ...m, label: `Tháng ${m.month}/${m.year}` }));
+  const rows: PoValueTrendRow[] = employees.map((e) => ({
+    employeeId: e.id,
+    employeeName: e.name,
+    values: months.map((m) => bucket.get(`${e.id}::${m.year}-${m.month}`) ?? 0),
+  }));
+  const totals = months.map((_, idx) => rows.reduce((s, r) => s + r.values[idx], 0));
+
+  return { months: monthMetas, rows, totals };
 }
 
 export interface SalesPlanLineWithActual {

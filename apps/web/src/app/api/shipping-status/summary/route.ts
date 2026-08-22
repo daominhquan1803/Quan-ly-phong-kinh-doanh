@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@hoanggia/db";
+import { prisma, getPoAggregates, type PoAggregate } from "@hoanggia/db";
 import { requireSession, scopeByOwner, UnauthorizedError } from "@/lib/rbac";
 import { daysUntilDeadline } from "@/lib/order-status";
 
@@ -12,34 +12,15 @@ const DAILY_WINDOW_DAYS = 7; // thống kê giao hàng hàng ngày — chỉ hi�
 // PO — quy mô thực tế (vài trăm PO quá hạn) vẫn nhẹ để render, chỉ chặn ở mức rất cao để tránh
 // trường hợp bất thường dữ liệu phình to đột biến làm treo trang.
 const MAX_ROWS = 2000;
-const CLOSED_STATUS = "kết thúc";
 
-function normStatus(s: string | null): string {
-  return (s ?? "").trim().toLowerCase();
-}
-
-interface PoAgg {
-  poCode: string;
-  salesEmployeeId: string | null;
-  salesEmployeeName: string;
-  customerCode: string | null;
-  isOpen: boolean;
-  earliestOpenDeadline: Date | null;
-  latestDeadlineAll: Date | null;
-  latestDeliveryDate: Date | null; // đợt giao gần nhất của cả PO — dùng tính tỷ lệ đúng hạn
-  remainingValue: number;
-  poValue: number;
-  manuallyClosedAt: Date | null;
-  manuallyClosedByName: string | null;
-}
+type PoAgg = PoAggregate;
 
 /**
- * Tiến độ giao hàng — NGUỒN DỮ LIỆU ĐỘC LẬP VỚI AMIS: từ file Excel theo dõi PO anh Quân nhập
- * tay (PoTrackingLine/PoDeliveryEvent), KHÔNG còn dùng bảng Order đồng bộ AMIS nữa (trang
- * "Đơn hàng" vẫn tiếp tục đồng bộ AMIS như cũ, đây là 2 nguồn tách biệt). "Đơn" ở trang này =
- * 1 PO (gộp mọi dòng hàng cùng Số PO) — 1 PO được coi là ĐANG MỞ nếu còn ít nhất 1 dòng hàng
- * chưa "Kết thúc"; hạn giao của PO lấy hạn SỚM NHẤT trong các dòng còn mở (dòng nào gấp nhất
- * quyết định PO có quá hạn hay không).
+ * Tiến độ giao hàng — NGUỒN DỮ LIỆU ĐỘC LẬP VỚI AMIS: từ PoTrackingLine/PoDeliveryEvent (bơm
+ * từ AMIS + Phiếu đi hàng, xem po-tracking-from-orders.ts), KHÔNG dùng bảng Order đồng bộ AMIS
+ * trực tiếp (trang "Đơn hàng" vẫn hiển thị Order như cũ, đây là 2 nguồn tách biệt). "Đơn" ở
+ * trang này = 1 PO (gộp mọi dòng hàng cùng Số PO, xem getPoAggregates — dùng CHUNG với widget
+ * "Đơn hàng quá hạn" ở Tổng quan để 2 nơi luôn khớp số liệu).
  */
 export async function GET(req: NextRequest) {
   try {
@@ -47,78 +28,11 @@ export async function GET(req: NextRequest) {
     const scope = scopeByOwner(session, "salesEmployeeId");
     const employeeId = req.nextUrl.searchParams.get("employeeId");
 
-    const lines = await prisma.poTrackingLine.findMany({
-      where: {
-        salesEmployeeId: { not: null },
-        ...scope,
-        // Chỉ ADMIN được lọc theo nhân viên bất kỳ — SALES đã bị scopeByOwner giới hạn.
-        ...(employeeId && session.user.role === "ADMIN" ? { salesEmployeeId: employeeId } : {}),
-      },
-      select: {
-        poCode: true,
-        salesEmployeeId: true,
-        salesEmployee: { select: { id: true, name: true } },
-        customerCode: true,
-        requestedDeliveryDate: true,
-        statusRaw: true,
-        remainingValue: true,
-        poValue: true,
-        manuallyClosedAt: true,
-        manuallyClosedByUser: { select: { name: true } },
-        deliveryEvents: { select: { eventDate: true }, orderBy: { eventDate: "desc" }, take: 1 },
-      },
+    const allPos = await getPoAggregates({
+      ...scope,
+      // Chỉ ADMIN được lọc theo nhân viên bất kỳ — SALES đã bị scopeByOwner giới hạn.
+      ...(employeeId && session.user.role === "ADMIN" ? { salesEmployeeId: employeeId } : {}),
     });
-
-    const poMap = new Map<string, PoAgg>();
-    for (const l of lines) {
-      let agg = poMap.get(l.poCode);
-      if (!agg) {
-        agg = {
-          poCode: l.poCode,
-          salesEmployeeId: l.salesEmployeeId,
-          salesEmployeeName: l.salesEmployee?.name ?? "—",
-          customerCode: l.customerCode,
-          isOpen: false,
-          earliestOpenDeadline: null,
-          latestDeadlineAll: null,
-          latestDeliveryDate: null,
-          remainingValue: 0,
-          poValue: 0,
-          manuallyClosedAt: null,
-          manuallyClosedByName: null,
-        };
-        poMap.set(l.poCode, agg);
-      }
-      if (l.manuallyClosedAt && (!agg.manuallyClosedAt || l.manuallyClosedAt > agg.manuallyClosedAt)) {
-        agg.manuallyClosedAt = l.manuallyClosedAt;
-        agg.manuallyClosedByName = l.manuallyClosedByUser?.name ?? null;
-      }
-
-      const isLineOpen = normStatus(l.statusRaw) !== CLOSED_STATUS;
-      if (isLineOpen) {
-        agg.isOpen = true;
-        if (l.requestedDeliveryDate && (!agg.earliestOpenDeadline || l.requestedDeliveryDate < agg.earliestOpenDeadline)) {
-          agg.earliestOpenDeadline = l.requestedDeliveryDate;
-        }
-        // Kẹp về 0 ở mức từng dòng — 1 số dòng "Kết thúc" có G.Trị còn lại âm trong file gốc
-        // (đã giao vượt giá trị PO, do điều chỉnh/nhập bù), cộng thẳng sẽ kéo tổng cả PO xuống
-        // âm dù các dòng khác vẫn còn nợ thật — không phản ánh đúng "còn lại phải giao". Chỉ
-        // cộng dòng CÒN MỞ — dòng đã "Kết thúc" trên file gốc nghĩa là PO đã đóng, không cần
-        // giao tiếp dù chưa giao đủ số lượng, nên không tính vào "còn lại chưa giao" (theo anh
-        // Quân xác nhận).
-        agg.remainingValue += Math.max(0, Number(l.remainingValue ?? 0));
-      }
-      if (l.requestedDeliveryDate && (!agg.latestDeadlineAll || l.requestedDeliveryDate > agg.latestDeadlineAll)) {
-        agg.latestDeadlineAll = l.requestedDeliveryDate;
-      }
-      const lastEvent = l.deliveryEvents[0]?.eventDate ?? null;
-      if (lastEvent && (!agg.latestDeliveryDate || lastEvent > agg.latestDeliveryDate)) {
-        agg.latestDeliveryDate = lastEvent;
-      }
-      agg.poValue += Number(l.poValue ?? 0);
-    }
-
-    const allPos = Array.from(poMap.values());
     const openPos = allPos.filter((p) => p.isOpen);
 
     const isPoOverdue = (p: PoAgg) => {
