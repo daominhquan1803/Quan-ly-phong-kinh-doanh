@@ -9,8 +9,8 @@ const upsertSchema = z.object({
   employeeId: z.string().min(1),
   year: z.number().int(),
   month: z.number().int().min(1).max(12),
-  targetProfitPct: z.number().nullable().optional(),
-  actualProfitPct: z.number().nullable().optional(),
+  targetHighPriceSkuCount: z.number().int().nullable().optional(),
+  actualHighPriceSkuCount: z.number().int().nullable().optional(),
   targetNewCustomers: z.number().int().nullable().optional(),
   actualNewCustomers: z.number().int().nullable().optional(),
   debtOverduePct: z.number().nullable().optional(),
@@ -20,7 +20,7 @@ const upsertSchema = z.object({
   violationCount: z.number().int().nullable().optional(),
 });
 
-/** Quản trị viên nhập/sửa các chỉ tiêu KPI không tính tự động được (Lợi nhuận, KH mới, Công
+/** Quản trị viên nhập/sửa các chỉ tiêu KPI không tính tự động được (Giá bán cao, KH mới, Công
  * nợ tạm thời, chỉ tiêu số lượt đi gặp KH, Thái độ & kỷ luật) cho 1 nhân viên trong 1 tháng. */
 export async function POST(req: NextRequest) {
   try {

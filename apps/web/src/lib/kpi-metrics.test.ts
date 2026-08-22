@@ -1,92 +1,66 @@
 import { describe, it, expect } from "vitest";
 import { computeKpiScores } from "./kpi-metrics";
 
-// 3 dòng số liệu mẫu lấy nguyên văn từ file KPI_KD_HoanggiaPS.xlsx (sheet
-// KPI_Danh_gia_thang, PHÒNG KINH DOANH 1) — dùng để khoá công thức tính điểm đúng như file
-// gốc, tránh sửa nhầm công thức làm lệch kết quả so với thực tế công ty đang áp dụng.
+// Công thức khoá theo file KPI_KD_HoanggiaPS.xlsx bản cập nhật (anh Quân xác nhận đổi 2 tiêu
+// chí): "Cơ cấu ngành hàng TM/SX" (mức lệch % so với chỉ tiêu cố định 65% TM / 35% SX, xem
+// sheet Huong_dan mục 16) thay cho "DS Sản xuất" cũ; "Giá bán cao" (số mã hàng bán cao hơn giá
+// SX báo ≥3%) thay cho "Lợi nhuận" (%) cũ. 6 đầu điểm còn lại giữ nguyên công thức như trước.
 
 describe("computeKpiScores", () => {
-  it("Đào Minh Quân — vượt chỉ tiêu toàn diện, 90 điểm, hạng A", () => {
+  it("đạt tuyệt đối mọi tiêu chí — 100 điểm, hạng A", () => {
     const r = computeKpiScores({
-      targetRevenue: 1645000000,
-      actualRevenue: 1800000000,
-      targetRevenueSX: 600000000,
-      actualRevenueSX: 895000000,
-      targetProfitPct: 3,
-      actualProfitPct: 3,
+      targetRevenue: 1000,
+      actualRevenue: 1000,
+      actualRevenueSX: 350,
+      actualRevenueTM: 650, // đúng 35% SX — khớp chỉ tiêu cơ cấu, lệch 0
+      targetHighPriceSkuCount: 8,
+      actualHighPriceSkuCount: 8,
       targetNewCustomers: 1,
       actualNewCustomers: 1,
-      debtOverduePct: 25,
-      debtCollectionRatePct: 80,
+      debtOverduePct: 10,
+      debtCollectionRatePct: 100,
       visitTarget: 10,
-      approvedVisitCount: 8,
+      approvedVisitCount: 10,
       defectCount: 0,
       attendanceDays: 26,
       violationCount: 0,
     });
     expect(r.scoreRevenue).toBe(20);
-    expect(r.scoreRevenueSX).toBe(10);
-    expect(r.scoreProfit).toBe(10);
+    expect(r.actualMixSXPct).toBe(35);
+    expect(r.mixDeviationPct).toBe(0);
+    expect(r.scoreMix).toBe(10);
+    expect(r.scoreHighPrice).toBe(10);
     expect(r.scoreNewCustomers).toBe(10);
-    expect(r.scoreDebtOverdue).toBe(6);
-    expect(r.scoreDebtCollection).toBe(8);
-    expect(r.scoreCskh).toBe(16);
+    expect(r.scoreDebtOverdue).toBe(10);
+    expect(r.scoreDebtCollection).toBe(10);
+    expect(r.scoreCskh).toBe(20);
     expect(r.scoreAttitude).toBe(10);
-    expect(r.totalScore).toBe(90);
+    expect(r.totalScore).toBe(100);
     expect(r.grade).toBe("A");
   });
 
-  it("Đặng Văn Tấn — chưa có doanh số ghi nhận trong tháng, 60 điểm, hạng D", () => {
-    const r = computeKpiScores({
-      targetRevenue: 3093642350,
-      actualRevenue: 0,
-      targetRevenueSX: 800000000,
-      actualRevenueSX: 0,
-      targetProfitPct: 3,
-      actualProfitPct: 3,
-      targetNewCustomers: 1,
-      actualNewCustomers: 1,
-      debtOverduePct: 14,
-      debtCollectionRatePct: 90,
-      visitTarget: 10,
-      approvedVisitCount: 10,
-      defectCount: 3,
-      attendanceDays: 26,
-      violationCount: 0,
-    });
-    expect(r.scoreRevenue).toBe(0);
-    expect(r.scoreRevenueSX).toBe(0);
-    expect(r.scoreDebtOverdue).toBe(10);
-    expect(r.scoreDebtCollection).toBe(9);
-    expect(r.scoreCskh).toBe(11);
-    expect(r.totalScore).toBe(60);
-    expect(r.grade).toBe("D");
+  it("cơ cấu ngành hàng — chấm theo mức lệch so với chỉ tiêu 35% SX: ≤5%→10đ, 5-10%→7đ, 10-15%→3đ, >15%→0đ", () => {
+    // 40% SX — lệch đúng 5% (biên trên của bậc đầu) → vẫn 10đ.
+    expect(computeKpiScores({ ...base(), actualRevenueSX: 400, actualRevenueTM: 600 }).scoreMix).toBe(10);
+    // 42% SX — lệch 7% → 7đ.
+    expect(computeKpiScores({ ...base(), actualRevenueSX: 420, actualRevenueTM: 580 }).scoreMix).toBe(7);
+    // 47% SX — lệch 12% → 3đ.
+    expect(computeKpiScores({ ...base(), actualRevenueSX: 470, actualRevenueTM: 530 }).scoreMix).toBe(3);
+    // 60% SX — lệch 25% → 0đ.
+    expect(computeKpiScores({ ...base(), actualRevenueSX: 600, actualRevenueTM: 400 }).scoreMix).toBe(0);
+    // Lệch về phía Thương mại (SX thấp hơn chỉ tiêu) cũng tính theo trị tuyệt đối — 20% SX,
+    // lệch 15% (đúng biên) → vẫn còn 3đ, không phải 0.
+    expect(computeKpiScores({ ...base(), actualRevenueSX: 200, actualRevenueTM: 800 }).scoreMix).toBe(3);
+    // Chưa có doanh số nhóm nào (0/0) — không suy đoán, 0đ.
+    expect(computeKpiScores({ ...base(), actualRevenueSX: 0, actualRevenueTM: 0 }).scoreMix).toBe(0);
   });
 
-  it("Ngô Thanh Tùng — dưới chỉ tiêu nhiều mặt, 53 điểm, hạng F", () => {
-    const r = computeKpiScores({
-      targetRevenue: 1445000000,
-      actualRevenue: 0,
-      targetRevenueSX: 400000000,
-      actualRevenueSX: 0,
-      targetProfitPct: 3,
-      actualProfitPct: 3,
-      targetNewCustomers: 2,
-      actualNewCustomers: 1,
-      debtOverduePct: 10,
-      debtCollectionRatePct: 70,
-      visitTarget: 10,
-      approvedVisitCount: 7,
-      defectCount: 1,
-      attendanceDays: 26,
-      violationCount: 0,
-    });
-    expect(r.scoreNewCustomers).toBe(5);
-    expect(r.scoreDebtOverdue).toBe(10);
-    expect(r.scoreDebtCollection).toBe(7);
-    expect(r.scoreCskh).toBe(11);
-    expect(r.totalScore).toBe(53);
-    expect(r.grade).toBe("F");
+  it("giá bán cao — MIN(10, số mã hàng thực tế / chỉ tiêu × 10), thiếu chỉ tiêu thì 0đ", () => {
+    expect(computeKpiScores({ ...base(), targetHighPriceSkuCount: 8, actualHighPriceSkuCount: 8 }).scoreHighPrice).toBe(10);
+    expect(computeKpiScores({ ...base(), targetHighPriceSkuCount: 10, actualHighPriceSkuCount: 6 }).scoreHighPrice).toBe(6);
+    // Vượt chỉ tiêu vẫn không quá trần 10đ.
+    expect(computeKpiScores({ ...base(), targetHighPriceSkuCount: 4, actualHighPriceSkuCount: 20 }).scoreHighPrice).toBe(10);
+    expect(computeKpiScores({ ...base(), targetHighPriceSkuCount: null, actualHighPriceSkuCount: 5 }).scoreHighPrice).toBe(0);
   });
 
   it("bậc thang nợ quá hạn: <15% =10đ, 15-24% =8đ, 25-30% =6đ, >=31% =3đ", () => {
@@ -102,12 +76,9 @@ describe("computeKpiScores", () => {
       ...base(),
       targetRevenue: 100,
       actualRevenue: 1000,
-      targetRevenueSX: 100,
-      actualRevenueSX: 1000,
       approvedVisitCount: 100,
     });
     expect(r.scoreRevenue).toBe(20);
-    expect(r.scoreRevenueSX).toBe(10);
     expect(r.scoreCskh).toBe(20);
   });
 
@@ -115,10 +86,10 @@ describe("computeKpiScores", () => {
     const r = computeKpiScores({
       targetRevenue: 0,
       actualRevenue: 0,
-      targetRevenueSX: 0,
       actualRevenueSX: 0,
-      targetProfitPct: null,
-      actualProfitPct: null,
+      actualRevenueTM: 0,
+      targetHighPriceSkuCount: null,
+      actualHighPriceSkuCount: null,
       targetNewCustomers: null,
       actualNewCustomers: null,
       debtOverduePct: null,
@@ -133,16 +104,46 @@ describe("computeKpiScores", () => {
     expect(r.grade).toBe("F");
     expect(Number.isNaN(r.totalScore)).toBe(false);
   });
+
+  it("chưa đạt nhiều mặt — cộng đúng tổng và xếp hạng theo bậc thang", () => {
+    const r = computeKpiScores({
+      targetRevenue: 1445000000,
+      actualRevenue: 0,
+      actualRevenueSX: 0,
+      actualRevenueTM: 0,
+      targetHighPriceSkuCount: 10,
+      actualHighPriceSkuCount: 6,
+      targetNewCustomers: 2,
+      actualNewCustomers: 1,
+      debtOverduePct: 10,
+      debtCollectionRatePct: 70,
+      visitTarget: 10,
+      approvedVisitCount: 7,
+      defectCount: 1,
+      attendanceDays: 26,
+      violationCount: 0,
+    });
+    expect(r.scoreRevenue).toBe(0);
+    expect(r.scoreMix).toBe(0); // 0/0 doanh số nhóm — chưa có dữ liệu
+    expect(r.scoreHighPrice).toBe(6);
+    expect(r.scoreNewCustomers).toBe(5);
+    expect(r.scoreDebtOverdue).toBe(10);
+    expect(r.scoreDebtCollection).toBe(7);
+    expect(r.scoreCskh).toBe(11); // (7/10)*20 - 1*3 = 14-3
+    expect(r.scoreAttitude).toBe(10);
+    expect(r.totalScore).toBe(49);
+    expect(r.grade).toBe("F");
+  });
 });
 
 function base() {
   return {
     targetRevenue: 1000,
     actualRevenue: 1000,
-    targetRevenueSX: 1000,
-    actualRevenueSX: 1000,
-    targetProfitPct: 3,
-    actualProfitPct: 3,
+    actualRevenueSX: 350,
+    actualRevenueTM: 650,
+    targetHighPriceSkuCount: 8,
+    actualHighPriceSkuCount: 8,
     targetNewCustomers: 1,
     actualNewCustomers: 1,
     debtOverduePct: 0,

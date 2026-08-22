@@ -12,13 +12,14 @@ interface KpiRow {
   actualRevenue: number;
   revenuePct: number | null;
   scoreRevenue: number;
-  targetRevenueSX: number;
   actualRevenueSX: number;
-  revenueSXPct: number | null;
-  scoreRevenueSX: number;
-  targetProfitPct: number | null;
-  actualProfitPct: number | null;
-  scoreProfit: number;
+  actualRevenueTM: number;
+  actualMixSXPct: number | null;
+  mixDeviationPct: number | null;
+  scoreMix: number;
+  targetHighPriceSkuCount: number | null;
+  actualHighPriceSkuCount: number | null;
+  scoreHighPrice: number;
   targetNewCustomers: number | null;
   actualNewCustomers: number | null;
   scoreNewCustomers: number;
@@ -66,10 +67,16 @@ function pct(n: number | null): string {
   return n != null ? `${Math.round(n * 100)}%` : "—";
 }
 
-// targetProfitPct/actualProfitPct/debtOverduePct/debtCollectionRatePct đã lưu sẵn dạng số
-// nguyên phần trăm (vd 25 = 25%) — chỉ hiện thêm "%", không nhân 100 như pct() ở trên.
+// debtOverduePct/debtCollectionRatePct đã lưu sẵn dạng số nguyên phần trăm (vd 25 = 25%) —
+// chỉ hiện thêm "%", không nhân 100 như pct() ở trên.
 function pctRaw(n: number | null): string {
   return n != null ? `${n}%` : "—";
+}
+
+// actualMixSXPct/mixDeviationPct cũng đã ở dạng số nguyên phần trăm nhưng có thể lẻ thập phân
+// (vd 42.857...) — làm tròn trước khi hiện.
+function pctRound(n: number | null): string {
+  return n != null ? `${Math.round(n)}%` : "—";
 }
 
 function numOrDash(n: number | null): string {
@@ -118,8 +125,8 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
             <tr>
               <th rowSpan={2} className="text-left font-medium px-3 py-2 align-bottom">Nhân viên</th>
               <th colSpan={2} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">Doanh số (20đ)</th>
-              <th colSpan={2} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">DS Sản xuất (10đ)</th>
-              <th colSpan={3} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">Lợi nhuận (10đ)</th>
+              <th colSpan={3} className="text-center font-medium px-3 py-1.5 border-l border-gray-200" title="Chỉ tiêu cơ cấu cố định: 65% Thương mại / 35% Sản xuất">Cơ cấu ngành hàng (10đ)</th>
+              <th colSpan={3} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">Giá bán cao (10đ)</th>
               <th colSpan={3} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">KH mới (10đ)</th>
               <th colSpan={4} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">Công nợ (20đ)</th>
               <th colSpan={3} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">CSKH & Chất lượng (20đ)</th>
@@ -130,10 +137,11 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
             <tr>
               <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">%</th>
               <th className="text-right font-normal px-3 py-1.5">Điểm</th>
-              <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">%</th>
+              <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">% SX thực tế</th>
+              <th className="text-right font-normal px-3 py-1.5">Lệch chỉ tiêu</th>
               <th className="text-right font-normal px-3 py-1.5">Điểm</th>
-              <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Chỉ tiêu</th>
-              <th className="text-right font-normal px-3 py-1.5">Thực tế</th>
+              <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Chỉ tiêu (mã)</th>
+              <th className="text-right font-normal px-3 py-1.5">Thực tế (mã)</th>
               <th className="text-right font-normal px-3 py-1.5">Điểm</th>
               <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Chỉ tiêu</th>
               <th className="text-right font-normal px-3 py-1.5">Thực tế</th>
@@ -156,14 +164,14 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
           <tbody className="divide-y divide-gray-100">
             {isLoading && (
               <tr>
-                <td colSpan={25} className="px-4 py-6 text-center text-gray-500">
+                <td colSpan={26} className="px-4 py-6 text-center text-gray-500">
                   Đang tải...
                 </td>
               </tr>
             )}
             {!isLoading && (data?.rows.length ?? 0) === 0 && (
               <tr>
-                <td colSpan={25} className="px-4 py-6 text-center text-gray-500">
+                <td colSpan={26} className="px-4 py-6 text-center text-gray-500">
                   Chưa có dữ liệu nhân viên.
                 </td>
               </tr>
@@ -181,14 +189,15 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
                   <td className="px-3 py-2 text-right font-medium">{r.scoreRevenue}</td>
                   <td
                     className="px-3 py-2 text-right border-l border-gray-100"
-                    title={`${formatCurrencyVND(r.actualRevenueSX)} / ${formatCurrencyVND(r.targetRevenueSX)}`}
+                    title={`SX ${formatCurrencyVND(r.actualRevenueSX)} / TM ${formatCurrencyVND(r.actualRevenueTM)}`}
                   >
-                    {pct(r.revenueSXPct)}
+                    {pctRound(r.actualMixSXPct)}
                   </td>
-                  <td className="px-3 py-2 text-right font-medium">{r.scoreRevenueSX}</td>
-                  <td className="px-3 py-2 text-right border-l border-gray-100">{pctRaw(r.targetProfitPct)}</td>
-                  <td className="px-3 py-2 text-right">{pctRaw(r.actualProfitPct)}</td>
-                  <td className="px-3 py-2 text-right font-medium">{r.scoreProfit}</td>
+                  <td className="px-3 py-2 text-right">{pctRound(r.mixDeviationPct)}</td>
+                  <td className="px-3 py-2 text-right font-medium">{r.scoreMix}</td>
+                  <td className="px-3 py-2 text-right border-l border-gray-100">{numOrDash(r.targetHighPriceSkuCount)}</td>
+                  <td className="px-3 py-2 text-right">{numOrDash(r.actualHighPriceSkuCount)}</td>
+                  <td className="px-3 py-2 text-right font-medium">{r.scoreHighPrice}</td>
                   <td className="px-3 py-2 text-right border-l border-gray-100">{numOrDash(r.targetNewCustomers)}</td>
                   <td className="px-3 py-2 text-right">{numOrDash(r.actualNewCustomers)}</td>
                   <td className="px-3 py-2 text-right font-medium">{r.scoreNewCustomers}</td>
@@ -223,7 +232,7 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
                 </tr>
                 {isAdmin && editingId === r.employeeId && (
                   <tr>
-                    <td colSpan={25} className="bg-navy-50/40 px-4 py-4">
+                    <td colSpan={26} className="bg-navy-50/40 px-4 py-4">
                       <KpiEditForm
                         row={r}
                         year={year}
@@ -243,8 +252,9 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
         </table>
       </div>
       <p className="text-xs text-gray-400">
-        Doanh số &amp; DS Sản xuất lấy tự động từ Kế hoạch kinh doanh. Điểm &quot;Đi gặp KH&quot; tự tính theo số lượt
-        đăng ký đi công tác đã được duyệt trong tháng. Các ô còn lại do Quản trị viên nhập.
+        Doanh số &amp; Cơ cấu ngành hàng (chỉ tiêu cố định 65% Thương mại / 35% Sản xuất) lấy tự động từ Kế hoạch kinh
+        doanh. Điểm &quot;Đi gặp KH&quot; tự tính theo số lượt đăng ký đi công tác đã được duyệt trong tháng. Các ô còn
+        lại do Quản trị viên nhập.
       </p>
 
       {isAdmin && (
@@ -277,8 +287,8 @@ function KpiEditForm({
   onCancel: () => void;
 }) {
   const [form, setForm] = useState<Record<string, number | "">>({
-    targetProfitPct: row.targetProfitPct ?? "",
-    actualProfitPct: row.actualProfitPct ?? "",
+    targetHighPriceSkuCount: row.targetHighPriceSkuCount ?? "",
+    actualHighPriceSkuCount: row.actualHighPriceSkuCount ?? "",
     targetNewCustomers: row.targetNewCustomers ?? "",
     actualNewCustomers: row.actualNewCustomers ?? "",
     debtOverduePct: row.debtOverduePct ?? "",
@@ -316,8 +326,8 @@ function KpiEditForm({
           employeeId: row.employeeId,
           year,
           month,
-          targetProfitPct: form.targetProfitPct === "" ? null : Number(form.targetProfitPct),
-          actualProfitPct: form.actualProfitPct === "" ? null : Number(form.actualProfitPct),
+          targetHighPriceSkuCount: form.targetHighPriceSkuCount === "" ? null : Number(form.targetHighPriceSkuCount),
+          actualHighPriceSkuCount: form.actualHighPriceSkuCount === "" ? null : Number(form.actualHighPriceSkuCount),
           targetNewCustomers: form.targetNewCustomers === "" ? null : Number(form.targetNewCustomers),
           actualNewCustomers: form.actualNewCustomers === "" ? null : Number(form.actualNewCustomers),
           debtOverduePct: form.debtOverduePct === "" ? null : Number(form.debtOverduePct),
@@ -343,8 +353,8 @@ function KpiEditForm({
     <div className="space-y-3">
       <p className="text-sm font-medium text-gray-900">Sửa chỉ tiêu KPI — {row.employeeName}</p>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {field("targetProfitPct", "Chỉ tiêu Lợi nhuận (%)", { step: "0.1" })}
-        {field("actualProfitPct", "Lợi nhuận thực tế (%)", { step: "0.1" })}
+        {field("targetHighPriceSkuCount", "Chỉ tiêu mã hàng giá cao hơn 3%")}
+        {field("actualHighPriceSkuCount", "Thực tế mã hàng giá cao hơn")}
         {field("targetNewCustomers", "Chỉ tiêu KH mới")}
         {field("actualNewCustomers", "Thực tế KH mới")}
         {field("debtOverduePct", "Công nợ quá hạn (%)", { step: "0.1" })}

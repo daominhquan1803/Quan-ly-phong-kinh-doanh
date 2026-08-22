@@ -3,32 +3,44 @@ import { monthRange, getEmployeeTargetVsActual, getProductGroupTargetVsActual } 
 
 /**
  * Công thức tính điểm KPI hàng tháng — dựa theo file mẫu KPI_KD_HoanggiaPS.xlsx (sheet
- * KPI_Danh_gia_thang + Thang_diem_va_xep_loai), đối chiếu khớp chính xác với cả 3 dòng số
- * liệu mẫu đã tính sẵn trong file (Đào Minh Quân 90đ hạng A, Đặng Văn Tấn 60đ hạng D, Ngô
- * Thanh Tùng 53đ hạng F — xem test kpi-metrics.test.ts).
+ * KPI_Danh_gia_thang + Thang_diem_va_xep_loai + Huong_dan). Bản cập nhật (anh Quân gửi lại file
+ * mới, xác nhận đổi tiêu chí):
+ *  - "DS Sản xuất" (so tỷ lệ Doanh số SX thực hiện/chỉ tiêu) → đổi thành "Cơ cấu ngành hàng
+ *    TM/SX" (so % cơ cấu thực tế với chỉ tiêu cố định 65% TM / 35% SX, chấm theo mức lệch —
+ *    xem sheet "Huong_dan" mục 16, đây là mô tả rõ ràng nhất trong file, 2 sheet còn lại vẫn
+ *    còn sót công thức cũ chưa sửa hết khi anh ghép file).
+ *  - "Lợi nhuận" (% lợi nhuận) → đổi thành "Giá bán cao" (đếm SỐ MÃ HÀNG bán cao hơn giá SX báo
+ *    ≥3%) — cùng dạng công thức tỷ lệ/chỉ tiêu như cũ, chỉ đổi ý nghĩa số liệu nhập từ % sang
+ *    số lượng mã hàng.
  *
  * Tổng 100 điểm, 8 đầu điểm:
- *  1. Doanh số           tối đa 20đ  — MIN(20, tỷ lệ đạt DS × 20)         — tự động, từ SalesTarget
- *  2. Doanh số Sản xuất  tối đa 10đ  — MIN(10, tỷ lệ đạt DS SX × 10)      — tự động, từ SalesPlanLine nhóm Sản xuất
- *  3. Lợi nhuận          tối đa 10đ  — MIN(10, LN thực tế / chỉ tiêu ×10) — nhập tay (chưa có dữ liệu giá vốn)
- *  4. KH mới              tối đa 10đ  — MIN(10, tỷ lệ đạt KH mới ×10)      — nhập tay
- *  5. Nợ quá hạn          tối đa 10đ  — bậc thang theo %                   — nhập tay (chờ nối congno.hienvi.me)
- *  6. Thu hồi nợ          tối đa 10đ  — MIN(10, tỷ lệ thu hồi ×10)         — nhập tay (chờ nối congno.hienvi.me)
- *  7. CSKH & Chất lượng   tối đa 20đ  — (Điểm đi gặp KH/10)×20 − hàng lỗi×3 — tự động, từ BusinessTripRequest + DefectReport
- *  8. Thái độ & kỷ luật   tối đa 10đ  — (Chuyên cần/26)×10 − vi phạm×2     — nhập tay
+ *  1. Doanh số            tối đa 20đ — MIN(20, tỷ lệ đạt DS × 20)                    — tự động, từ SalesTarget
+ *  2. Cơ cấu ngành hàng    tối đa 10đ — chấm theo mức lệch % cơ cấu SX so với 35%      — tự động, từ SalesPlanLine nhóm SX/TM
+ *  3. Giá bán cao          tối đa 10đ — MIN(10, số mã hàng thực tế / chỉ tiêu × 10)    — nhập tay (chưa có dữ liệu giá SX báo)
+ *  4. KH mới               tối đa 10đ — MIN(10, tỷ lệ đạt KH mới × 10)                 — nhập tay
+ *  5. Nợ quá hạn           tối đa 10đ — bậc thang theo %                              — nhập tay (chờ nối congno.hienvi.me)
+ *  6. Thu hồi nợ           tối đa 10đ — MIN(10, tỷ lệ thu hồi × 10)                    — nhập tay (chờ nối congno.hienvi.me)
+ *  7. CSKH & Chất lượng    tối đa 20đ — (Điểm đi gặp KH/10)×20 − hàng lỗi×3           — tự động, từ BusinessTripRequest + DefectReport
+ *  8. Thái độ & kỷ luật    tối đa 10đ — (Chuyên cần/26)×10 − vi phạm×2                — nhập tay
  *
  * "Điểm đi gặp KH" (1-10) trong công thức #7 tự tính = MIN(10, số lượt đã duyệt / chỉ tiêu ×10).
  */
+
+// Chỉ tiêu cơ cấu ngành hàng cố định toàn phòng (không theo kế hoạch riêng từng người) — 65%
+// Thương mại / 35% Sản xuất, theo đúng file KPI_KD_HoanggiaPS.xlsx.
+const TARGET_MIX_SX_PCT = 35;
 
 export type KpiGrade = "A" | "B" | "C" | "D" | "F";
 
 export interface KpiScoreInput {
   targetRevenue: number;
   actualRevenue: number;
-  targetRevenueSX: number;
+  // Cơ cấu ngành hàng — doanh số thực tế 2 nhóm Sản xuất/Thương mại trong tháng, dùng tính %
+  // cơ cấu thực tế so với chỉ tiêu cố định TARGET_MIX_SX_PCT (không cần chỉ tiêu SX riêng nữa).
   actualRevenueSX: number;
-  targetProfitPct: number | null;
-  actualProfitPct: number | null;
+  actualRevenueTM: number;
+  targetHighPriceSkuCount: number | null;
+  actualHighPriceSkuCount: number | null;
   targetNewCustomers: number | null;
   actualNewCustomers: number | null;
   debtOverduePct: number | null;
@@ -43,9 +55,11 @@ export interface KpiScoreInput {
 export interface KpiScoreResult {
   revenuePct: number | null;
   scoreRevenue: number;
-  revenueSXPct: number | null;
-  scoreRevenueSX: number;
-  scoreProfit: number;
+  // % doanh số Sản xuất trong tổng (SX+TM) thực tế, và độ lệch tuyệt đối so với chỉ tiêu 35%.
+  actualMixSXPct: number | null;
+  mixDeviationPct: number | null;
+  scoreMix: number;
+  scoreHighPrice: number;
   scoreNewCustomers: number;
   scoreDebtOverdue: number;
   scoreDebtCollection: number;
@@ -73,6 +87,17 @@ function scoreDebtOverdueBand(pct: number | null): number {
   return 3;
 }
 
+// Chấm điểm Cơ cấu ngành hàng theo MỨC LỆCH (độ lệch tuyệt đối, %) giữa % Sản xuất thực tế và
+// chỉ tiêu cố định 35% — theo đúng mô tả trong sheet "Huong_dan" mục 16 (đã anh xác nhận dùng
+// cách này thay cho cách tính tỷ lệ Doanh số SX thực hiện/chỉ tiêu cũ).
+function scoreMixDeviationBand(deviationPct: number | null): number {
+  if (deviationPct == null) return 0;
+  if (deviationPct <= 5) return 10;
+  if (deviationPct <= 10) return 7;
+  if (deviationPct <= 15) return 3;
+  return 0;
+}
+
 function gradeOf(total: number): { grade: KpiGrade; label: string; bonus: string } {
   if (total >= 90) return { grade: "A", label: "A - Xuất sắc", bonus: "100% mức thưởng KPI" };
   if (total >= 80) return { grade: "B", label: "B - Tốt", bonus: "70% mức thưởng KPI" };
@@ -84,13 +109,16 @@ function gradeOf(total: number): { grade: KpiGrade; label: string; bonus: string
 /** Hàm tính điểm thuần (không đụng DB) — dễ test độc lập với công thức mẫu Excel. */
 export function computeKpiScores(input: KpiScoreInput): KpiScoreResult {
   const revenuePct = input.targetRevenue > 0 ? input.actualRevenue / input.targetRevenue : null;
-  const revenueSXPct = input.targetRevenueSX > 0 ? input.actualRevenueSX / input.targetRevenueSX : null;
   const scoreRevenue = clamp((revenuePct ?? 0) * 20, 0, 20);
-  const scoreRevenueSX = clamp((revenueSXPct ?? 0) * 10, 0, 10);
 
-  const scoreProfit =
-    input.targetProfitPct && input.targetProfitPct > 0 && input.actualProfitPct != null
-      ? clamp((input.actualProfitPct / input.targetProfitPct) * 10, 0, 10)
+  const mixTotal = input.actualRevenueSX + input.actualRevenueTM;
+  const actualMixSXPct = mixTotal > 0 ? (input.actualRevenueSX / mixTotal) * 100 : null;
+  const mixDeviationPct = actualMixSXPct != null ? Math.abs(actualMixSXPct - TARGET_MIX_SX_PCT) : null;
+  const scoreMix = scoreMixDeviationBand(mixDeviationPct);
+
+  const scoreHighPrice =
+    input.targetHighPriceSkuCount && input.targetHighPriceSkuCount > 0 && input.actualHighPriceSkuCount != null
+      ? clamp((input.actualHighPriceSkuCount / input.targetHighPriceSkuCount) * 10, 0, 10)
       : 0;
 
   const scoreNewCustomers =
@@ -112,24 +140,25 @@ export function computeKpiScores(input: KpiScoreInput): KpiScoreResult {
   // tổng các cột điểm thành phần đã hiển thị (tránh lệch 0.1đ do sai số làm tròn khi cộng
   // trước rồi mới làm tròn sau).
   const rRevenue = round1(scoreRevenue);
-  const rRevenueSX = round1(scoreRevenueSX);
-  const rProfit = round1(scoreProfit);
+  const rMix = round1(scoreMix);
+  const rHighPrice = round1(scoreHighPrice);
   const rNewCustomers = round1(scoreNewCustomers);
   const rDebtCollection = round1(scoreDebtCollection);
   const rCskh = round1(scoreCskh);
   const rAttitude = round1(scoreAttitude);
 
   const totalScore = round1(
-    rRevenue + rRevenueSX + rProfit + rNewCustomers + scoreDebtOverdue + rDebtCollection + rCskh + rAttitude
+    rRevenue + rMix + rHighPrice + rNewCustomers + scoreDebtOverdue + rDebtCollection + rCskh + rAttitude
   );
   const { grade, label, bonus } = gradeOf(totalScore);
 
   return {
     revenuePct,
     scoreRevenue: rRevenue,
-    revenueSXPct,
-    scoreRevenueSX: rRevenueSX,
-    scoreProfit: rProfit,
+    actualMixSXPct,
+    mixDeviationPct,
+    scoreMix: rMix,
+    scoreHighPrice: rHighPrice,
     scoreNewCustomers: rNewCustomers,
     scoreDebtOverdue,
     scoreDebtCollection: rDebtCollection,
@@ -150,10 +179,10 @@ export interface KpiMonthlyReportRow extends KpiScoreResult {
   month: number;
   targetRevenue: number;
   actualRevenue: number;
-  targetRevenueSX: number;
   actualRevenueSX: number;
-  targetProfitPct: number | null;
-  actualProfitPct: number | null;
+  actualRevenueTM: number;
+  targetHighPriceSkuCount: number | null;
+  actualHighPriceSkuCount: number | null;
   targetNewCustomers: number | null;
   actualNewCustomers: number | null;
   debtOverduePct: number | null;
@@ -206,18 +235,19 @@ export async function getKpiMonthlyReport(
   for (const r of revenueRows) {
     const entry = entryByEmployee.get(r.employeeId);
 
-    // Doanh số SX riêng theo từng người — luôn gọi có lọc đúng 1 nhân viên để không bị cộng
-    // dồn nhầm khi báo cáo nhiều người cùng lúc.
-    const sxGroups = await getProductGroupTargetVsActual(year, month, r.employeeId);
-    const sx = sxGroups.find((g) => g.group === "Sản xuất");
+    // Cơ cấu ngành hàng cần doanh số thực tế CẢ 2 nhóm Sản xuất/Thương mại của riêng người này
+    // — luôn gọi có lọc đúng 1 nhân viên để không bị cộng dồn nhầm khi báo cáo nhiều người.
+    const groups = await getProductGroupTargetVsActual(year, month, r.employeeId);
+    const sx = groups.find((g) => g.group === "Sản xuất");
+    const tm = groups.find((g) => g.group === "Thương mại");
 
     const input: KpiScoreInput = {
       targetRevenue: r.targetRevenue,
       actualRevenue: r.actualRevenue,
-      targetRevenueSX: sx?.targetRevenue ?? 0,
       actualRevenueSX: sx?.actualRevenue ?? 0,
-      targetProfitPct: entry?.targetProfitPct != null ? Number(entry.targetProfitPct) : null,
-      actualProfitPct: entry?.actualProfitPct != null ? Number(entry.actualProfitPct) : null,
+      actualRevenueTM: tm?.actualRevenue ?? 0,
+      targetHighPriceSkuCount: entry?.targetHighPriceSkuCount ?? null,
+      actualHighPriceSkuCount: entry?.actualHighPriceSkuCount ?? null,
       targetNewCustomers: entry?.targetNewCustomers ?? null,
       actualNewCustomers: entry?.actualNewCustomers ?? null,
       debtOverduePct: entry?.debtOverduePct != null ? Number(entry.debtOverduePct) : null,

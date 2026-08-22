@@ -476,9 +476,10 @@ model KpiMonthlyEntry {
   year       Int
   month      Int
 
-  // 2. Lợi nhuận — chưa có dữ liệu giá vốn trong hệ thống nên nhập tay cả chỉ tiêu lẫn thực tế.
-  targetProfitPct Decimal? @db.Decimal(6, 2)
-  actualProfitPct Decimal? @db.Decimal(6, 2)
+  // 2. Giá bán cao (mã hàng bán cao hơn giá SX báo ≥3%) — đếm số mã hàng, nhập tay cả chỉ tiêu
+  // lẫn thực tế (chưa có khái niệm "giá SX báo" trong dữ liệu đơn hàng).
+  targetHighPriceSkuCount Int?
+  actualHighPriceSkuCount Int?
 
   // 3. Phát triển khách hàng mới — chưa có khái niệm "khách hàng mới" trong dữ liệu đơn hàng.
   targetNewCustomers Int?
