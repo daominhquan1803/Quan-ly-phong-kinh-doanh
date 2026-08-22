@@ -1,4 +1,4 @@
-import { prisma, normPoStatus, PO_CLOSED_STATUS } from "@hoanggia/db";
+import { prisma, getPoAggregates } from "@hoanggia/db";
 
 export function monthRange(year: number, month: number) {
   const start = new Date(year, month - 1, 1);
@@ -20,10 +20,10 @@ export interface EmployeeTargetVsActual {
   // nguồn với "Doanh số" (độc lập AMIS). Tách riêng vì 2 số đo 2 việc khác nhau: đặt hàng vs
   // giao hàng.
   poValue: number;
-  // OIH ("Order In Hand" — giá trị hàng chưa giao) của các PO đặt trong tháng: với đúng tập PO
-  // ở trên (poDate trong tháng), cộng G.Trị còn lại của các dòng CÒN MỞ (loại dòng đã "Kết
-  // thúc" — không cần giao tiếp dù còn dư giá trị, cùng logic với getPoAggregates/Tiến độ giao
-  // hàng, tránh lệch số giữa các trang).
+  // OIH ("Order In Hand" — giá trị hàng chưa giao) — TOÀN BỘ giá trị còn lại của MỌI PO đang mở
+  // của nhân viên này, KHÔNG giới hạn theo tháng đặt PO (đúng theo anh Quân xác nhận: OIH tính
+  // cả hàng chưa giao của các tháng trước, không riêng tháng đang xem). Dùng chung
+  // getPoAggregates với Tiến độ giao hàng để không lệch số giữa 2 trang.
   oihValue: number;
   completionPct: number | null;
 }
@@ -56,7 +56,7 @@ export async function getEmployeeTargetVsActual(
     select: { id: true, name: true },
   });
 
-  const [targets, deliveredByEmployee, poLines] = await Promise.all([
+  const [targets, deliveredByEmployee, poLines, poAggregates] = await Promise.all([
     prisma.salesTarget.findMany({ where: { year, month } }),
     // "Doanh số" = tổng giá trị các đợt giao THẬT trong tháng này (PoDeliveryEvent — nhập tay
     // từ file theo dõi PO độc lập, không qua AMIS). Mỗi đợt giao có ngày riêng nên đơn giao
@@ -67,28 +67,25 @@ export async function getEmployeeTargetVsActual(
       where: { eventDate: { gte: start, lt: end }, salesEmployeeId: { not: null } },
       _sum: { value: true },
     }),
-    // Lấy raw rows (không groupBy) để tính CẢ "Giá trị PO đặt hàng" (poValue, mọi dòng) LẪN OIH
-    // (remainingValue, chỉ dòng CÒN MỞ) trong 1 lần quét — statusRaw cần so khớp chuẩn hoá
-    // (normPoStatus) nên không lọc được thẳng ở tầng groupBy.
-    prisma.poTrackingLine.findMany({
+    // "Giá trị PO đặt hàng" = tổng G.Trị PO của các dòng có ngày đặt PO (poDate) trong tháng.
+    prisma.poTrackingLine.groupBy({
+      by: ["salesEmployeeId"],
       where: { poDate: { gte: start, lt: end }, salesEmployeeId: { not: null } },
-      select: { salesEmployeeId: true, poValue: true, remainingValue: true, statusRaw: true },
+      _sum: { poValue: true },
     }),
+    // OIH — TOÀN BỘ PO đang mở của nhân viên, không lọc theo poDate (xem giải thích ở
+    // EmployeeTargetVsActual.oihValue).
+    getPoAggregates(onlyEmployeeId ? { salesEmployeeId: onlyEmployeeId } : {}),
   ]);
 
   const targetMap = new Map(targets.map((t) => [t.employeeId, Number(t.targetRevenue)]));
   const revenueMap = new Map(deliveredByEmployee.map((r) => [r.salesEmployeeId as string, Number(r._sum.value ?? 0)]));
+  const poMap = new Map(poLines.map((r) => [r.salesEmployeeId as string, Number(r._sum.poValue ?? 0)]));
 
-  const poMap = new Map<string, number>();
   const oihMap = new Map<string, number>();
-  for (const l of poLines) {
-    const empId = l.salesEmployeeId as string;
-    poMap.set(empId, (poMap.get(empId) ?? 0) + Number(l.poValue));
-    // Dòng đã "Kết thúc" không cần giao tiếp dù còn dư giá trị — không tính vào OIH (giống hệt
-    // cách "Giá trị chưa giao" loại trừ ở getPoAggregates/Tiến độ giao hàng).
-    if (normPoStatus(l.statusRaw) !== PO_CLOSED_STATUS) {
-      oihMap.set(empId, (oihMap.get(empId) ?? 0) + Math.max(0, Number(l.remainingValue)));
-    }
+  for (const p of poAggregates) {
+    if (!p.isOpen || !p.salesEmployeeId) continue;
+    oihMap.set(p.salesEmployeeId, (oihMap.get(p.salesEmployeeId) ?? 0) + p.remainingValue);
   }
 
   return employees.map((e) => {
