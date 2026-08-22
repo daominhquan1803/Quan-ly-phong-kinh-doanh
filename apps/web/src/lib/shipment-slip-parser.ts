@@ -70,15 +70,20 @@ export function parseShipmentSlipsWithMapping(
     };
 
     const slipNumber = str("slipNumber");
-    const itemName = str("itemName");
-    if (!slipNumber && !itemName) return; // dòng trống — bỏ qua âm thầm
+    const itemCode = str("itemCode");
+    const itemNameRaw = str("itemName");
+    // Mã hàng HOẶC Tên hàng — chỉ cần 1 trong 2 là đủ định danh mã hàng (đúng yêu cầu anh
+    // Quân); nếu thiếu Tên hàng thì dùng luôn Mã hàng làm tên hiển thị (cột itemName trong DB
+    // bắt buộc phải có giá trị).
+    const itemName = itemNameRaw ?? itemCode;
+    if (!slipNumber && !itemCode && !itemNameRaw) return; // dòng trống — bỏ qua âm thầm
 
     if (!slipNumber) {
       result.errors.push({ rowNumber, message: "Thiếu Số phiếu" });
       return;
     }
     if (!itemName) {
-      result.errors.push({ rowNumber, message: "Thiếu Tên hàng" });
+      result.errors.push({ rowNumber, message: "Thiếu Mã hàng hoặc Tên hàng" });
       return;
     }
 
@@ -103,7 +108,7 @@ export function parseShipmentSlipsWithMapping(
     const qtyRequestedRaw = get("qtyRequested");
     const qtyActualRaw = get("qtyActual");
     slip.items.push({
-      itemCode: str("itemCode"),
+      itemCode,
       itemName,
       warehouse: str("warehouse"),
       poSaleNumber: str("poSaleNumber"),

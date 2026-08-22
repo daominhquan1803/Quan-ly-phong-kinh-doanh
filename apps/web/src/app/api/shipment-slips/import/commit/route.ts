@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, applyShipmentSlipDeliveries } from "@hoanggia/db";
 import { parseShipmentSlipsWithMapping } from "@/lib/shipment-slip-parser";
-import { ShipmentSlipFieldKey } from "@/lib/shipment-slip-fields";
+import { ShipmentSlipFieldKey, getMissingRequiredShipmentSlipFields } from "@/lib/shipment-slip-fields";
 import { requireSession, UnauthorizedError } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
@@ -21,11 +21,16 @@ export async function POST(req: NextRequest) {
     }
 
     const mapping: Partial<Record<ShipmentSlipFieldKey, string>> = JSON.parse(mappingRaw);
-    if (!mapping.slipNumber) {
-      return NextResponse.json({ error: "Cần map cột bắt buộc: Số phiếu" }, { status: 400 });
-    }
-    if (!mapping.itemName) {
-      return NextResponse.json({ error: "Cần map cột bắt buộc: Tên hàng" }, { status: 400 });
+    // Đối chiếu server-side với đúng danh sách field bắt buộc của wizard (phòng khi client bị
+    // qua mặt) — đây chính là nguyên nhân gây lỗi thật trước đó: phiếu vẫn commit được dù
+    // thiếu Số PO/SL thực xuất, khiến toàn bộ dòng hàng không tự ghi nhận vào Tiến độ giao
+    // hàng mà không có cảnh báo nào.
+    const missingRequired = getMissingRequiredShipmentSlipFields(mapping);
+    if (missingRequired.length > 0) {
+      return NextResponse.json(
+        { error: `Cần map đủ các cột bắt buộc: ${missingRequired.map((f) => f.label).join(", ")}` },
+        { status: 400 }
+      );
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());

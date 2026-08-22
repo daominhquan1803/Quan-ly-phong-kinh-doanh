@@ -22,18 +22,22 @@ export type ShipmentSlipFieldKey =
   | "poCustomerItemCode"
   | "note";
 
+// 7 cột "nhận diện" bắt buộc anh Quân xác nhận là đủ để xử lý 1 phiếu: Ngày giao hàng, Phiếu
+// giao hàng, Mã/Tên khách hàng, Số PO, Mã/Tên hàng, SL thực xuất, Đơn vị — required=true ở
+// đúng các field tương ứng (itemCode/itemName giữ nguyên quan hệ "1 trong 2" như cũ: itemName
+// bắt buộc làm định danh chắc chắn có, itemCode tuỳ chọn để khớp chính xác hơn khi có).
 export const SHIPMENT_SLIP_FIELDS: FieldDef<ShipmentSlipFieldKey>[] = [
   {
     key: "slipNumber",
-    label: "Số phiếu",
+    label: "Phiếu giao hàng (Số phiếu)",
     required: true,
-    synonyms: ["số phiếu", "số", "so phieu", "slip number", "mã phiếu"],
+    synonyms: ["phiếu giao hàng", "phieu giao hang", "số phiếu", "số", "so phieu", "slip number", "mã phiếu"],
   },
   {
     key: "slipDate",
-    label: "Ngày lập phiếu",
-    required: false,
-    synonyms: ["ngày lập phiếu", "ngày", "ngay lap phieu", "slip date"],
+    label: "Ngày giao hàng",
+    required: true,
+    synonyms: ["ngày giao hàng", "ngay giao hang", "delivery date", "ngày lập phiếu", "ngày", "ngay lap phieu", "slip date"],
   },
   {
     key: "receiverName",
@@ -43,9 +47,9 @@ export const SHIPMENT_SLIP_FIELDS: FieldDef<ShipmentSlipFieldKey>[] = [
   },
   {
     key: "customerName",
-    label: "Khách hàng",
-    required: false,
-    synonyms: ["khách hàng", "tên khách hàng", "customer", "ten khach hang"],
+    label: "Khách hàng (Mã hoặc Tên)",
+    required: true,
+    synonyms: ["mã khách hàng", "ma khach hang", "khách hàng", "tên khách hàng", "customer", "ten khach hang"],
   },
   {
     key: "deliveryAddress",
@@ -91,15 +95,15 @@ export const SHIPMENT_SLIP_FIELDS: FieldDef<ShipmentSlipFieldKey>[] = [
   },
   {
     key: "poSaleNumber",
-    label: "Số PO bán",
-    required: false,
-    synonyms: ["số po bán", "số po", "so po ban", "po sale number", "mã đơn hàng"],
+    label: "Số PO",
+    required: true,
+    synonyms: ["số po bán", "số po", "so po ban", "po sale number", "mã đơn hàng", "so po"],
   },
   {
     key: "unit",
-    label: "ĐVT",
-    required: false,
-    synonyms: ["đvt", "đơn vị tính", "don vi tinh", "unit"],
+    label: "Đơn vị",
+    required: true,
+    synonyms: ["đơn vị", "don vi", "đvt", "đơn vị tính", "don vi tinh", "unit"],
   },
   {
     key: "qtyRequested",
@@ -110,7 +114,7 @@ export const SHIPMENT_SLIP_FIELDS: FieldDef<ShipmentSlipFieldKey>[] = [
   {
     key: "qtyActual",
     label: "SL thực xuất",
-    required: false,
+    required: true,
     synonyms: ["sl thực xuất", "số lượng thực xuất", "sl thuc xuat", "qty actual", "thực xuất"],
   },
   {
@@ -126,3 +130,23 @@ export const SHIPMENT_SLIP_FIELDS: FieldDef<ShipmentSlipFieldKey>[] = [
     synonyms: ["ghi chú", "ghi chu", "note"],
   },
 ];
+
+/**
+ * Danh sách field bắt buộc CHƯA được map — coi Mã hàng/Tên hàng là 1 NHÓM "1 trong 2" (chỉ
+ * cần map 1 trong 2 cột là đủ để xác định mã hàng, đúng theo "Mã hàng hoặc tên hàng" anh yêu
+ * cầu), khác các field bắt buộc còn lại đều cần map riêng lẻ. Dùng chung cho cả wizard (khoá
+ * nút Nhập) lẫn commit route (chặn phía server, phòng khi client bị qua mặt).
+ */
+export function getMissingRequiredShipmentSlipFields(
+  mapping: Partial<Record<ShipmentSlipFieldKey, string>>
+): { key: ShipmentSlipFieldKey; label: string }[] {
+  const missing: { key: ShipmentSlipFieldKey; label: string }[] = [];
+  for (const f of SHIPMENT_SLIP_FIELDS) {
+    if (f.key === "itemCode" || f.key === "itemName") continue; // xử lý riêng bên dưới
+    if (f.required && !mapping[f.key]) missing.push({ key: f.key, label: f.label });
+  }
+  if (!mapping.itemCode && !mapping.itemName) {
+    missing.push({ key: "itemName", label: "Mã hàng hoặc Tên hàng" });
+  }
+  return missing;
+}

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { SHIPMENT_SLIP_FIELDS, ShipmentSlipFieldKey } from "@/lib/shipment-slip-fields";
+import { SHIPMENT_SLIP_FIELDS, ShipmentSlipFieldKey, getMissingRequiredShipmentSlipFields } from "@/lib/shipment-slip-fields";
 import { UploadCloud, CheckCircle2, AlertTriangle } from "lucide-react";
 
 interface PreviewResponse {
@@ -88,7 +88,7 @@ export function ShipmentSlipImportWizard() {
     }
   }
 
-  const requiredMissing = SHIPMENT_SLIP_FIELDS.filter((f) => f.required && !mapping[f.key]);
+  const requiredMissing = getMissingRequiredShipmentSlipFields(mapping);
 
   return (
     <div className="space-y-4">

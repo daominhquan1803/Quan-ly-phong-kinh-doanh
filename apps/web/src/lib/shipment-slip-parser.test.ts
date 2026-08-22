@@ -69,10 +69,18 @@ describe("parseShipmentSlipsWithMapping", () => {
     expect(errors).toEqual([{ rowNumber: 2, message: "Thiếu Số phiếu" }]);
   });
 
-  it("reports a row error when Tên hàng is missing but Số phiếu is present", () => {
+  it("uses Mã hàng as fallback Tên hàng when Tên hàng is blank — Mã hàng HOẶC Tên hàng là đủ", () => {
     const buffer = makeBuffer([HEADERS, ["BH03265", "SAMSUNG", "Mr Phú", "SI08244", "", "KHO S", "PO1", "Cái", 100, 100]]);
+    const { slips, errors } = parseShipmentSlipsWithMapping(buffer, mapping);
+    expect(errors).toHaveLength(0);
+    expect(slips).toHaveLength(1);
+    expect(slips[0].items[0]).toMatchObject({ itemCode: "SI08244", itemName: "SI08244" });
+  });
+
+  it("reports a row error when BOTH Mã hàng and Tên hàng are missing", () => {
+    const buffer = makeBuffer([HEADERS, ["BH03265", "SAMSUNG", "Mr Phú", "", "", "KHO S", "PO1", "Cái", 100, 100]]);
     const { errors } = parseShipmentSlipsWithMapping(buffer, mapping);
-    expect(errors).toEqual([{ rowNumber: 2, message: "Thiếu Tên hàng" }]);
+    expect(errors).toEqual([{ rowNumber: 2, message: "Thiếu Mã hàng hoặc Tên hàng" }]);
   });
 
   it("silently skips fully blank rows", () => {

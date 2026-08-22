@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeLineDeliveryFields, contentIndicatesNoLongerNeeded } from "@hoanggia/db";
+import { computeLineDeliveryFields, contentIndicatesNoLongerNeeded, allocateQtyAcrossLines } from "@hoanggia/db";
 
 describe("computeLineDeliveryFields", () => {
   it("cộng phần giao qua Phiếu đi hàng lên trên nền từ file PO tracking", () => {
@@ -96,5 +96,55 @@ describe("contentIndicatesNoLongerNeeded", () => {
     expect(contentIndicatesNoLongerNeeded("Kết chuyển sang PO khác")).toBe(false); // "kết" không đi liền "thúc"
     expect(contentIndicatesNoLongerNeeded(null)).toBe(false);
     expect(contentIndicatesNoLongerNeeded("")).toBe(false);
+  });
+});
+
+describe("allocateQtyAcrossLines", () => {
+  it("dòng đầu nhận đủ phần còn thiếu trước, dư mới sang dòng sau (trừ dần lần lượt)", () => {
+    const result = allocateQtyAcrossLines(6, [
+      { lineId: "A", capacity: 5 },
+      { lineId: "B", capacity: 3 },
+      { lineId: "C", capacity: 10 },
+    ]);
+    expect(result).toEqual([
+      { lineId: "A", qty: 5 },
+      { lineId: "B", qty: 1 },
+    ]);
+  });
+
+  it("đủ cho dòng đầu thì không đụng tới các dòng sau", () => {
+    const result = allocateQtyAcrossLines(5, [
+      { lineId: "A", capacity: 5 },
+      { lineId: "B", capacity: 3 },
+    ]);
+    expect(result).toEqual([{ lineId: "A", qty: 5 }]);
+  });
+
+  it("bỏ qua dòng đã hết capacity (0 hoặc âm), không tạo phân bổ 0", () => {
+    const result = allocateQtyAcrossLines(4, [
+      { lineId: "A", capacity: 0 },
+      { lineId: "B", capacity: -2 },
+      { lineId: "C", capacity: 10 },
+    ]);
+    expect(result).toEqual([{ lineId: "C", qty: 4 }]);
+  });
+
+  it("SL giao vượt tổng capacity mọi dòng — phần dư dồn hết vào dòng CUỐI CÙNG, không mất số liệu", () => {
+    const result = allocateQtyAcrossLines(25, [
+      { lineId: "A", capacity: 5 },
+      { lineId: "B", capacity: 3 },
+      { lineId: "C", capacity: 10 },
+    ]);
+    expect(result).toEqual([
+      { lineId: "A", qty: 5 },
+      { lineId: "B", qty: 3 },
+      { lineId: "C", qty: 17 }, // 10 (capacity) + 7 (dư) — dòng cuối không bị chặn ở capacity
+    ]);
+    expect(result.reduce((s, r) => s + r.qty, 0)).toBe(25);
+  });
+
+  it("chỉ 1 dòng — nhận trọn vẹn (kể cả vượt capacity, dồn hết vào vì là dòng cuối)", () => {
+    const result = allocateQtyAcrossLines(8, [{ lineId: "A", capacity: 5 }]);
+    expect(result).toEqual([{ lineId: "A", qty: 8 }]);
   });
 });

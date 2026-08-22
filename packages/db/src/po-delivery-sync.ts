@@ -181,12 +181,56 @@ export interface ApplyShipmentSlipResult {
   unmatchedItems: string[];
 }
 
+/** Số thứ tự xuất hiện của 1 dòng PO trong file PO tracking gốc — hậu tố cuối naturalKey (vd
+ * "D01.26MQ11A::AA09180::2" → 2). Dùng để sắp xếp đúng thứ tự khi 1 PO có nhiều dòng cùng Mã
+ * hàng, phân bổ SL giao trừ dần lần lượt theo đúng thứ tự này (không phải thứ tự DB trả về). */
+function parseOccurrenceIndex(naturalKey: string): number {
+  const n = Number(naturalKey.slice(naturalKey.lastIndexOf("::") + 2));
+  return Number.isFinite(n) ? n : 0;
+}
+
+export interface AllocationCandidate {
+  lineId: string;
+  // SL còn có thể nhận thêm của dòng này TẠI THỜI ĐIỂM phân bổ (đã trừ phần đã giao qua nền +
+  // các phiếu khác + phần đã phân bổ trong CHÍNH lần chạy này cho dòng đó).
+  capacity: number;
+}
+
+export interface QtyAllocation {
+  lineId: string;
+  qty: number;
+}
+
+/**
+ * Phân bổ 1 SL thực xuất vào NHIỀU dòng PO trùng Mã hàng trong cùng 1 PO (do file PO tracking
+ * gốc tách nhiều dòng cùng mã, vd đặt 2 đợt giá khác nhau) — trừ dần LẦN LƯỢT theo đúng thứ tự
+ * candidates truyền vào (gọi hàm này với candidates đã sắp xếp theo parseOccurrenceIndex): dòng
+ * đầu nhận đủ phần còn thiếu của nó trước, dư ra mới sang dòng tiếp theo. Nếu tổng SL giao VƯỢT
+ * quá tổng SL còn lại của mọi dòng (giao dư/PO đã điều chỉnh), phần dư dồn hết vào DÒNG CUỐI
+ * CÙNG — không làm mất số liệu, giống cách 1 dòng đơn lẻ vẫn cho phép giao vượt SL PO.
+ */
+export function allocateQtyAcrossLines(qty: number, candidates: AllocationCandidate[]): QtyAllocation[] {
+  const results: QtyAllocation[] = [];
+  let remaining = qty;
+  for (let i = 0; i < candidates.length; i++) {
+    const isLast = i === candidates.length - 1;
+    const c = candidates[i];
+    const take = isLast ? remaining : Math.min(remaining, Math.max(0, c.capacity));
+    if (take > 0) results.push({ lineId: c.lineId, qty: take });
+    remaining -= take;
+    if (remaining <= 0 && !isLast) break;
+  }
+  return results;
+}
+
 /**
  * Đồng bộ đợt giao từ 1 Phiếu đi hàng vào các dòng PO tracking tương ứng — khớp theo Số PO
- * (poSaleNumber = PoTrackingLine.poCode) + Mã hàng (hoặc Tên hàng nếu thiếu mã), CHỈ áp dụng
- * khi khớp đúng 1 dòng (không suy đoán khi mơ hồ/không tìm thấy — liệt kê vào unmatchedItems
- * để người dùng biết). Giá trị giao = SL thực xuất × đơn giá (Giá HĐ của dòng PO, hoặc suy ra
- * G.Trị PO / SL PO nếu thiếu Giá HĐ) — bỏ qua nếu không có cách nào tính được đơn giá.
+ * (poSaleNumber = PoTrackingLine.poCode) + Mã hàng (hoặc Tên hàng nếu thiếu mã). Nếu khớp đúng
+ * 1 dòng thì ghi thẳng; nếu khớp NHIỀU dòng cùng Mã hàng (PO tách nhiều dòng cùng mã) thì phân
+ * bổ SL trừ dần lần lượt theo đúng thứ tự trong file gốc (xem allocateQtyAcrossLines) — chỉ áp
+ * dụng khi MỌI dòng khớp đều có SL PO (mới tính được "còn nhận được bao nhiêu"), nếu không thì
+ * không suy đoán, báo mơ hồ như cũ. Giá trị giao = SL × đơn giá CỦA ĐÚNG DÒNG nhận phần đó (Giá
+ * HĐ, hoặc suy ra G.Trị PO / SL PO nếu thiếu Giá HĐ) — bỏ qua dòng nào không có cách tính đơn giá.
  *
  * Xoá hết các đợt giao CŨ do CHÍNH phiếu này sinh ra trước khi tạo lại — để nhập lại/sửa phiếu
  * không bị tính trùng.
@@ -206,9 +250,39 @@ export async function applyShipmentSlipDeliveries(
   const touchedLineIds = new Set<string>(previouslyTouchedLines.map((r) => r.lineId));
   const unmatchedItems: string[] = [];
   let matchedCount = 0;
+  // SL đã phân bổ cho từng dòng TRONG CHÍNH LẦN CHẠY NÀY — trừ tiếp vào capacity của các dòng
+  // hàng khác trong cùng phiếu nếu chúng cũng rơi vào cùng nhóm nhiều-dòng-cùng-mã.
+  const allocatedThisRun = new Map<string, number>();
+
+  async function createEvent(
+    line: { id: string; contractPrice: number | null; poValue: number; poQuantity: number | null; salesEmployeeId: string | null },
+    qty: number
+  ): Promise<boolean> {
+    const unitPrice =
+      line.contractPrice != null
+        ? line.contractPrice
+        : line.poQuantity != null && line.poQuantity > 0
+        ? line.poValue / line.poQuantity
+        : null;
+    if (unitPrice == null) return false;
+    await prisma.poDeliveryEvent.create({
+      data: {
+        lineId: line.id,
+        salesEmployeeId: line.salesEmployeeId,
+        eventDate: slipDate ?? new Date(),
+        quantity: qty,
+        value: qty * unitPrice,
+        sequence: 0,
+        sourceShipmentSlipId: slipId,
+      },
+    });
+    touchedLineIds.add(line.id);
+    allocatedThisRun.set(line.id, (allocatedThisRun.get(line.id) ?? 0) + qty);
+    return true;
+  }
 
   for (const item of items) {
-    // Trước đây 2 trường hợp này bị BỎ QUA ÂM THẦM (không ghi vào unmatchedItems) — người
+    // 2 trường hợp dưới đây trước đây bị BỎ QUA ÂM THẦM (không ghi vào unmatchedItems) — người
     // upload không thấy cảnh báo gì dù toàn bộ dòng hàng không được ghi nhận, chỉ phát hiện ra
     // khi thấy số liệu giao hàng không đổi. Nay báo rõ lý do để biết ngay cần map lại cột nào.
     if (!item.poSaleNumber) {
@@ -225,40 +299,61 @@ export async function applyShipmentSlipDeliveries(
         poCode: item.poSaleNumber,
         ...(item.itemCode ? { itemCode: item.itemCode } : { itemName: item.itemName }),
       },
-      select: { id: true, contractPrice: true, poValue: true, poQuantity: true, salesEmployeeId: true },
+      select: { id: true, naturalKey: true, contractPrice: true, poValue: true, poQuantity: true, salesEmployeeId: true, baselineDeliveredQty: true },
     });
-    if (candidates.length !== 1) {
-      unmatchedItems.push(
-        `${item.poSaleNumber} / ${item.itemCode ?? item.itemName} (${candidates.length === 0 ? "không tìm thấy dòng PO khớp" : "khớp nhiều dòng, không rõ dòng nào"})`
-      );
-      continue;
-    }
-    const line = candidates[0];
-    const poQuantity = line.poQuantity != null ? Number(line.poQuantity) : null;
-    const unitPrice =
-      line.contractPrice != null
-        ? Number(line.contractPrice)
-        : poQuantity != null && poQuantity > 0
-        ? Number(line.poValue) / poQuantity
-        : null;
-    if (unitPrice == null) {
-      unmatchedItems.push(`${item.poSaleNumber} / ${item.itemCode ?? item.itemName} (không có đơn giá để tính giá trị)`);
+
+    if (candidates.length === 0) {
+      unmatchedItems.push(`${item.poSaleNumber} / ${item.itemCode ?? item.itemName} (không tìm thấy dòng PO khớp)`);
       continue;
     }
 
-    await prisma.poDeliveryEvent.create({
-      data: {
-        lineId: line.id,
-        salesEmployeeId: line.salesEmployeeId,
-        eventDate: slipDate ?? new Date(),
-        quantity: item.qtyActual,
-        value: item.qtyActual * unitPrice,
-        sequence: 0,
-        sourceShipmentSlipId: slipId,
-      },
-    });
-    touchedLineIds.add(line.id);
-    matchedCount++;
+    if (candidates.length === 1) {
+      const line = candidates[0];
+      const ok = await createEvent(
+        { id: line.id, contractPrice: line.contractPrice != null ? Number(line.contractPrice) : null, poValue: Number(line.poValue), poQuantity: line.poQuantity != null ? Number(line.poQuantity) : null, salesEmployeeId: line.salesEmployeeId },
+        item.qtyActual
+      );
+      if (!ok) {
+        unmatchedItems.push(`${item.poSaleNumber} / ${item.itemCode ?? item.itemName} (không có đơn giá để tính giá trị)`);
+        continue;
+      }
+      matchedCount++;
+      continue;
+    }
+
+    // Nhiều dòng cùng Mã hàng trong 1 PO — trừ dần lần lượt theo đúng thứ tự xuất hiện trong
+    // file PO tracking gốc. Chỉ tự trừ dần được khi MỌI dòng khớp đều có SL PO.
+    if (candidates.some((c) => c.poQuantity == null)) {
+      unmatchedItems.push(
+        `${item.poSaleNumber} / ${item.itemCode ?? item.itemName} (khớp nhiều dòng nhưng thiếu SL PO ở ít nhất 1 dòng, không tự trừ dần được)`
+      );
+      continue;
+    }
+
+    const sorted = [...candidates].sort((a, b) => parseOccurrenceIndex(a.naturalKey) - parseOccurrenceIndex(b.naturalKey));
+    const allocCandidates: AllocationCandidate[] = [];
+    for (const c of sorted) {
+      const otherSlipAgg = await getSlipAggForLine(c.id); // đã loại trừ chính phiếu này (event của nó đã bị xoá ở trên)
+      const used = Number(c.baselineDeliveredQty ?? 0) + otherSlipAgg.qty + (allocatedThisRun.get(c.id) ?? 0);
+      allocCandidates.push({ lineId: c.id, capacity: Number(c.poQuantity) - used });
+    }
+
+    const allocations = allocateQtyAcrossLines(item.qtyActual, allocCandidates);
+    let anyAllocated = false;
+    let anyPriceMissing = false;
+    for (const alloc of allocations) {
+      const line = sorted.find((c) => c.id === alloc.lineId)!;
+      const ok = await createEvent(
+        { id: line.id, contractPrice: line.contractPrice != null ? Number(line.contractPrice) : null, poValue: Number(line.poValue), poQuantity: Number(line.poQuantity), salesEmployeeId: line.salesEmployeeId },
+        alloc.qty
+      );
+      if (ok) anyAllocated = true;
+      else anyPriceMissing = true;
+    }
+    if (anyAllocated) matchedCount++;
+    if (anyPriceMissing) {
+      unmatchedItems.push(`${item.poSaleNumber} / ${item.itemCode ?? item.itemName} (1 phần không có đơn giá để tính giá trị)`);
+    }
   }
 
   for (const lineId of touchedLineIds) {
