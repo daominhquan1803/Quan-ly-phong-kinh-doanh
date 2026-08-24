@@ -1,20 +1,21 @@
 import { describe, it, expect } from "vitest";
 import { computeKpiScores } from "./kpi-metrics";
 
-// Công thức khoá theo file KPI_KD_HoanggiaPS.xlsx, đã qua 2 lần cập nhật anh Quân gửi lại:
-// (1) "Cơ cấu ngành hàng TM/SX" (mức lệch % so với chỉ tiêu cố định 65% TM / 35% SX, xem sheet
-// Huong_dan mục 16) thay cho "DS Sản xuất" cũ; "Giá bán cao" (số mã hàng bán cao hơn giá SX báo
-// ≥3%) thay cho "Lợi nhuận" (%) cũ. (2) Doanh số tổng có thêm thưởng vượt chỉ tiêu — từ 110% trở
-// lên, mỗi 10% vượt thêm +1đ, không giới hạn trần (xem sheet Thang_diem_va_xep_loai mục 1a). 6
-// đầu điểm còn lại giữ nguyên công thức như trước.
+// Công thức khoá theo file KPI_KD_HoanggiaPS.xlsx, đã qua 3 lần cập nhật anh Quân gửi lại:
+// (1) "DS Sản xuất" (tỷ lệ) → "Cơ cấu ngành hàng TM/SX" (mức lệch so với chỉ tiêu cố định
+// 65/35); "Lợi nhuận" (%) → "Giá bán cao" (số mã hàng bán cao hơn giá SX báo ≥3%). (2) Doanh số
+// tổng có thêm thưởng vượt chỉ tiêu — từ 110% trở lên, mỗi 10% vượt thêm +1đ, không giới hạn
+// trần. (3) Đổi LẠI đầu điểm #2 — từ "Cơ cấu ngành hàng" (mức lệch so với 65/35) sang thuần tỷ lệ
+// đạt DS ngành Sản xuất (thực tế/chỉ tiêu riêng SX, không còn liên quan Thương mại), cùng công
+// thức + cơ chế thưởng >110% như Doanh số tổng. 6 đầu điểm còn lại giữ nguyên công thức như trước.
 
 describe("computeKpiScores", () => {
   it("đạt tuyệt đối mọi tiêu chí — 100 điểm, hạng A", () => {
     const r = computeKpiScores({
       targetRevenue: 1000,
       actualRevenue: 1000,
+      targetRevenueSX: 350,
       actualRevenueSX: 350,
-      actualRevenueTM: 650, // đúng 35% SX — khớp chỉ tiêu cơ cấu, lệch 0
       targetHighPriceSkuCount: 8,
       actualHighPriceSkuCount: 8,
       targetNewCustomers: 1,
@@ -29,9 +30,8 @@ describe("computeKpiScores", () => {
     });
     expect(r.scoreRevenue).toBe(20);
     expect(r.revenueBonus).toBe(0);
-    expect(r.actualMixSXPct).toBe(35);
-    expect(r.mixDeviationPct).toBe(0);
-    expect(r.scoreMix).toBe(10);
+    expect(r.scoreSX).toBe(10);
+    expect(r.revenueSXBonus).toBe(0);
     expect(r.scoreHighPrice).toBe(10);
     expect(r.scoreNewCustomers).toBe(10);
     expect(r.scoreDebtOverdue).toBe(10);
@@ -42,20 +42,24 @@ describe("computeKpiScores", () => {
     expect(r.grade).toBe("A");
   });
 
-  it("cơ cấu ngành hàng — chấm theo mức lệch so với chỉ tiêu 35% SX: ≤5%→10đ, 5-10%→7đ, 10-15%→3đ, >15%→0đ", () => {
-    // 40% SX — lệch đúng 5% (biên trên của bậc đầu) → vẫn 10đ.
-    expect(computeKpiScores({ ...base(), actualRevenueSX: 400, actualRevenueTM: 600 }).scoreMix).toBe(10);
-    // 42% SX — lệch 7% → 7đ.
-    expect(computeKpiScores({ ...base(), actualRevenueSX: 420, actualRevenueTM: 580 }).scoreMix).toBe(7);
-    // 47% SX — lệch 12% → 3đ.
-    expect(computeKpiScores({ ...base(), actualRevenueSX: 470, actualRevenueTM: 530 }).scoreMix).toBe(3);
-    // 60% SX — lệch 25% → 0đ.
-    expect(computeKpiScores({ ...base(), actualRevenueSX: 600, actualRevenueTM: 400 }).scoreMix).toBe(0);
-    // Lệch về phía Thương mại (SX thấp hơn chỉ tiêu) cũng tính theo trị tuyệt đối — 20% SX,
-    // lệch 15% (đúng biên) → vẫn còn 3đ, không phải 0.
-    expect(computeKpiScores({ ...base(), actualRevenueSX: 200, actualRevenueTM: 800 }).scoreMix).toBe(3);
-    // Chưa có doanh số nhóm nào (0/0) — không suy đoán, 0đ.
-    expect(computeKpiScores({ ...base(), actualRevenueSX: 0, actualRevenueTM: 0 }).scoreMix).toBe(0);
+  it("DS ngành Sản xuất dưới 110% chỉ tiêu — MIN(10, tỷ lệ đạt × 10), thiếu chỉ tiêu thì 0đ", () => {
+    expect(computeKpiScores({ ...base(), targetRevenueSX: 400, actualRevenueSX: 400 }).scoreSX).toBe(10);
+    expect(computeKpiScores({ ...base(), targetRevenueSX: 400, actualRevenueSX: 300 }).scoreSX).toBe(7.5);
+    expect(computeKpiScores({ ...base(), targetRevenueSX: 400, actualRevenueSX: 200 }).scoreSX).toBe(5);
+    expect(computeKpiScores({ ...base(), targetRevenueSX: 0, actualRevenueSX: 500 }).scoreSX).toBe(0); // chưa có chỉ tiêu — không suy đoán
+  });
+
+  it("DS ngành Sản xuất từ 110% chỉ tiêu trở lên — thưởng +1đ mỗi mốc 10% vượt thêm, không giới hạn trần", () => {
+    // Đúng 110% — đã có +1đ (tính từ mốc chẵn).
+    const r110 = computeKpiScores({ ...base(), targetRevenueSX: 1000, actualRevenueSX: 1100 });
+    expect(r110.revenueSXBonus).toBe(1);
+    expect(r110.scoreSX).toBe(11);
+    // 120% — 2 mốc 10% → +2đ.
+    const r120 = computeKpiScores({ ...base(), targetRevenueSX: 1000, actualRevenueSX: 1200 });
+    expect(r120.revenueSXBonus).toBe(2);
+    expect(r120.scoreSX).toBe(12);
+    // 150% — 5 mốc → +5đ.
+    expect(computeKpiScores({ ...base(), targetRevenueSX: 1000, actualRevenueSX: 1500 }).revenueSXBonus).toBe(5);
   });
 
   it("giá bán cao — MIN(10, số mã hàng thực tế / chỉ tiêu × 10), thiếu chỉ tiêu thì 0đ", () => {
@@ -104,8 +108,8 @@ describe("computeKpiScores", () => {
     const r = computeKpiScores({
       targetRevenue: 0,
       actualRevenue: 0,
+      targetRevenueSX: 0,
       actualRevenueSX: 0,
-      actualRevenueTM: 0,
       targetHighPriceSkuCount: null,
       actualHighPriceSkuCount: null,
       targetNewCustomers: null,
@@ -127,8 +131,8 @@ describe("computeKpiScores", () => {
     const r = computeKpiScores({
       targetRevenue: 1445000000,
       actualRevenue: 0,
-      actualRevenueSX: 0,
-      actualRevenueTM: 0,
+      targetRevenueSX: 600000000,
+      actualRevenueSX: 380000000,
       targetHighPriceSkuCount: 10,
       actualHighPriceSkuCount: 6,
       targetNewCustomers: 2,
@@ -142,14 +146,14 @@ describe("computeKpiScores", () => {
       violationCount: 0,
     });
     expect(r.scoreRevenue).toBe(0);
-    expect(r.scoreMix).toBe(0); // 0/0 doanh số nhóm — chưa có dữ liệu
+    expect(r.scoreSX).toBe(6.3); // 380/600 = 63.3% × 10 = 6.33... → làm tròn 1 số thập phân
     expect(r.scoreHighPrice).toBe(6);
     expect(r.scoreNewCustomers).toBe(5);
     expect(r.scoreDebtOverdue).toBe(10);
     expect(r.scoreDebtCollection).toBe(7);
     expect(r.scoreCskh).toBe(11); // (7/10)*20 - 1*3 = 14-3
     expect(r.scoreAttitude).toBe(10);
-    expect(r.totalScore).toBe(49);
+    expect(r.totalScore).toBe(55.3);
     expect(r.grade).toBe("F");
   });
 });
@@ -158,8 +162,8 @@ function base() {
   return {
     targetRevenue: 1000,
     actualRevenue: 1000,
+    targetRevenueSX: 350,
     actualRevenueSX: 350,
-    actualRevenueTM: 650,
     targetHighPriceSkuCount: 8,
     actualHighPriceSkuCount: 8,
     targetNewCustomers: 1,

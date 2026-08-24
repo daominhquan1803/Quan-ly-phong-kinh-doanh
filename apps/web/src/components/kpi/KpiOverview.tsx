@@ -13,11 +13,11 @@ interface KpiRow {
   revenuePct: number | null;
   scoreRevenue: number;
   revenueBonus: number;
+  targetRevenueSX: number;
   actualRevenueSX: number;
-  actualRevenueTM: number;
-  actualMixSXPct: number | null;
-  mixDeviationPct: number | null;
-  scoreMix: number;
+  revenueSXPct: number | null;
+  scoreSX: number;
+  revenueSXBonus: number;
   targetHighPriceSkuCount: number | null;
   actualHighPriceSkuCount: number | null;
   scoreHighPrice: number;
@@ -74,12 +74,6 @@ function pctRaw(n: number | null): string {
   return n != null ? `${n}%` : "—";
 }
 
-// actualMixSXPct/mixDeviationPct cũng đã ở dạng số nguyên phần trăm nhưng có thể lẻ thập phân
-// (vd 42.857...) — làm tròn trước khi hiện.
-function pctRound(n: number | null): string {
-  return n != null ? `${Math.round(n)}%` : "—";
-}
-
 function numOrDash(n: number | null): string {
   return n != null ? String(n) : "—";
 }
@@ -126,7 +120,7 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
             <tr>
               <th rowSpan={2} className="text-left font-medium px-3 py-2 align-bottom">Nhân viên</th>
               <th colSpan={2} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">Doanh số (20đ)</th>
-              <th colSpan={3} className="text-center font-medium px-3 py-1.5 border-l border-gray-200" title="Chỉ tiêu cơ cấu cố định: 65% Thương mại / 35% Sản xuất">Cơ cấu ngành hàng (10đ)</th>
+              <th colSpan={3} className="text-center font-medium px-3 py-1.5 border-l border-gray-200" title="Tỷ lệ đạt chỉ tiêu doanh số riêng nhóm hàng Sản xuất — lấy từ Kế hoạch kinh doanh">DS ngành Sản xuất (10đ)</th>
               <th colSpan={3} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">Giá bán cao (10đ)</th>
               <th colSpan={3} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">KH mới (10đ)</th>
               <th colSpan={4} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">Công nợ (20đ)</th>
@@ -138,8 +132,8 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
             <tr>
               <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">%</th>
               <th className="text-right font-normal px-3 py-1.5">Điểm</th>
-              <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">% SX thực tế</th>
-              <th className="text-right font-normal px-3 py-1.5">Lệch chỉ tiêu</th>
+              <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Chỉ tiêu</th>
+              <th className="text-right font-normal px-3 py-1.5">Thực tế</th>
               <th className="text-right font-normal px-3 py-1.5">Điểm</th>
               <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Chỉ tiêu (mã)</th>
               <th className="text-right font-normal px-3 py-1.5">Thực tế (mã)</th>
@@ -194,14 +188,19 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
                     {r.scoreRevenue}
                     {r.revenueBonus > 0 && <span className="text-success-600 font-normal"> (+{r.revenueBonus})</span>}
                   </td>
-                  <td
-                    className="px-3 py-2 text-right border-l border-gray-100"
-                    title={`SX ${formatCurrencyVND(r.actualRevenueSX)} / TM ${formatCurrencyVND(r.actualRevenueTM)}`}
-                  >
-                    {pctRound(r.actualMixSXPct)}
+                  <td className="px-3 py-2 text-right border-l border-gray-100">
+                    {r.targetRevenueSX > 0 ? formatCurrencyVND(r.targetRevenueSX) : "—"}
                   </td>
-                  <td className="px-3 py-2 text-right">{pctRound(r.mixDeviationPct)}</td>
-                  <td className="px-3 py-2 text-right font-medium">{r.scoreMix}</td>
+                  <td className="px-3 py-2 text-right" title={r.revenueSXPct != null ? `Đạt ${Math.round(r.revenueSXPct * 100)}% chỉ tiêu` : undefined}>
+                    {formatCurrencyVND(r.actualRevenueSX)}
+                  </td>
+                  <td
+                    className="px-3 py-2 text-right font-medium"
+                    title={r.revenueSXBonus > 0 ? `Có thưởng vượt chỉ tiêu: +${r.revenueSXBonus}đ (đạt ${Math.round((r.revenueSXPct ?? 0) * 100)}% chỉ tiêu, từ 110% cứ mỗi 10% vượt thêm +1đ)` : undefined}
+                  >
+                    {r.scoreSX}
+                    {r.revenueSXBonus > 0 && <span className="text-success-600 font-normal"> (+{r.revenueSXBonus})</span>}
+                  </td>
                   <td className="px-3 py-2 text-right border-l border-gray-100">{numOrDash(r.targetHighPriceSkuCount)}</td>
                   <td className="px-3 py-2 text-right">{numOrDash(r.actualHighPriceSkuCount)}</td>
                   <td className="px-3 py-2 text-right font-medium">{r.scoreHighPrice}</td>
@@ -259,8 +258,8 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
         </table>
       </div>
       <p className="text-xs text-gray-400">
-        Doanh số &amp; Cơ cấu ngành hàng (chỉ tiêu cố định 65% Thương mại / 35% Sản xuất) lấy tự động từ Kế hoạch kinh
-        doanh — đạt từ 110% chỉ tiêu doanh số trở lên, cứ mỗi 10% vượt thêm được cộng 1đ thưởng, không giới hạn trần.
+        Doanh số &amp; DS ngành Sản xuất lấy tự động từ Kế hoạch kinh doanh (chỉ tiêu nhóm Sản xuất
+        lấy theo Kế hoạch chi tiết đã nhập) — đạt từ 110% chỉ tiêu trở lên, cứ mỗi 10% vượt thêm được cộng 1đ thưởng, không giới hạn trần.
         Điểm &quot;Đi gặp KH&quot; tự tính theo số lượt đăng ký đi công tác đã được duyệt trong tháng. Các ô còn lại do
         Quản trị viên nhập.
       </p>

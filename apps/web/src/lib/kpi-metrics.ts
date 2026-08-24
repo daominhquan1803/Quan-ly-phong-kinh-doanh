@@ -3,25 +3,28 @@ import { monthRange, getEmployeeTargetVsActual, getProductGroupTargetVsActual } 
 
 /**
  * Công thức tính điểm KPI hàng tháng — dựa theo file mẫu KPI_KD_HoanggiaPS.xlsx (sheet
- * KPI_Danh_gia_thang + Thang_diem_va_xep_loai + Huong_dan). Đã qua 2 lần cập nhật (anh Quân gửi
- * lại file, xác nhận đổi tiêu chí):
+ * KPI_Danh_gia_thang + Thang_diem_va_xep_loai + Huong_dan). Đã qua 3 lần cập nhật (anh Quân gửi
+ * lại file/yêu cầu đổi tiêu chí):
  *  - Lần 1: "DS Sản xuất" (so tỷ lệ Doanh số SX thực hiện/chỉ tiêu) → đổi thành "Cơ cấu ngành
- *    hàng TM/SX" (so % cơ cấu thực tế với chỉ tiêu cố định 65% TM / 35% SX, chấm theo mức lệch —
- *    xem sheet "Huong_dan" mục 16, mô tả này KHÔNG đổi ở bản file mới nhất, vẫn giữ nguyên công
- *    thức này); "Lợi nhuận" (% lợi nhuận) → đổi thành "Giá bán cao" (đếm SỐ MÃ HÀNG bán cao hơn
- *    giá SX báo ≥3%).
+ *    hàng TM/SX" (so % cơ cấu thực tế với chỉ tiêu cố định 65% TM / 35% SX, chấm theo mức lệch) —
+ *    "Lợi nhuận" (% lợi nhuận) → đổi thành "Giá bán cao" (đếm SỐ MÃ HÀNG bán cao hơn giá SX báo
+ *    ≥3%).
  *  - Lần 2 (file gửi lại 24/08): thêm THƯỞNG VƯỢT CHỈ TIÊU cho Doanh số tổng — xem sheet
  *    "Thang_diem_va_xep_loai" mục 1a, dòng "Tỷ lệ cao >110%": từ tỷ lệ đạt 110% trở lên, cứ mỗi
  *    10% vượt thêm được cộng 1đ, KHÔNG giới hạn trần (khác 6 đầu điểm còn lại vẫn giữ nguyên
- *    trần tối đa). Sheet "Thang_diem_va_xep_loai" mục 1b (Doanh số hàng SX, công thức tỷ lệ cũ)
- *    và phần trọng số % ở đầu 2 sheet Huong_dan/Thang_diem_va_xep_loai vẫn là văn bản CŨ chưa
- *    dọn hết khi anh ghép/sửa file (mục 1b đã bị thay hoàn toàn bởi Cơ cấu ngành hàng ở trên,
- *    không còn áp dụng) — không lấy các phần này làm căn cứ, chỉ theo đúng công thức + số điểm
- *    tối đa nêu ở mục "Tổng 100 điểm" bên dưới (khớp với các cột thật trong KPI_Danh_gia_thang).
+ *    trần tối đa).
+ *  - Lần 3: đổi LẠI đầu điểm #2 — từ "Cơ cấu ngành hàng TM/SX" (mức lệch so với chỉ tiêu cố định
+ *    65/35 ở Lần 1) sang "Doanh số ngành Sản xuất" thuần tỷ lệ thực hiện/chỉ tiêu riêng của
+ *    NGÀNH SẢN XUẤT (không còn liên quan Thương mại/cơ cấu nữa) — đúng công thức MIN(10, tỷ lệ
+ *    đạt DS SX × 20) ở sheet "Thang_diem_va_xep_loai" mục 1b, kèm THƯỞNG vượt 110% giống hệt cơ
+ *    chế của Doanh số tổng (mục 1b cũng có dòng "Tỷ lệ cao >110%" y hệt mục 1a) — áp dụng cùng
+ *    cách đọc cho nhất quán với đầu điểm #1. Chỉ tiêu/thực tế DS ngành SX lấy từ SalesPlanLine
+ *    nhóm "Sản xuất" (cùng nguồn getProductGroupTargetVsActual dùng ở trang Kế hoạch kinh doanh),
+ *    không cần nhập tay.
  *
  * Tổng 100 điểm, 8 đầu điểm:
  *  1. Doanh số            tối đa 20đ (+thưởng vượt 110%, không trần) — MIN(20, tỷ lệ đạt DS × 20) + thưởng — tự động, từ SalesTarget
- *  2. Cơ cấu ngành hàng    tối đa 10đ — chấm theo mức lệch % cơ cấu SX so với 35%      — tự động, từ SalesPlanLine nhóm SX/TM
+ *  2. DS ngành Sản xuất    tối đa 10đ (+thưởng vượt 110%, không trần) — MIN(10, tỷ lệ đạt DS SX × 10) + thưởng — tự động, từ SalesPlanLine nhóm Sản xuất
  *  3. Giá bán cao          tối đa 10đ — MIN(10, số mã hàng thực tế / chỉ tiêu × 10)    — nhập tay (chưa có dữ liệu giá SX báo)
  *  4. KH mới               tối đa 10đ — MIN(10, tỷ lệ đạt KH mới × 10)                 — nhập tay
  *  5. Nợ quá hạn           tối đa 10đ — bậc thang theo %                              — nhập tay (chờ nối congno.hienvi.me)
@@ -32,19 +35,15 @@ import { monthRange, getEmployeeTargetVsActual, getProductGroupTargetVsActual } 
  * "Điểm đi gặp KH" (1-10) trong công thức #7 tự tính = MIN(10, số lượt đã duyệt / chỉ tiêu ×10).
  */
 
-// Chỉ tiêu cơ cấu ngành hàng cố định toàn phòng (không theo kế hoạch riêng từng người) — 65%
-// Thương mại / 35% Sản xuất, theo đúng file KPI_KD_HoanggiaPS.xlsx.
-const TARGET_MIX_SX_PCT = 35;
-
 export type KpiGrade = "A" | "B" | "C" | "D" | "F";
 
 export interface KpiScoreInput {
   targetRevenue: number;
   actualRevenue: number;
-  // Cơ cấu ngành hàng — doanh số thực tế 2 nhóm Sản xuất/Thương mại trong tháng, dùng tính %
-  // cơ cấu thực tế so với chỉ tiêu cố định TARGET_MIX_SX_PCT (không cần chỉ tiêu SX riêng nữa).
+  // DS ngành Sản xuất — chỉ tiêu/thực hiện riêng nhóm Sản xuất trong tháng (từ SalesPlanLine),
+  // dùng tính tỷ lệ đạt để chấm điểm #2 (không còn liên quan tới Thương mại/cơ cấu nữa).
+  targetRevenueSX: number;
   actualRevenueSX: number;
-  actualRevenueTM: number;
   targetHighPriceSkuCount: number | null;
   actualHighPriceSkuCount: number | null;
   targetNewCustomers: number | null;
@@ -62,12 +61,14 @@ export interface KpiScoreResult {
   revenuePct: number | null;
   scoreRevenue: number;
   // Phần điểm THƯỞNG vượt chỉ tiêu (đã cộng sẵn vào scoreRevenue ở trên) — tách riêng để UI hiển
-  // thị rõ khi có thưởng, xem scoreRevenueWithBonus().
+  // thị rõ khi có thưởng, xem scoreRatioWithBonus().
   revenueBonus: number;
-  // % doanh số Sản xuất trong tổng (SX+TM) thực tế, và độ lệch tuyệt đối so với chỉ tiêu 35%.
-  actualMixSXPct: number | null;
-  mixDeviationPct: number | null;
-  scoreMix: number;
+  // Tỷ lệ đạt DS ngành Sản xuất (thực tế/chỉ tiêu, dạng thập phân như revenuePct).
+  revenueSXPct: number | null;
+  scoreSX: number;
+  // Phần điểm THƯỞNG vượt chỉ tiêu của DS ngành SX (đã cộng sẵn vào scoreSX) — cùng cơ chế với
+  // revenueBonus.
+  revenueSXBonus: number;
   scoreHighPrice: number;
   scoreNewCustomers: number;
   scoreDebtOverdue: number;
@@ -96,32 +97,23 @@ function scoreDebtOverdueBand(pct: number | null): number {
   return 3;
 }
 
-// Chấm điểm Cơ cấu ngành hàng theo MỨC LỆCH (độ lệch tuyệt đối, %) giữa % Sản xuất thực tế và
-// chỉ tiêu cố định 35% — theo đúng mô tả trong sheet "Huong_dan" mục 16 (đã anh xác nhận dùng
-// cách này thay cho cách tính tỷ lệ Doanh số SX thực hiện/chỉ tiêu cũ).
-function scoreMixDeviationBand(deviationPct: number | null): number {
-  if (deviationPct == null) return 0;
-  if (deviationPct <= 5) return 10;
-  if (deviationPct <= 10) return 7;
-  if (deviationPct <= 15) return 3;
-  return 0;
-}
-
 /**
- * Điểm Doanh số tổng (tối đa 20đ như cũ) CỘNG THÊM thưởng vượt chỉ tiêu — theo sheet
- * "Thang_diem_va_xep_loai" mục 1a, dòng "Tỷ lệ cao >110%": "Từ 110% tỷ lệ cao hơn mỗi 10% cộng
- * 1đ". Đọc là: đạt đúng 110% đã có +1đ, mỗi mốc 10% tiếp theo (120%, 130%...) cộng thêm 1đ nữa —
- * không giới hạn trần (khác phần MIN(20,...) bên dưới), nên Điểm DS và Điểm tổng có thể vượt quá
- * mức tối đa thông thường khi vượt xa chỉ tiêu — đúng tinh thần khuyến khích vượt chỉ tiêu của
- * file mẫu. File không nêu mốc chẵn 110% có tính hay phải vượt qua mới tính — chọn cách đọc bao
- * gồm mốc chẵn (>=110%) vì khớp sát nghĩa "từ 110%" hơn "trên 110%" ở dòng mô tả.
+ * Điểm theo tỷ lệ đạt (thực tế/chỉ tiêu) với trần `maxScore` — CỘNG THÊM thưởng vượt chỉ tiêu —
+ * dùng chung cho Doanh số tổng (mục 1a, trần 20đ) và DS ngành Sản xuất (mục 1b, trần 10đ) trong
+ * sheet "Thang_diem_va_xep_loai", cả 2 mục đều có cùng dòng "Tỷ lệ cao >110%": "Từ 110% tỷ lệ
+ * cao hơn mỗi 10% cộng 1đ". Đọc là: đạt đúng 110% đã có +1đ, mỗi mốc 10% tiếp theo (120%,
+ * 130%...) cộng thêm 1đ nữa — không giới hạn trần (khác phần MIN(maxScore,...) bên dưới), nên
+ * điểm mục đó và Điểm tổng có thể vượt quá mức tối đa thông thường khi vượt xa chỉ tiêu — đúng
+ * tinh thần khuyến khích vượt chỉ tiêu của file mẫu. File không nêu mốc chẵn 110% có tính hay
+ * phải vượt qua mới tính — chọn cách đọc bao gồm mốc chẵn (>=110%) vì khớp sát nghĩa "từ 110%"
+ * hơn "trên 110%" ở dòng mô tả.
  */
-function scoreRevenueWithBonus(revenuePct: number | null): { score: number; bonus: number } {
-  const base = clamp((revenuePct ?? 0) * 20, 0, 20);
+function scoreRatioWithBonus(pct: number | null, maxScore: number): { score: number; bonus: number } {
+  const base = clamp((pct ?? 0) * maxScore, 0, maxScore);
   // % vượt chỉ tiêu, làm tròn về 1 chữ số thập phân TRƯỚC khi chia lấy số mốc 10% — tránh sai số
   // dấu phẩy động (vd (1.2-1)*10 ra 1.9999999999999998 trong JS thay vì 2, làm floor() hụt 1 mốc).
-  const overPct = revenuePct != null ? Math.round((revenuePct - 1) * 1000) / 10 : 0;
-  const bonus = revenuePct != null && revenuePct >= 1.1 ? Math.floor(overPct / 10) : 0;
+  const overPct = pct != null ? Math.round((pct - 1) * 1000) / 10 : 0;
+  const bonus = pct != null && pct >= 1.1 ? Math.floor(overPct / 10) : 0;
   return { score: base + bonus, bonus };
 }
 
@@ -136,12 +128,10 @@ function gradeOf(total: number): { grade: KpiGrade; label: string; bonus: string
 /** Hàm tính điểm thuần (không đụng DB) — dễ test độc lập với công thức mẫu Excel. */
 export function computeKpiScores(input: KpiScoreInput): KpiScoreResult {
   const revenuePct = input.targetRevenue > 0 ? input.actualRevenue / input.targetRevenue : null;
-  const { score: scoreRevenue, bonus: revenueBonus } = scoreRevenueWithBonus(revenuePct);
+  const { score: scoreRevenue, bonus: revenueBonus } = scoreRatioWithBonus(revenuePct, 20);
 
-  const mixTotal = input.actualRevenueSX + input.actualRevenueTM;
-  const actualMixSXPct = mixTotal > 0 ? (input.actualRevenueSX / mixTotal) * 100 : null;
-  const mixDeviationPct = actualMixSXPct != null ? Math.abs(actualMixSXPct - TARGET_MIX_SX_PCT) : null;
-  const scoreMix = scoreMixDeviationBand(mixDeviationPct);
+  const revenueSXPct = input.targetRevenueSX > 0 ? input.actualRevenueSX / input.targetRevenueSX : null;
+  const { score: scoreSX, bonus: revenueSXBonus } = scoreRatioWithBonus(revenueSXPct, 10);
 
   const scoreHighPrice =
     input.targetHighPriceSkuCount && input.targetHighPriceSkuCount > 0 && input.actualHighPriceSkuCount != null
@@ -167,7 +157,7 @@ export function computeKpiScores(input: KpiScoreInput): KpiScoreResult {
   // tổng các cột điểm thành phần đã hiển thị (tránh lệch 0.1đ do sai số làm tròn khi cộng
   // trước rồi mới làm tròn sau).
   const rRevenue = round1(scoreRevenue);
-  const rMix = round1(scoreMix);
+  const rSX = round1(scoreSX);
   const rHighPrice = round1(scoreHighPrice);
   const rNewCustomers = round1(scoreNewCustomers);
   const rDebtCollection = round1(scoreDebtCollection);
@@ -175,7 +165,7 @@ export function computeKpiScores(input: KpiScoreInput): KpiScoreResult {
   const rAttitude = round1(scoreAttitude);
 
   const totalScore = round1(
-    rRevenue + rMix + rHighPrice + rNewCustomers + scoreDebtOverdue + rDebtCollection + rCskh + rAttitude
+    rRevenue + rSX + rHighPrice + rNewCustomers + scoreDebtOverdue + rDebtCollection + rCskh + rAttitude
   );
   const { grade, label, bonus } = gradeOf(totalScore);
 
@@ -183,9 +173,9 @@ export function computeKpiScores(input: KpiScoreInput): KpiScoreResult {
     revenuePct,
     scoreRevenue: rRevenue,
     revenueBonus,
-    actualMixSXPct,
-    mixDeviationPct,
-    scoreMix: rMix,
+    revenueSXPct,
+    scoreSX: rSX,
+    revenueSXBonus,
     scoreHighPrice: rHighPrice,
     scoreNewCustomers: rNewCustomers,
     scoreDebtOverdue,
@@ -207,8 +197,8 @@ export interface KpiMonthlyReportRow extends KpiScoreResult {
   month: number;
   targetRevenue: number;
   actualRevenue: number;
+  targetRevenueSX: number;
   actualRevenueSX: number;
-  actualRevenueTM: number;
   targetHighPriceSkuCount: number | null;
   actualHighPriceSkuCount: number | null;
   targetNewCustomers: number | null;
@@ -263,17 +253,16 @@ export async function getKpiMonthlyReport(
   for (const r of revenueRows) {
     const entry = entryByEmployee.get(r.employeeId);
 
-    // Cơ cấu ngành hàng cần doanh số thực tế CẢ 2 nhóm Sản xuất/Thương mại của riêng người này
-    // — luôn gọi có lọc đúng 1 nhân viên để không bị cộng dồn nhầm khi báo cáo nhiều người.
+    // DS ngành Sản xuất cần chỉ tiêu/thực tế riêng nhóm Sản xuất của riêng người này — luôn gọi
+    // có lọc đúng 1 nhân viên để không bị cộng dồn nhầm khi báo cáo nhiều người.
     const groups = await getProductGroupTargetVsActual(year, month, r.employeeId);
     const sx = groups.find((g) => g.group === "Sản xuất");
-    const tm = groups.find((g) => g.group === "Thương mại");
 
     const input: KpiScoreInput = {
       targetRevenue: r.targetRevenue,
       actualRevenue: r.actualRevenue,
+      targetRevenueSX: sx?.targetRevenue ?? 0,
       actualRevenueSX: sx?.actualRevenue ?? 0,
-      actualRevenueTM: tm?.actualRevenue ?? 0,
       targetHighPriceSkuCount: entry?.targetHighPriceSkuCount ?? null,
       actualHighPriceSkuCount: entry?.actualHighPriceSkuCount ?? null,
       targetNewCustomers: entry?.targetNewCustomers ?? null,
