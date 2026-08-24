@@ -81,6 +81,7 @@ model User {
   kpiEntriesEdited KpiMonthlyEntry[]      @relation("KpiUpdatedBy")
   businessTrips    BusinessTripRequest[]  @relation("TripEmployee")
   tripApprovals    BusinessTripRequest[]  @relation("TripApprovedBy")
+  tripSupportOf    BusinessTripSupporter[] @relation("TripSupporter")
   defectReports    DefectReport[]         @relation("DefectEmployee")
   defectsCreated   DefectReport[]         @relation("DefectCreatedBy")
   poTrackingLines  PoTrackingLine[]
@@ -421,7 +422,10 @@ model SalesPlanLine {
 }
 
 // ---------- Đăng ký đi công tác (gặp khách hàng) ----------
-// NVKD tự đăng ký, Quản trị viên duyệt mới được ghi nhận vào KPI "Điểm Đi Gặp Khách".
+// NVKD tự đăng ký, Quản trị viên duyệt mới được ghi nhận vào KPI "Điểm Đi Gặp Khách". Người đi
+// hỗ trợ (BusinessTripSupporter) cũng được tính điểm đi gặp khách cho CHÍNH lượt đi này — chỉ
+// cần người đăng ký chính được duyệt là tính luôn cho cả người hỗ trợ, không cần duyệt riêng
+// từng người (1 lượt đi = 1 buổi gặp khách thật, không phải nhiều buổi).
 
 model BusinessTripRequest {
   id           String     @id @default(cuid())
@@ -439,10 +443,29 @@ model BusinessTripRequest {
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
+  supporters BusinessTripSupporter[]
+
   @@index([employeeId])
   @@index([visitDate])
   @@index([status])
   @@map("business_trip_requests")
+}
+
+// 1 dòng = 1 người đi hỗ trợ cho 1 lượt đăng ký đi công tác — được chọn thêm bởi người đăng ký
+// chính lúc tạo lượt đi. Không có trạng thái duyệt riêng: ăn theo trạng thái của
+// BusinessTripRequest (trip.status = APPROVED) khi tính KPI "Điểm Đi Gặp Khách" cho employeeId ở
+// đây (xem lib/kpi-metrics.ts).
+model BusinessTripSupporter {
+  id         String              @id @default(cuid())
+  tripId     String
+  trip       BusinessTripRequest @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   User                @relation("TripSupporter", fields: [employeeId], references: [id])
+  createdAt  DateTime            @default(now())
+
+  @@unique([tripId, employeeId])
+  @@index([employeeId])
+  @@map("business_trip_supporters")
 }
 
 // ---------- Biên bản hàng lỗi (Quản trị viên nhập, dùng tính KPI CSKH & Chất lượng) ----------

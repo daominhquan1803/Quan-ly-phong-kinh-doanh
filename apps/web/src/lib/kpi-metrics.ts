@@ -220,7 +220,7 @@ export async function getKpiMonthlyReport(
 ): Promise<KpiMonthlyReportRow[]> {
   const { start, end } = monthRange(year, month);
 
-  const [revenueRows, entries, visitCounts, defectCounts] = await Promise.all([
+  const [revenueRows, entries, visitCounts, supporterVisitCounts, defectCounts] = await Promise.all([
     getEmployeeTargetVsActual(year, month, onlyEmployeeId),
     prisma.kpiMonthlyEntry.findMany({
       where: { year, month, ...(onlyEmployeeId ? { employeeId: onlyEmployeeId } : {}) },
@@ -230,6 +230,16 @@ export async function getKpiMonthlyReport(
       where: {
         status: "APPROVED",
         visitDate: { gte: start, lt: end },
+        ...(onlyEmployeeId ? { employeeId: onlyEmployeeId } : {}),
+      },
+      _count: { _all: true },
+    }),
+    // Người đi HỖ TRỢ cũng được tính điểm "đi gặp khách" cho lượt đi đã duyệt — cộng thêm vào
+    // visitByEmployee bên dưới (không có duyệt riêng, ăn theo trạng thái của trip).
+    prisma.businessTripSupporter.groupBy({
+      by: ["employeeId"],
+      where: {
+        trip: { status: "APPROVED", visitDate: { gte: start, lt: end } },
         ...(onlyEmployeeId ? { employeeId: onlyEmployeeId } : {}),
       },
       _count: { _all: true },
@@ -246,6 +256,9 @@ export async function getKpiMonthlyReport(
 
   const entryByEmployee = new Map(entries.map((e) => [e.employeeId, e]));
   const visitByEmployee = new Map(visitCounts.map((v) => [v.employeeId, v._count._all]));
+  for (const v of supporterVisitCounts) {
+    visitByEmployee.set(v.employeeId, (visitByEmployee.get(v.employeeId) ?? 0) + v._count._all);
+  }
   const defectByEmployee = new Map(defectCounts.map((d) => [d.employeeId, d._count._all]));
 
   const rows: KpiMonthlyReportRow[] = [];

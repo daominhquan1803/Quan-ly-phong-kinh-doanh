@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn, formatDateVN } from "@/lib/utils";
 import { EmployeeFilterSelect } from "@/components/shared/EmployeeFilterSelect";
@@ -16,6 +17,7 @@ interface TripRow {
   status: "PENDING" | "APPROVED" | "REJECTED";
   approvedBy: { id: string; name: string } | null;
   rejectReason: string | null;
+  supporters: { employee: { id: string; name: string } }[];
 }
 
 const STATUS_LABEL: Record<TripRow["status"], string> = {
@@ -30,6 +32,7 @@ const STATUS_STYLE: Record<TripRow["status"], string> = {
 };
 
 export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
+  const { data: session } = useSession();
   const [employeeId, setEmployeeId] = useState("");
   const [showForm, setShowForm] = useState(false);
   const queryClient = useQueryClient();
@@ -80,7 +83,9 @@ export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
         </button>
       </div>
 
-      {showForm && <TripForm onCreated={() => { setShowForm(false); invalidate(); }} />}
+      {showForm && (
+        <TripForm currentUserId={session?.user?.id} onCreated={() => { setShowForm(false); invalidate(); }} />
+      )}
 
       <div className="rounded-lg border border-gray-200 bg-white overflow-x-auto">
         <table className="min-w-full text-sm">
@@ -91,6 +96,7 @@ export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
               {isAdmin && <th className="text-left font-medium px-4 py-2.5">Nhân viên</th>}
               <th className="text-left font-medium px-4 py-2.5">Công ty đến gặp</th>
               <th className="text-left font-medium px-4 py-2.5">Nội dung</th>
+              <th className="text-left font-medium px-4 py-2.5">Người đi hỗ trợ</th>
               <th className="text-left font-medium px-4 py-2.5">Trạng thái</th>
               <th className="px-4 py-2.5"></th>
             </tr>
@@ -98,14 +104,14 @@ export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
           <tbody className="divide-y divide-gray-100">
             {isLoading && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-gray-500">
+                <td colSpan={8} className="px-4 py-6 text-center text-gray-500">
                   Đang tải...
                 </td>
               </tr>
             )}
             {!isLoading && (data?.trips.length ?? 0) === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-gray-500">
+                <td colSpan={8} className="px-4 py-6 text-center text-gray-500">
                   Chưa có đăng ký nào.
                 </td>
               </tr>
@@ -118,6 +124,9 @@ export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
                 <td className="px-4 py-2.5">{t.companyName}</td>
                 <td className="px-4 py-2.5 max-w-xs truncate" title={t.content}>
                   {t.content}
+                </td>
+                <td className="px-4 py-2.5">
+                  {t.supporters.length > 0 ? t.supporters.map((s) => s.employee.name).join(", ") : "—"}
                 </td>
                 <td className="px-4 py-2.5">
                   <span className={cn("status-badge", STATUS_STYLE[t.status])}>{STATUS_LABEL[t.status]}</span>
@@ -163,13 +172,33 @@ export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
   );
 }
 
-function TripForm({ onCreated }: { onCreated: () => void }) {
+interface EmployeeOption {
+  id: string;
+  name: string;
+}
+
+function TripForm({ onCreated, currentUserId }: { onCreated: () => void; currentUserId?: string }) {
   const [visitDate, setVisitDate] = useState("");
   const [expectedTime, setExpectedTime] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [content, setContent] = useState("");
+  const [supporterIds, setSupporterIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const { data: employeesData } = useQuery({
+    queryKey: ["employees-for-trip-supporters"],
+    queryFn: async () => {
+      const res = await fetch("/api/employees");
+      if (!res.ok) throw new Error("Không tải được danh sách nhân viên");
+      return res.json() as Promise<{ users: EmployeeOption[] }>;
+    },
+  });
+  const supporterOptions = (employeesData?.users ?? []).filter((u) => u.id !== currentUserId);
+
+  function toggleSupporter(id: string) {
+    setSupporterIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
 
   async function handleSubmit() {
     setSaving(true);
@@ -178,7 +207,7 @@ function TripForm({ onCreated }: { onCreated: () => void }) {
       const res = await fetch("/api/business-trips", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ visitDate, expectedTime, companyName, content }),
+        body: JSON.stringify({ visitDate, expectedTime, companyName, content, supporterEmployeeIds: supporterIds }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -188,6 +217,7 @@ function TripForm({ onCreated }: { onCreated: () => void }) {
       setExpectedTime("");
       setCompanyName("");
       setContent("");
+      setSupporterIds([]);
       onCreated();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Đăng ký thất bại");
@@ -230,6 +260,18 @@ function TripForm({ onCreated }: { onCreated: () => void }) {
           className="input"
         />
       </label>
+      <div className="flex flex-col gap-1 text-xs text-gray-500 sm:col-span-2">
+        Người đi hỗ trợ (không bắt buộc) — cũng được tính điểm KPI &quot;đi gặp khách&quot; cho lượt đi này
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5 rounded-md border border-gray-200 bg-white px-3 py-2 max-h-32 overflow-y-auto">
+          {supporterOptions.length === 0 && <span className="text-gray-400">Không có đồng nghiệp nào khác</span>}
+          {supporterOptions.map((u) => (
+            <label key={u.id} className="flex items-center gap-1.5 text-gray-700">
+              <input type="checkbox" checked={supporterIds.includes(u.id)} onChange={() => toggleSupporter(u.id)} />
+              {u.name}
+            </label>
+          ))}
+        </div>
+      </div>
       {error && <p className="text-xs text-brandRed-600 sm:col-span-2">{error}</p>}
       <button
         onClick={handleSubmit}
