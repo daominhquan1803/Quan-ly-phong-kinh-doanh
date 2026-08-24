@@ -12,6 +12,7 @@ interface KpiRow {
   actualRevenue: number;
   revenuePct: number | null;
   scoreRevenue: number;
+  revenueBonus: number;
   actualRevenueSX: number;
   actualRevenueTM: number;
   actualMixSXPct: number | null;
@@ -186,7 +187,13 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
                   >
                     {pct(r.revenuePct)}
                   </td>
-                  <td className="px-3 py-2 text-right font-medium">{r.scoreRevenue}</td>
+                  <td
+                    className="px-3 py-2 text-right font-medium"
+                    title={r.revenueBonus > 0 ? `Có thưởng vượt chỉ tiêu: +${r.revenueBonus}đ (đạt ${Math.round((r.revenuePct ?? 0) * 100)}% chỉ tiêu, từ 110% cứ mỗi 10% vượt thêm +1đ)` : undefined}
+                  >
+                    {r.scoreRevenue}
+                    {r.revenueBonus > 0 && <span className="text-success-600 font-normal"> (+{r.revenueBonus})</span>}
+                  </td>
                   <td
                     className="px-3 py-2 text-right border-l border-gray-100"
                     title={`SX ${formatCurrencyVND(r.actualRevenueSX)} / TM ${formatCurrencyVND(r.actualRevenueTM)}`}
@@ -253,8 +260,9 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
       </div>
       <p className="text-xs text-gray-400">
         Doanh số &amp; Cơ cấu ngành hàng (chỉ tiêu cố định 65% Thương mại / 35% Sản xuất) lấy tự động từ Kế hoạch kinh
-        doanh. Điểm &quot;Đi gặp KH&quot; tự tính theo số lượt đăng ký đi công tác đã được duyệt trong tháng. Các ô còn
-        lại do Quản trị viên nhập.
+        doanh — đạt từ 110% chỉ tiêu doanh số trở lên, cứ mỗi 10% vượt thêm được cộng 1đ thưởng, không giới hạn trần.
+        Điểm &quot;Đi gặp KH&quot; tự tính theo số lượt đăng ký đi công tác đã được duyệt trong tháng. Các ô còn lại do
+        Quản trị viên nhập.
       </p>
 
       {isAdmin && (

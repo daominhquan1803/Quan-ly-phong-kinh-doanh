@@ -3,18 +3,24 @@ import { monthRange, getEmployeeTargetVsActual, getProductGroupTargetVsActual } 
 
 /**
  * Công thức tính điểm KPI hàng tháng — dựa theo file mẫu KPI_KD_HoanggiaPS.xlsx (sheet
- * KPI_Danh_gia_thang + Thang_diem_va_xep_loai + Huong_dan). Bản cập nhật (anh Quân gửi lại file
- * mới, xác nhận đổi tiêu chí):
- *  - "DS Sản xuất" (so tỷ lệ Doanh số SX thực hiện/chỉ tiêu) → đổi thành "Cơ cấu ngành hàng
- *    TM/SX" (so % cơ cấu thực tế với chỉ tiêu cố định 65% TM / 35% SX, chấm theo mức lệch —
- *    xem sheet "Huong_dan" mục 16, đây là mô tả rõ ràng nhất trong file, 2 sheet còn lại vẫn
- *    còn sót công thức cũ chưa sửa hết khi anh ghép file).
- *  - "Lợi nhuận" (% lợi nhuận) → đổi thành "Giá bán cao" (đếm SỐ MÃ HÀNG bán cao hơn giá SX báo
- *    ≥3%) — cùng dạng công thức tỷ lệ/chỉ tiêu như cũ, chỉ đổi ý nghĩa số liệu nhập từ % sang
- *    số lượng mã hàng.
+ * KPI_Danh_gia_thang + Thang_diem_va_xep_loai + Huong_dan). Đã qua 2 lần cập nhật (anh Quân gửi
+ * lại file, xác nhận đổi tiêu chí):
+ *  - Lần 1: "DS Sản xuất" (so tỷ lệ Doanh số SX thực hiện/chỉ tiêu) → đổi thành "Cơ cấu ngành
+ *    hàng TM/SX" (so % cơ cấu thực tế với chỉ tiêu cố định 65% TM / 35% SX, chấm theo mức lệch —
+ *    xem sheet "Huong_dan" mục 16, mô tả này KHÔNG đổi ở bản file mới nhất, vẫn giữ nguyên công
+ *    thức này); "Lợi nhuận" (% lợi nhuận) → đổi thành "Giá bán cao" (đếm SỐ MÃ HÀNG bán cao hơn
+ *    giá SX báo ≥3%).
+ *  - Lần 2 (file gửi lại 24/08): thêm THƯỞNG VƯỢT CHỈ TIÊU cho Doanh số tổng — xem sheet
+ *    "Thang_diem_va_xep_loai" mục 1a, dòng "Tỷ lệ cao >110%": từ tỷ lệ đạt 110% trở lên, cứ mỗi
+ *    10% vượt thêm được cộng 1đ, KHÔNG giới hạn trần (khác 6 đầu điểm còn lại vẫn giữ nguyên
+ *    trần tối đa). Sheet "Thang_diem_va_xep_loai" mục 1b (Doanh số hàng SX, công thức tỷ lệ cũ)
+ *    và phần trọng số % ở đầu 2 sheet Huong_dan/Thang_diem_va_xep_loai vẫn là văn bản CŨ chưa
+ *    dọn hết khi anh ghép/sửa file (mục 1b đã bị thay hoàn toàn bởi Cơ cấu ngành hàng ở trên,
+ *    không còn áp dụng) — không lấy các phần này làm căn cứ, chỉ theo đúng công thức + số điểm
+ *    tối đa nêu ở mục "Tổng 100 điểm" bên dưới (khớp với các cột thật trong KPI_Danh_gia_thang).
  *
  * Tổng 100 điểm, 8 đầu điểm:
- *  1. Doanh số            tối đa 20đ — MIN(20, tỷ lệ đạt DS × 20)                    — tự động, từ SalesTarget
+ *  1. Doanh số            tối đa 20đ (+thưởng vượt 110%, không trần) — MIN(20, tỷ lệ đạt DS × 20) + thưởng — tự động, từ SalesTarget
  *  2. Cơ cấu ngành hàng    tối đa 10đ — chấm theo mức lệch % cơ cấu SX so với 35%      — tự động, từ SalesPlanLine nhóm SX/TM
  *  3. Giá bán cao          tối đa 10đ — MIN(10, số mã hàng thực tế / chỉ tiêu × 10)    — nhập tay (chưa có dữ liệu giá SX báo)
  *  4. KH mới               tối đa 10đ — MIN(10, tỷ lệ đạt KH mới × 10)                 — nhập tay
@@ -55,6 +61,9 @@ export interface KpiScoreInput {
 export interface KpiScoreResult {
   revenuePct: number | null;
   scoreRevenue: number;
+  // Phần điểm THƯỞNG vượt chỉ tiêu (đã cộng sẵn vào scoreRevenue ở trên) — tách riêng để UI hiển
+  // thị rõ khi có thưởng, xem scoreRevenueWithBonus().
+  revenueBonus: number;
   // % doanh số Sản xuất trong tổng (SX+TM) thực tế, và độ lệch tuyệt đối so với chỉ tiêu 35%.
   actualMixSXPct: number | null;
   mixDeviationPct: number | null;
@@ -98,6 +107,24 @@ function scoreMixDeviationBand(deviationPct: number | null): number {
   return 0;
 }
 
+/**
+ * Điểm Doanh số tổng (tối đa 20đ như cũ) CỘNG THÊM thưởng vượt chỉ tiêu — theo sheet
+ * "Thang_diem_va_xep_loai" mục 1a, dòng "Tỷ lệ cao >110%": "Từ 110% tỷ lệ cao hơn mỗi 10% cộng
+ * 1đ". Đọc là: đạt đúng 110% đã có +1đ, mỗi mốc 10% tiếp theo (120%, 130%...) cộng thêm 1đ nữa —
+ * không giới hạn trần (khác phần MIN(20,...) bên dưới), nên Điểm DS và Điểm tổng có thể vượt quá
+ * mức tối đa thông thường khi vượt xa chỉ tiêu — đúng tinh thần khuyến khích vượt chỉ tiêu của
+ * file mẫu. File không nêu mốc chẵn 110% có tính hay phải vượt qua mới tính — chọn cách đọc bao
+ * gồm mốc chẵn (>=110%) vì khớp sát nghĩa "từ 110%" hơn "trên 110%" ở dòng mô tả.
+ */
+function scoreRevenueWithBonus(revenuePct: number | null): { score: number; bonus: number } {
+  const base = clamp((revenuePct ?? 0) * 20, 0, 20);
+  // % vượt chỉ tiêu, làm tròn về 1 chữ số thập phân TRƯỚC khi chia lấy số mốc 10% — tránh sai số
+  // dấu phẩy động (vd (1.2-1)*10 ra 1.9999999999999998 trong JS thay vì 2, làm floor() hụt 1 mốc).
+  const overPct = revenuePct != null ? Math.round((revenuePct - 1) * 1000) / 10 : 0;
+  const bonus = revenuePct != null && revenuePct >= 1.1 ? Math.floor(overPct / 10) : 0;
+  return { score: base + bonus, bonus };
+}
+
 function gradeOf(total: number): { grade: KpiGrade; label: string; bonus: string } {
   if (total >= 90) return { grade: "A", label: "A - Xuất sắc", bonus: "100% mức thưởng KPI" };
   if (total >= 80) return { grade: "B", label: "B - Tốt", bonus: "70% mức thưởng KPI" };
@@ -109,7 +136,7 @@ function gradeOf(total: number): { grade: KpiGrade; label: string; bonus: string
 /** Hàm tính điểm thuần (không đụng DB) — dễ test độc lập với công thức mẫu Excel. */
 export function computeKpiScores(input: KpiScoreInput): KpiScoreResult {
   const revenuePct = input.targetRevenue > 0 ? input.actualRevenue / input.targetRevenue : null;
-  const scoreRevenue = clamp((revenuePct ?? 0) * 20, 0, 20);
+  const { score: scoreRevenue, bonus: revenueBonus } = scoreRevenueWithBonus(revenuePct);
 
   const mixTotal = input.actualRevenueSX + input.actualRevenueTM;
   const actualMixSXPct = mixTotal > 0 ? (input.actualRevenueSX / mixTotal) * 100 : null;
@@ -155,6 +182,7 @@ export function computeKpiScores(input: KpiScoreInput): KpiScoreResult {
   return {
     revenuePct,
     scoreRevenue: rRevenue,
+    revenueBonus,
     actualMixSXPct,
     mixDeviationPct,
     scoreMix: rMix,

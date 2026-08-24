@@ -1,10 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { computeKpiScores } from "./kpi-metrics";
 
-// Công thức khoá theo file KPI_KD_HoanggiaPS.xlsx bản cập nhật (anh Quân xác nhận đổi 2 tiêu
-// chí): "Cơ cấu ngành hàng TM/SX" (mức lệch % so với chỉ tiêu cố định 65% TM / 35% SX, xem
-// sheet Huong_dan mục 16) thay cho "DS Sản xuất" cũ; "Giá bán cao" (số mã hàng bán cao hơn giá
-// SX báo ≥3%) thay cho "Lợi nhuận" (%) cũ. 6 đầu điểm còn lại giữ nguyên công thức như trước.
+// Công thức khoá theo file KPI_KD_HoanggiaPS.xlsx, đã qua 2 lần cập nhật anh Quân gửi lại:
+// (1) "Cơ cấu ngành hàng TM/SX" (mức lệch % so với chỉ tiêu cố định 65% TM / 35% SX, xem sheet
+// Huong_dan mục 16) thay cho "DS Sản xuất" cũ; "Giá bán cao" (số mã hàng bán cao hơn giá SX báo
+// ≥3%) thay cho "Lợi nhuận" (%) cũ. (2) Doanh số tổng có thêm thưởng vượt chỉ tiêu — từ 110% trở
+// lên, mỗi 10% vượt thêm +1đ, không giới hạn trần (xem sheet Thang_diem_va_xep_loai mục 1a). 6
+// đầu điểm còn lại giữ nguyên công thức như trước.
 
 describe("computeKpiScores", () => {
   it("đạt tuyệt đối mọi tiêu chí — 100 điểm, hạng A", () => {
@@ -26,6 +28,7 @@ describe("computeKpiScores", () => {
       violationCount: 0,
     });
     expect(r.scoreRevenue).toBe(20);
+    expect(r.revenueBonus).toBe(0);
     expect(r.actualMixSXPct).toBe(35);
     expect(r.mixDeviationPct).toBe(0);
     expect(r.scoreMix).toBe(10);
@@ -71,15 +74,30 @@ describe("computeKpiScores", () => {
     expect(computeKpiScores({ ...base(), debtOverduePct: 31 }).scoreDebtOverdue).toBe(3);
   });
 
-  it("không vượt trần điểm dù thực hiện vượt xa chỉ tiêu", () => {
-    const r = computeKpiScores({
-      ...base(),
-      targetRevenue: 100,
-      actualRevenue: 1000,
-      approvedVisitCount: 100,
-    });
-    expect(r.scoreRevenue).toBe(20);
-    expect(r.scoreCskh).toBe(20);
+  it("doanh số dưới 110% chỉ tiêu — không có thưởng, vẫn trần ở 20đ như cũ", () => {
+    expect(computeKpiScores({ ...base(), targetRevenue: 1000, actualRevenue: 1090 }).scoreRevenue).toBe(20);
+    expect(computeKpiScores({ ...base(), targetRevenue: 1000, actualRevenue: 1090 }).revenueBonus).toBe(0);
+  });
+
+  it("doanh số từ 110% chỉ tiêu trở lên — thưởng +1đ mỗi mốc 10% vượt thêm, không giới hạn trần", () => {
+    // Đúng 110% — đã có +1đ (tính từ mốc chẵn, không cần vượt qua mới tính).
+    const r110 = computeKpiScores({ ...base(), targetRevenue: 1000, actualRevenue: 1100 });
+    expect(r110.revenueBonus).toBe(1);
+    expect(r110.scoreRevenue).toBe(21);
+    // 115% — chưa đủ mốc 120%, vẫn +1đ.
+    expect(computeKpiScores({ ...base(), targetRevenue: 1000, actualRevenue: 1150 }).revenueBonus).toBe(1);
+    // 120% — 2 mốc 10% (110%, 120%) → +2đ.
+    const r120 = computeKpiScores({ ...base(), targetRevenue: 1000, actualRevenue: 1200 });
+    expect(r120.revenueBonus).toBe(2);
+    expect(r120.scoreRevenue).toBe(22);
+    // 150% — 5 mốc → +5đ.
+    expect(computeKpiScores({ ...base(), targetRevenue: 1000, actualRevenue: 1500 }).revenueBonus).toBe(5);
+    // Vượt rất xa (1000%) — thưởng vẫn cộng dồn không trần, đẩy cả Điểm DS và Điểm tổng vượt mức
+    // tối đa thông thường (khác CSKH/6 đầu điểm còn lại vẫn giữ trần).
+    const rHuge = computeKpiScores({ ...base(), targetRevenue: 100, actualRevenue: 1000, approvedVisitCount: 100 });
+    expect(rHuge.revenueBonus).toBe(90);
+    expect(rHuge.scoreRevenue).toBe(110);
+    expect(rHuge.scoreCskh).toBe(20); // CSKH vẫn giữ trần 20đ như cũ, không có cơ chế thưởng
   });
 
   it("chưa nhập chỉ tiêu (null) thì điểm mục đó = 0, không NaN", () => {
