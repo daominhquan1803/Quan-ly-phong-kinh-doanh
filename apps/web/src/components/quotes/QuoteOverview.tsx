@@ -7,6 +7,7 @@ import { cn, formatDateVN } from "@/lib/utils";
 import { normalizeVN } from "@/lib/text-normalize";
 import { FilterInput, SortableTh, toggleSort, type SortState } from "@/components/shared/SortableFilterableTable";
 import { RefreshCw, CheckCircle2, XCircle, AlertTriangle, X } from "lucide-react";
+import { CHART_TOOLTIP_STYLE } from "@/components/dashboard/chart-theme";
 
 type QuoteStatus = "WON" | "NEGOTIATING" | "LOST" | "NOT_QUOTED";
 
@@ -69,13 +70,13 @@ const STATUS_STYLE: Record<QuoteStatus, string> = {
   WON: "bg-success-600/10 text-success-600",
   NEGOTIATING: "bg-warning-500/10 text-warning-500",
   LOST: "bg-brandRed-50 text-brandRed-600",
-  NOT_QUOTED: "bg-gray-200 text-gray-500",
+  NOT_QUOTED: "bg-gray-200 text-muted-foreground",
 };
 const STATUS_CHART_COLOR: Record<QuoteStatus, string> = {
-  WON: "#1E9E63",
+  WON: "#22B378",
   NEGOTIATING: "#F2A93B",
   LOST: "#C8102E",
-  NOT_QUOTED: "#9CA3AF",
+  NOT_QUOTED: "#5b6478",
 };
 const STATUS_KPI_BORDER: Record<QuoteStatus, string> = {
   WON: "border-t-success-600",
@@ -215,7 +216,7 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
                 setAssigneeFilter("");
               }
             }}
-            className="text-sm rounded-md border border-gray-200 py-2 px-2 focus:outline-none focus:ring-2 focus:ring-navy-900"
+            className="text-sm rounded-md border border-gray-200 py-2 px-2 focus:outline-none focus:ring-2 focus:ring-amber-500"
           >
             {(summary?.availableMonths ?? []).map((m) => (
               <option key={`${m.year}-${m.month}`} value={m.month}>
@@ -229,7 +230,7 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
           <button
             onClick={handleSync}
             disabled={syncing}
-            className="flex items-center gap-1.5 rounded-md bg-navy-900 px-3 py-2 text-sm font-semibold text-white hover:bg-navy-700 disabled:opacity-60"
+            className="flex items-center gap-1.5 rounded-md bg-amber-500 px-3 py-2 text-sm font-semibold text-amber-foreground hover:bg-amber-400 disabled:opacity-60"
           >
             <RefreshCw className={cn("h-4 w-4", syncing && "animate-spin")} />
             {syncing ? "Đang đồng bộ..." : "Đồng bộ thủ công"}
@@ -240,7 +241,7 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
       {syncError && <div className="rounded-md bg-brandRed-50 text-brandRed-600 text-sm px-4 py-2.5">{syncError}</div>}
 
       {syncData?.lastSync && (
-        <div className="flex items-center gap-2 text-sm text-gray-500">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
           {syncData.lastSync.status === "SUCCESS" ? (
             <CheckCircle2 className="h-4 w-4 text-success-600" />
           ) : syncData.lastSync.status === "FAILED" ? (
@@ -267,24 +268,24 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="kpi-card kpi-card--navy">
-          <p className="text-sm text-gray-500">Tổng số báo giá</p>
-          <p className="text-2xl font-bold text-navy-900 mt-1">{summaryLoading ? "—" : summary?.total ?? 0}</p>
-          <p className="text-xs text-gray-400 mt-1">{summary?.month ? `Tháng ${summary.month}/${summary.year}` : ""}</p>
+          <p className="text-sm text-muted-foreground">Tổng số báo giá</p>
+          <p className="text-2xl font-bold text-ink mt-1">{summaryLoading ? "—" : summary?.total ?? 0}</p>
+          <p className="text-xs text-muted2 mt-1">{summary?.month ? `Tháng ${summary.month}/${summary.year}` : ""}</p>
         </div>
         {(summary?.byStatus ?? []).map((s) => (
           <div key={s.status} className={cn("kpi-card", STATUS_KPI_BORDER[s.status])}>
-            <p className="text-sm text-gray-500">{s.label}</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">{s.pct}%</p>
-            <p className="text-xs text-gray-400 mt-1">{s.count} báo giá</p>
+            <p className="text-sm text-muted-foreground">{s.label}</p>
+            <p className="text-2xl font-bold text-ink mt-1">{s.pct}%</p>
+            <p className="text-xs text-muted2 mt-1">{s.count} báo giá</p>
           </div>
         ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {donutData.length > 0 && (
-          <div className="rounded-lg border border-gray-200 bg-white p-5">
-            <h2 className="font-medium text-gray-900 mb-1">Tỷ lệ theo trạng thái</h2>
-            <p className="text-xs text-gray-400 mb-2">{summary?.month ? `Tháng ${summary.month}/${summary.year}` : ""}</p>
+          <div className="rounded-lg border border-gray-200 bg-card p-5">
+            <h2 className="font-medium text-ink mb-1">Tỷ lệ theo trạng thái</h2>
+            <p className="text-xs text-muted2 mb-2">{summary?.month ? `Tháng ${summary.month}/${summary.year}` : ""}</p>
             <div className="relative">
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
@@ -296,7 +297,7 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
                     outerRadius={96}
                     paddingAngle={3}
                     cornerRadius={4}
-                    stroke="#fff"
+                    stroke="#101c31"
                     strokeWidth={2}
                   >
                     {donutData.map((d) => (
@@ -308,22 +309,22 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
                       `${value} báo giá (${summary?.total ? Math.round((value / summary.total) * 100) : 0}%)`,
                       name,
                     ]}
-                    contentStyle={{ borderRadius: 8, border: "1px solid #E2E6ED", fontSize: 13 }}
+                    contentStyle={CHART_TOOLTIP_STYLE}
                   />
                 </PieChart>
               </ResponsiveContainer>
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-2xl font-bold text-navy-900">{summary?.total ?? 0}</span>
-                <span className="text-[11px] text-gray-400">báo giá</span>
+                <span className="text-2xl font-bold text-ink">{summary?.total ?? 0}</span>
+                <span className="text-[11px] text-muted2">báo giá</span>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 mt-3 pt-3 border-t border-gray-100">
               {(summary?.byStatus ?? []).map((s) => (
                 <div key={s.status} className="flex items-center gap-2 text-xs">
                   <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: STATUS_CHART_COLOR[s.status] }} />
-                  <span className="text-gray-600 truncate">{s.label}</span>
-                  <span className="ml-auto font-medium text-gray-900 whitespace-nowrap">
-                    {s.count} <span className="text-gray-400 font-normal">({s.pct}%)</span>
+                  <span className="text-muted-foreground truncate">{s.label}</span>
+                  <span className="ml-auto font-medium text-ink whitespace-nowrap">
+                    {s.count} <span className="text-muted2 font-normal">({s.pct}%)</span>
                   </span>
                 </div>
               ))}
@@ -331,12 +332,12 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
           </div>
         )}
 
-        <div className="lg:col-span-2 rounded-lg border border-gray-200 bg-white overflow-x-auto">
+        <div className="lg:col-span-2 rounded-lg border border-gray-200 bg-card overflow-x-auto">
           <div className="px-4 pt-3 pb-1">
-            <h2 className="font-medium text-gray-900">Theo nhân viên phụ trách</h2>
+            <h2 className="font-medium text-ink">Theo nhân viên phụ trách</h2>
           </div>
           <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 text-gray-500">
+            <thead className="bg-gray-50 text-muted-foreground">
               <tr>
                 <th className="text-left font-medium px-4 py-2.5">Phụ trách</th>
                 <th className="text-right font-medium px-4 py-2.5">Tổng</th>
@@ -349,7 +350,7 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
             <tbody className="divide-y divide-gray-100">
               {(summary?.byAssignee.length ?? 0) === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-gray-500">
+                  <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
                     {summaryLoading ? "Đang tải..." : "Chưa có dữ liệu."}
                   </td>
                 </tr>
@@ -361,12 +362,12 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
                   onClick={() => setAssigneeFilter((prev) => (prev === a.assigneeRaw ? "" : a.assigneeRaw))}
                   title="Bấm để lọc bảng chi tiết theo người này"
                 >
-                  <td className="px-4 py-2.5 font-medium text-gray-900">{a.assigneeRaw}</td>
+                  <td className="px-4 py-2.5 font-medium text-ink">{a.assigneeRaw}</td>
                   <td className="px-4 py-2.5 text-right">{a.total}</td>
                   <td className="px-4 py-2.5 text-right text-success-600">{a.WON || "—"}</td>
                   <td className="px-4 py-2.5 text-right text-warning-500">{a.NEGOTIATING || "—"}</td>
                   <td className="px-4 py-2.5 text-right text-brandRed-600">{a.LOST || "—"}</td>
-                  <td className="px-4 py-2.5 text-right text-gray-500">{a.NOT_QUOTED || "—"}</td>
+                  <td className="px-4 py-2.5 text-right text-muted-foreground">{a.NOT_QUOTED || "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -374,9 +375,9 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
         </div>
       </div>
 
-      <div className="rounded-lg border border-gray-200 bg-white overflow-x-auto">
+      <div className="rounded-lg border border-gray-200 bg-card overflow-x-auto">
         <div className="flex items-center justify-between flex-wrap gap-3 px-4 pt-3 pb-1">
-          <h2 className="font-medium text-gray-900">Chi tiết từng báo giá</h2>
+          <h2 className="font-medium text-ink">Chi tiết từng báo giá</h2>
           <div className="flex items-center gap-2 flex-wrap">
             <select
               value={statusFilter}
@@ -393,7 +394,7 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
             {assigneeFilter && (
               <button
                 onClick={() => setAssigneeFilter("")}
-                className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-brandRed-600 border border-gray-200 rounded-md px-2 py-1.5"
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-brandRed-600 border border-gray-200 rounded-md px-2 py-1.5"
               >
                 <X className="h-3 w-3" /> {assigneeFilter}
               </button>
@@ -401,7 +402,7 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
           </div>
         </div>
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-gray-500">
+          <thead className="bg-gray-50 text-muted-foreground">
             <tr>
               <SortableTh field="requestDay" sort={sort} onSort={handleSort}>
                 Ngày
@@ -417,13 +418,13 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
               <th className="text-left font-medium px-4 py-2.5">Nhân viên báo giá</th>
               <th className="text-left font-medium px-4 py-2.5">Trạng thái</th>
             </tr>
-            <tr className="bg-white border-t border-gray-100">
+            <tr className="bg-card border-t border-gray-100">
               <th colSpan={3} className="px-4 py-2 font-normal">
                 <FilterInput value={q} onChange={setQ} placeholder="Tìm khách hàng, mặt hàng, phụ trách..." />
               </th>
               <th colSpan={4} className="px-4 py-2 text-right">
                 {hasActiveFilter && (
-                  <button onClick={() => setQ("")} className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-brandRed-600">
+                  <button onClick={() => setQ("")} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-brandRed-600">
                     <X className="h-3 w-3" /> Xoá lọc
                   </button>
                 )}
@@ -433,14 +434,14 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
           <tbody className="divide-y divide-gray-100">
             {listLoading && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-gray-500">
+                <td colSpan={7} className="px-4 py-6 text-center text-muted-foreground">
                   Đang tải...
                 </td>
               </tr>
             )}
             {!listLoading && visibleRows.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-gray-500">
+                <td colSpan={7} className="px-4 py-6 text-center text-muted-foreground">
                   {hasActiveFilter ? "Không tìm thấy báo giá phù hợp" : "Chưa có báo giá nào trong tháng này."}
                 </td>
               </tr>
@@ -449,7 +450,7 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
               <tr key={r.id} className="hover:bg-gray-50">
                 <td className="px-4 py-2.5 whitespace-nowrap">{r.requestDay ?? "—"}</td>
                 <td className="px-4 py-2.5">{r.assigneeRaw ?? "—"}</td>
-                <td className="px-4 py-2.5 font-medium text-gray-900">{r.customerName}</td>
+                <td className="px-4 py-2.5 font-medium text-ink">{r.customerName}</td>
                 <td className="px-4 py-2.5 max-w-xs truncate" title={r.productInterest ?? undefined}>
                   {r.productInterest ?? "—"}
                 </td>
@@ -465,7 +466,7 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
           </tbody>
         </table>
         {hasActiveFilter && !listLoading && (
-          <p className="text-xs text-gray-500 px-4 py-2">
+          <p className="text-xs text-muted-foreground px-4 py-2">
             Đang hiển thị {visibleRows.length} / {listData?.rows.length ?? 0} báo giá theo bộ lọc hiện tại.
           </p>
         )}

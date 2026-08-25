@@ -186,7 +186,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-muted-foreground">
           Dữ liệu độc lập với AMIS — theo dõi từ file Excel PO anh nhập, không tự động đồng bộ.
         </p>
         <div className="flex items-center gap-2">{isAdmin && <EmployeeFilterSelect value={employeeId} onChange={setEmployeeId} />}</div>
@@ -194,21 +194,21 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="kpi-card kpi-card--navy">
-          <div className="flex items-center gap-1.5 text-sm text-gray-500">
+          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <TrendingUp className="h-4 w-4" /> Tỷ lệ giao đúng hạn ({data?.rateWindowDays ?? 90} ngày qua)
           </div>
-          <p className="text-2xl font-bold text-navy-900 mt-1">
+          <p className="text-2xl font-bold text-ink mt-1">
             {isLoading ? "—" : data?.onTimeRatePct != null ? `${data.onTimeRatePct}%` : "Chưa có dữ liệu"}
           </p>
         </div>
         <div className="kpi-card kpi-card--navy">
-          <div className="flex items-center gap-1.5 text-sm text-gray-500">
+          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <PackageCheck className="h-4 w-4" /> Đơn hàng đang mở
           </div>
-          <p className="text-2xl font-bold text-navy-900 mt-1">{isLoading ? "—" : data?.openCount}</p>
+          <p className="text-2xl font-bold text-ink mt-1">{isLoading ? "—" : data?.openCount}</p>
         </div>
         <div className="kpi-card kpi-card--red">
-          <div className="flex items-center gap-1.5 text-sm text-gray-500">
+          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <AlertTriangle className="h-4 w-4" /> Quá hạn giao ({isLoading ? "—" : data?.overdueCount} đơn)
           </div>
           <p className="text-2xl font-bold text-brandRed-600 mt-1">
@@ -216,7 +216,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
           </p>
         </div>
         <div className="kpi-card kpi-card--red">
-          <div className="flex items-center gap-1.5 text-sm text-gray-500">
+          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <Clock className="h-4 w-4" /> Sắp đến hạn ({data?.upcomingWindowDays ?? 3} ngày tới)
           </div>
           <p className="text-2xl font-bold text-warning-500 mt-1">{isLoading ? "—" : data?.upcomingCount}</p>
@@ -224,9 +224,9 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
       </div>
 
       {isAdmin && data && data.byEmployee.length > 0 && (
-        <div className="rounded-lg border border-gray-200 bg-white overflow-x-auto">
+        <div className="rounded-lg border border-gray-200 bg-card overflow-x-auto">
           <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 text-gray-500">
+            <thead className="bg-gray-50 text-muted-foreground">
               <tr>
                 <th className="text-left font-medium px-4 py-2.5">Nhân viên</th>
                 <th className="text-right font-medium px-4 py-2.5">Đơn đang mở</th>
@@ -239,7 +239,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
             <tbody className="divide-y divide-gray-100">
               {data.byEmployee.map((e) => (
                 <tr key={e.employeeId}>
-                  <td className="px-4 py-2.5 font-medium text-gray-900">{e.employeeName}</td>
+                  <td className="px-4 py-2.5 font-medium text-ink">{e.employeeName}</td>
                   <td className="px-4 py-2.5 text-right">{e.openCount}</td>
                   <td className={cn("px-4 py-2.5 text-right", e.overdueCount > 0 && "text-brandRed-600 font-medium")}>
                     {e.overdueCount}
@@ -254,10 +254,10 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
             </tbody>
             <tfoot className="border-t-2 border-gray-200 bg-gray-50">
               <tr>
-                <td className="px-4 py-2.5 font-semibold text-gray-900">Tổng phòng</td>
-                <td className="px-4 py-2.5 text-right font-semibold text-gray-900">{data.openCount}</td>
-                <td className="px-4 py-2.5 text-right font-semibold text-gray-900">{data.overdueCount}</td>
-                <td className="px-4 py-2.5 text-right font-semibold text-gray-900">{data.upcomingCount}</td>
+                <td className="px-4 py-2.5 font-semibold text-ink">Tổng phòng</td>
+                <td className="px-4 py-2.5 text-right font-semibold text-ink">{data.openCount}</td>
+                <td className="px-4 py-2.5 text-right font-semibold text-ink">{data.overdueCount}</td>
+                <td className="px-4 py-2.5 text-right font-semibold text-ink">{data.upcomingCount}</td>
                 <td className="px-4 py-2.5 text-right font-semibold text-success-600">
                   {formatCurrencyVND(data.totalDeliveredValue)}
                 </td>
@@ -271,13 +271,13 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
       )}
 
       {data && data.dailyDelivery.length > 0 && (
-        <div className="rounded-lg border border-gray-200 bg-white overflow-x-auto">
-          <div className="flex items-center gap-1.5 px-4 pt-3 text-sm font-medium text-gray-900">
+        <div className="rounded-lg border border-gray-200 bg-card overflow-x-auto">
+          <div className="flex items-center gap-1.5 px-4 pt-3 text-sm font-medium text-ink">
             <CalendarDays className="h-4 w-4" />
             Giao hàng theo ngày ({data.dailyWindowDays} ngày gần nhất)
           </div>
           <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 text-gray-500">
+            <thead className="bg-gray-50 text-muted-foreground">
               <tr>
                 <th className="text-left font-medium px-4 py-2.5">Ngày</th>
                 {data.dailyEmployees.map((e) => (
@@ -291,9 +291,9 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
             <tbody className="divide-y divide-gray-100">
               {data.dailyDelivery.map((d) => (
                 <tr key={d.date}>
-                  <td className="px-4 py-2.5 font-medium text-gray-900">{formatDayLabel(d.date)}</td>
+                  <td className="px-4 py-2.5 font-medium text-ink">{formatDayLabel(d.date)}</td>
                   {data.dailyEmployees.map((e) => (
-                    <td key={e.id} className="px-4 py-2.5 text-right text-gray-700">
+                    <td key={e.id} className="px-4 py-2.5 text-right text-ink2">
                       {d.byEmployee[e.id] ? formatCurrencyVND(d.byEmployee[e.id]) : "—"}
                     </td>
                   ))}
@@ -305,9 +305,9 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
             </tbody>
             <tfoot className="border-t-2 border-gray-200 bg-gray-50">
               <tr>
-                <td className="px-4 py-2.5 font-semibold text-gray-900">Tổng {data.dailyWindowDays} ngày</td>
+                <td className="px-4 py-2.5 font-semibold text-ink">Tổng {data.dailyWindowDays} ngày</td>
                 {data.dailyEmployees.map((e) => (
-                  <td key={e.id} className="px-4 py-2.5 text-right font-semibold text-gray-900">
+                  <td key={e.id} className="px-4 py-2.5 text-right font-semibold text-ink">
                     {formatCurrencyVND(data.dailyDelivery.reduce((s, d) => s + (d.byEmployee[e.id] ?? 0), 0))}
                   </td>
                 ))}
@@ -326,7 +326,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
             onClick={() => setTab("overdue")}
             className={cn(
               "rounded-md px-3 py-1.5 text-sm font-medium",
-              tab === "overdue" ? "bg-brandRed-600 text-white" : "bg-white border border-gray-200 text-gray-700"
+              tab === "overdue" ? "bg-brandRed-600 text-white" : "bg-card border border-gray-200 text-ink2"
             )}
           >
             Quá hạn giao ({data?.overdueCount ?? 0})
@@ -335,16 +335,16 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
             onClick={() => setTab("upcoming")}
             className={cn(
               "rounded-md px-3 py-1.5 text-sm font-medium",
-              tab === "upcoming" ? "bg-warning-500 text-white" : "bg-white border border-gray-200 text-gray-700"
+              tab === "upcoming" ? "bg-warning-500 text-white" : "bg-card border border-gray-200 text-ink2"
             )}
           >
             Sắp đến hạn ({data?.upcomingCount ?? 0})
           </button>
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white overflow-x-auto max-h-[600px] overflow-y-auto">
+        <div className="rounded-lg border border-gray-200 bg-card overflow-x-auto max-h-[600px] overflow-y-auto">
           <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 text-gray-500 sticky top-0 z-10">
+            <thead className="bg-gray-50 text-muted-foreground sticky top-0 z-10">
               <tr>
                 <th className="text-left font-medium px-4 py-2.5">Mã đơn</th>
                 <th className="text-left font-medium px-4 py-2.5">Khách hàng</th>
@@ -360,7 +360,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
                 </SortableTh>
                 <th className="px-4 py-2.5" />
               </tr>
-              <tr className="bg-white border-t border-gray-100">
+              <tr className="bg-card border-t border-gray-100">
                 <th className="px-4 py-2 font-normal">
                   <FilterInput value={filterOrderCode} onChange={setFilterOrderCode} placeholder="Tìm mã đơn..." />
                 </th>
@@ -374,7 +374,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
                   {hasActiveFilter && (
                     <button
                       onClick={clearFilters}
-                      className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-brandRed-600"
+                      className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-brandRed-600"
                     >
                       <X className="h-3 w-3" /> Xoá lọc
                     </button>
@@ -385,7 +385,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
             <tbody className="divide-y divide-gray-100">
               {!isLoading && visibleRows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-gray-500">
+                  <td colSpan={7} className="px-4 py-6 text-center text-muted-foreground">
                     {hasActiveFilter
                       ? "Không tìm thấy đơn phù hợp"
                       : tab === "overdue"
@@ -396,7 +396,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
               )}
               {visibleRows.map((o) => (
                 <tr key={o.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-2.5 font-medium text-navy-900">{o.orderCode}</td>
+                  <td className="px-4 py-2.5 font-medium text-ink">{o.orderCode}</td>
                   <td className="px-4 py-2.5">{o.customerName}</td>
                   <td className="px-4 py-2.5">{o.salesEmployeeName ?? "—"}</td>
                   <td className="px-4 py-2.5">{formatDateVN(o.expectedDeliveryDate)}</td>
@@ -419,7 +419,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
                     <button
                       onClick={() => setPoClosed(o.orderCode, true)}
                       disabled={pendingCodes.has(o.orderCode)}
-                      className="rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-700 hover:border-brandRed-600 hover:text-brandRed-600 disabled:opacity-50"
+                      className="rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-ink2 hover:border-brandRed-600 hover:text-brandRed-600 disabled:opacity-50"
                     >
                       {pendingCodes.has(o.orderCode) ? "Đang xử lý..." : "Kết thúc đơn"}
                     </button>
@@ -430,24 +430,24 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
           </table>
         </div>
         {hasActiveFilter && !isLoading && (
-          <p className="text-xs text-gray-500 mt-2">
+          <p className="text-xs text-muted-foreground mt-2">
             Đang hiển thị {visibleRows.length} / {totalCount ?? 0} đơn theo bộ lọc hiện tại.
           </p>
         )}
       </div>
 
       {data && data.manuallyClosedOrders.length > 0 && (
-        <div className="rounded-lg border border-gray-200 bg-white overflow-x-auto">
-          <div className="flex items-center gap-1.5 px-4 pt-3 text-sm font-medium text-gray-900">
+        <div className="rounded-lg border border-gray-200 bg-card overflow-x-auto">
+          <div className="flex items-center gap-1.5 px-4 pt-3 text-sm font-medium text-ink">
             <CheckCircle2 className="h-4 w-4 text-success-600" />
             Đơn đã đóng thủ công gần đây
           </div>
-          <p className="px-4 pb-2 text-xs text-gray-500">
+          <p className="px-4 pb-2 text-xs text-muted-foreground">
             Các đơn đã bấm &quot;Kết thúc đơn&quot; — không còn tính vào Quá hạn/Sắp đến hạn/Giá trị chưa giao. Bấm
             &quot;Mở lại đơn&quot; nếu đóng nhầm.
           </p>
           <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 text-gray-500">
+            <thead className="bg-gray-50 text-muted-foreground">
               <tr>
                 <th className="text-left font-medium px-4 py-2">Mã đơn</th>
                 <th className="text-left font-medium px-4 py-2">Khách hàng</th>
@@ -460,7 +460,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
             <tbody className="divide-y divide-gray-100">
               {data.manuallyClosedOrders.map((o) => (
                 <tr key={o.poCode} className="hover:bg-gray-50">
-                  <td className="px-4 py-2.5 font-medium text-navy-900">{o.poCode}</td>
+                  <td className="px-4 py-2.5 font-medium text-ink">{o.poCode}</td>
                   <td className="px-4 py-2.5">{o.customerName}</td>
                   <td className="px-4 py-2.5">{o.salesEmployeeName}</td>
                   <td className="px-4 py-2.5">{formatDateVN(o.manuallyClosedAt)}</td>
@@ -469,7 +469,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
                     <button
                       onClick={() => setPoClosed(o.poCode, false)}
                       disabled={pendingCodes.has(o.poCode)}
-                      className="rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-700 hover:border-navy-900 hover:text-navy-900 disabled:opacity-50"
+                      className="rounded-md border border-gray-200 px-2.5 py-1 text-xs font-medium text-ink2 hover:border-amber-500 hover:text-ink disabled:opacity-50"
                     >
                       {pendingCodes.has(o.poCode) ? "Đang xử lý..." : "Mở lại đơn"}
                     </button>

@@ -87,9 +87,9 @@ export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
         <TripForm currentUserId={session?.user?.id} onCreated={() => { setShowForm(false); invalidate(); }} />
       )}
 
-      <div className="rounded-lg border border-gray-200 bg-white overflow-x-auto">
+      <div className="rounded-lg border border-gray-200 bg-card overflow-x-auto">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-gray-500">
+          <thead className="bg-gray-50 text-muted-foreground">
             <tr>
               <th className="text-left font-medium px-4 py-2.5">Ngày đi</th>
               <th className="text-left font-medium px-4 py-2.5">Giờ dự kiến</th>
@@ -104,21 +104,21 @@ export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
           <tbody className="divide-y divide-gray-100">
             {isLoading && (
               <tr>
-                <td colSpan={8} className="px-4 py-6 text-center text-gray-500">
+                <td colSpan={8} className="px-4 py-6 text-center text-muted-foreground">
                   Đang tải...
                 </td>
               </tr>
             )}
             {!isLoading && (data?.trips.length ?? 0) === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-6 text-center text-gray-500">
+                <td colSpan={8} className="px-4 py-6 text-center text-muted-foreground">
                   Chưa có đăng ký nào.
                 </td>
               </tr>
             )}
             {data?.trips.map((t) => (
               <tr key={t.id} className="hover:bg-gray-50">
-                <td className="px-4 py-2.5 font-medium text-gray-900">{formatDateVN(t.visitDate)}</td>
+                <td className="px-4 py-2.5 font-medium text-ink">{formatDateVN(t.visitDate)}</td>
                 <td className="px-4 py-2.5">{t.expectedTime || "—"}</td>
                 {isAdmin && <td className="px-4 py-2.5">{t.employee.name}</td>}
                 <td className="px-4 py-2.5">{t.companyName}</td>
@@ -131,7 +131,7 @@ export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
                 <td className="px-4 py-2.5">
                   <span className={cn("status-badge", STATUS_STYLE[t.status])}>{STATUS_LABEL[t.status]}</span>
                   {t.status === "REJECTED" && t.rejectReason && (
-                    <p className="text-[11px] text-gray-400 mt-0.5">{t.rejectReason}</p>
+                    <p className="text-[11px] text-muted2 mt-0.5">{t.rejectReason}</p>
                   )}
                 </td>
                 <td className="px-4 py-2.5 text-right whitespace-nowrap">
@@ -156,7 +156,7 @@ export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
                   {t.status === "PENDING" && !isAdmin && (
                     <button
                       onClick={() => handleAction(t.id, "cancel")}
-                      className="text-gray-400 hover:text-brandRed-600"
+                      className="text-muted2 hover:text-brandRed-600"
                       title="Huỷ đăng ký"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -228,11 +228,11 @@ function TripForm({ onCreated, currentUserId }: { onCreated: () => void; current
 
   return (
     <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-      <label className="flex flex-col gap-1 text-xs text-gray-500">
+      <label className="flex flex-col gap-1 text-xs text-muted-foreground">
         Ngày đi
         <input type="date" value={visitDate} onChange={(e) => setVisitDate(e.target.value)} className="input" />
       </label>
-      <label className="flex flex-col gap-1 text-xs text-gray-500">
+      <label className="flex flex-col gap-1 text-xs text-muted-foreground">
         Giờ dự kiến gặp
         <input
           type="time"
@@ -241,7 +241,7 @@ function TripForm({ onCreated, currentUserId }: { onCreated: () => void; current
           className="input"
         />
       </label>
-      <label className="flex flex-col gap-1 text-xs text-gray-500 sm:col-span-2">
+      <label className="flex flex-col gap-1 text-xs text-muted-foreground sm:col-span-2">
         Công ty đến gặp
         <input
           value={companyName}
@@ -250,7 +250,7 @@ function TripForm({ onCreated, currentUserId }: { onCreated: () => void; current
           className="input"
         />
       </label>
-      <label className="flex flex-col gap-1 text-xs text-gray-500 sm:col-span-2">
+      <label className="flex flex-col gap-1 text-xs text-muted-foreground sm:col-span-2">
         Nội dung buổi gặp
         <textarea
           value={content}
@@ -260,12 +260,12 @@ function TripForm({ onCreated, currentUserId }: { onCreated: () => void; current
           className="input"
         />
       </label>
-      <div className="flex flex-col gap-1 text-xs text-gray-500 sm:col-span-2">
+      <div className="flex flex-col gap-1 text-xs text-muted-foreground sm:col-span-2">
         Người đi hỗ trợ (không bắt buộc) — cũng được tính điểm KPI &quot;đi gặp khách&quot; cho lượt đi này
-        <div className="flex flex-wrap gap-x-4 gap-y-1.5 rounded-md border border-gray-200 bg-white px-3 py-2 max-h-32 overflow-y-auto">
-          {supporterOptions.length === 0 && <span className="text-gray-400">Không có đồng nghiệp nào khác</span>}
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5 rounded-md border border-gray-200 bg-card px-3 py-2 max-h-32 overflow-y-auto">
+          {supporterOptions.length === 0 && <span className="text-muted2">Không có đồng nghiệp nào khác</span>}
           {supporterOptions.map((u) => (
-            <label key={u.id} className="flex items-center gap-1.5 text-gray-700">
+            <label key={u.id} className="flex items-center gap-1.5 text-ink2">
               <input type="checkbox" checked={supporterIds.includes(u.id)} onChange={() => toggleSupporter(u.id)} />
               {u.name}
             </label>
@@ -276,7 +276,7 @@ function TripForm({ onCreated, currentUserId }: { onCreated: () => void; current
       <button
         onClick={handleSubmit}
         disabled={saving || !visitDate || !companyName || !content}
-        className="rounded-md bg-navy-900 px-3 py-2 text-sm font-semibold text-white disabled:opacity-40 sm:col-span-2 w-fit"
+        className="rounded-md bg-amber-500 px-3 py-2 text-sm font-semibold text-amber-foreground hover:bg-amber-400 disabled:opacity-40 sm:col-span-2 w-fit"
       >
         {saving ? "Đang gửi..." : "Gửi đăng ký"}
       </button>

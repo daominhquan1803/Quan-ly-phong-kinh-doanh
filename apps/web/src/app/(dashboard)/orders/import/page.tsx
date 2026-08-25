@@ -9,8 +9,8 @@ export default async function OrdersImportPage() {
   return (
     <div className="space-y-6 max-w-4xl">
       <div>
-        <h1 className="text-xl font-semibold text-gray-900">Nhập đơn hàng từ Excel (AMIS)</h1>
-        <p className="text-sm text-gray-500">
+        <h1 className="text-xl font-semibold text-ink">Nhập đơn hàng từ Excel (AMIS)</h1>
+        <p className="text-sm text-muted-foreground">
           Xuất file đơn hàng từ AMIS CRM rồi upload tại đây để cập nhật vào hệ thống.
         </p>
       </div>

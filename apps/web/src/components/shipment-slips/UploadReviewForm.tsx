@@ -175,11 +175,11 @@ export function UploadReviewForm() {
     return (
       <div className="space-y-4">
         {error && <div className="rounded-md bg-brandRed-50 text-brandRed-600 text-sm px-4 py-2.5">{error}</div>}
-        <label className="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-gray-200 bg-white py-16 cursor-pointer hover:border-navy-900 transition-colors">
-          <UploadCloud className="h-10 w-10 text-navy-900" />
+        <label className="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-gray-200 bg-card py-16 cursor-pointer hover:border-amber-500 transition-colors">
+          <UploadCloud className="h-10 w-10 text-ink" />
           <div className="text-center">
-            <p className="font-medium text-gray-900">Chụp ảnh, chọn ảnh, chọn file PDF, hoặc file .txt phiếu đi hàng</p>
-            <p className="text-sm text-gray-500">AI sẽ tự đọc và điền sẵn form để anh kiểm tra lại</p>
+            <p className="font-medium text-ink">Chụp ảnh, chọn ảnh, chọn file PDF, hoặc file .txt phiếu đi hàng</p>
+            <p className="text-sm text-muted-foreground">AI sẽ tự đọc và điền sẵn form để anh kiểm tra lại</p>
           </div>
           <input
             type="file"
@@ -191,7 +191,7 @@ export function UploadReviewForm() {
               if (f) handleFileSelected(f);
             }}
           />
-          {loading && <p className="text-sm text-gray-500">AI đang đọc ảnh, vui lòng đợi...</p>}
+          {loading && <p className="text-sm text-muted-foreground">AI đang đọc ảnh, vui lòng đợi...</p>}
         </label>
       </div>
     );
@@ -208,7 +208,7 @@ export function UploadReviewForm() {
           </div>
         )}
 
-        <div className="rounded-lg border border-gray-200 bg-white p-5 space-y-3">
+        <div className="rounded-lg border border-gray-200 bg-card p-5 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <Field label="Số phiếu" low={isLow("slipNumber")}>
               <input value={slipNumber} onChange={(e) => setSlipNumber(e.target.value)} className="input" />
@@ -244,13 +244,13 @@ export function UploadReviewForm() {
           </Field>
         </div>
 
-        <div className="rounded-lg border border-gray-200 bg-white p-5 space-y-3">
+        <div className="rounded-lg border border-gray-200 bg-card p-5 space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="font-medium text-gray-900">Chi tiết hàng hoá</h3>
+            <h3 className="font-medium text-ink">Chi tiết hàng hoá</h3>
             <button
               type="button"
               onClick={() => setItems((prev) => [...prev, { ...EMPTY_ITEM }])}
-              className="flex items-center gap-1 text-sm text-navy-900 hover:underline"
+              className="flex items-center gap-1 text-sm text-ink hover:underline"
             >
               <Plus className="h-4 w-4" /> Thêm dòng
             </button>
@@ -259,7 +259,7 @@ export function UploadReviewForm() {
             {items.map((item, i) => (
               <div key={i} className="rounded-md border border-gray-200 p-3 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-gray-500">Dòng {i + 1}</span>
+                  <span className="text-xs font-medium text-muted-foreground">Dòng {i + 1}</span>
                   {items.length > 1 && (
                     <button type="button" onClick={() => setItems((prev) => prev.filter((_, idx) => idx !== i))}>
                       <Trash2 className="h-4 w-4 text-brandRed-600" />
@@ -333,7 +333,7 @@ export function UploadReviewForm() {
           <button
             type="button"
             onClick={() => setStep("upload")}
-            className="rounded-md border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="rounded-md border border-gray-200 px-4 py-2 text-sm font-medium text-ink2 hover:bg-gray-50"
           >
             Chụp ảnh khác
           </button>
@@ -349,16 +349,16 @@ export function UploadReviewForm() {
       </div>
 
       <div className="lg:sticky lg:top-6 self-start">
-        <div className="rounded-lg border border-gray-200 bg-white p-3">
+        <div className="rounded-lg border border-gray-200 bg-card p-3">
           {imageThumbPath && (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={imageThumbPath} alt="Phiếu đi hàng" className="w-full rounded-md" />
           )}
           {!imageThumbPath && imagePath?.toLowerCase().endsWith(".txt") && (
-            <p className="text-sm text-gray-500 text-center py-6">Phiếu dạng text — không có ảnh xem trước</p>
+            <p className="text-sm text-muted-foreground text-center py-6">Phiếu dạng text — không có ảnh xem trước</p>
           )}
           {imagePath && (
-            <a href={imagePath} target="_blank" rel="noreferrer" className="block text-center text-xs text-navy-900 mt-2 hover:underline">
+            <a href={imagePath} target="_blank" rel="noreferrer" className="block text-center text-xs text-ink mt-2 hover:underline">
               {imagePath.toLowerCase().endsWith(".pdf")
                 ? "Xem file PDF gốc"
                 : imagePath.toLowerCase().endsWith(".txt")
@@ -375,7 +375,7 @@ export function UploadReviewForm() {
 function Field({ label, low, children }: { label: string; low?: boolean; children: React.ReactNode }) {
   return (
     <div>
-      <label className={cn("block text-sm mb-1", low ? "text-warning-500 font-medium" : "text-gray-700")}>
+      <label className={cn("block text-sm mb-1", low ? "text-warning-500 font-medium" : "text-ink2")}>
         {label} {low && "⚠"}
       </label>
       <div className={cn(low && "rounded-md ring-2 ring-warning-500")}>{children}</div>

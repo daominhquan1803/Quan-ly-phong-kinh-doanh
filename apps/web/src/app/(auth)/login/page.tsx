@@ -39,7 +39,7 @@ export default function LoginPage() {
               <p className="text-white/60 text-sm">Hệ thống quản lý phòng kinh doanh</p>
             </div>
           </div>
-          <div className="bg-white rounded-lg shadow-card p-6">
+          <div className="bg-card rounded-lg shadow-card p-6">
             <Suspense fallback={null}>
               <LoginForm />
             </Suspense>

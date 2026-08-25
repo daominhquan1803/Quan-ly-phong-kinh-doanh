@@ -40,8 +40,8 @@ export function SalesPlanDetailSection({ isAdmin }: { isAdmin: boolean }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="font-medium text-gray-900">Kế hoạch chi tiết theo sản phẩm</h2>
-          <p className="text-xs text-gray-500">
+          <h2 className="font-medium text-ink">Kế hoạch chi tiết theo sản phẩm</h2>
+          <p className="text-xs text-muted-foreground">
             Nhập từ Excel: doanh số mục tiêu theo Nhân viên x Sản phẩm x Nhóm hàng. Thực hiện tính theo giá trị đã
             giao trong tháng.
           </p>
@@ -86,36 +86,36 @@ export function SalesPlanDetailSection({ isAdmin }: { isAdmin: boolean }) {
       )}
 
       {isLoading && (
-        <div className="rounded-lg border border-gray-200 bg-white px-4 py-6 text-center text-gray-500 text-sm">
+        <div className="rounded-lg border border-gray-200 bg-card px-4 py-6 text-center text-muted-foreground text-sm">
           Đang tải...
         </div>
       )}
       {!isLoading && (data?.lines.length ?? 0) === 0 && (
-        <div className="rounded-lg border border-gray-200 bg-white px-4 py-6 text-center text-gray-500 text-sm">
+        <div className="rounded-lg border border-gray-200 bg-card px-4 py-6 text-center text-muted-foreground text-sm">
           Chưa có kế hoạch chi tiết cho tháng này.
         </div>
       )}
       {!isLoading &&
         data &&
         groupLines(data.lines).map((group) => (
-          <div key={group.name} className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+          <div key={group.name} className="rounded-lg border border-gray-200 bg-card overflow-hidden">
             <div className="flex items-center justify-between flex-wrap gap-2 bg-gray-50 px-4 py-2.5 border-b border-gray-200">
-              <h3 className="font-medium text-gray-900">Nhóm hàng {group.name}</h3>
-              <div className="flex items-center gap-4 text-xs text-gray-600">
+              <h3 className="font-medium text-ink">Nhóm hàng {group.name}</h3>
+              <div className="flex items-center gap-4 text-xs text-muted-foreground">
                 <span>
-                  Chỉ tiêu: <span className="font-medium text-gray-900">{formatCurrencyVND(group.targetRevenue)}</span>
+                  Chỉ tiêu: <span className="font-medium text-ink">{formatCurrencyVND(group.targetRevenue)}</span>
                 </span>
                 <span>
-                  Thực hiện: <span className="font-medium text-gray-900">{formatCurrencyVND(group.actualRevenue)}</span>
+                  Thực hiện: <span className="font-medium text-ink">{formatCurrencyVND(group.actualRevenue)}</span>
                 </span>
-                <span className="font-semibold text-navy-900">
+                <span className="font-semibold text-ink">
                   {group.completionPct != null ? `${group.completionPct}%` : "—"}
                 </span>
               </div>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full text-sm">
-                <thead className="text-gray-500">
+                <thead className="text-muted-foreground">
                   <tr>
                     <th className="text-left font-medium px-4 py-2">Nhân viên</th>
                     <th className="text-right font-medium px-4 py-2">Chỉ tiêu</th>
@@ -126,10 +126,10 @@ export function SalesPlanDetailSection({ isAdmin }: { isAdmin: boolean }) {
                 <tbody className="divide-y divide-gray-100">
                   {group.rows.map((r) => (
                     <tr key={r.key} className="hover:bg-gray-50">
-                      <td className="px-4 py-2.5 font-medium text-gray-900">
+                      <td className="px-4 py-2.5 font-medium text-ink">
                         {r.employeeName}
                         {r.hasEmployeeTotalBasis && (
-                          <span className="block text-[11px] text-gray-400 font-normal">
+                          <span className="block text-[11px] text-muted2 font-normal">
                             *thực hiện = tổng NV (chưa tách theo nhóm)
                           </span>
                         )}
@@ -144,14 +144,14 @@ export function SalesPlanDetailSection({ isAdmin }: { isAdmin: boolean }) {
                 </tbody>
                 <tfoot className="border-t-2 border-gray-200 bg-gray-50">
                   <tr>
-                    <td className="px-4 py-2.5 font-semibold text-gray-900">Tổng</td>
-                    <td className="px-4 py-2.5 text-right font-semibold text-gray-900">
+                    <td className="px-4 py-2.5 font-semibold text-ink">Tổng</td>
+                    <td className="px-4 py-2.5 text-right font-semibold text-ink">
                       {formatCurrencyVND(group.targetRevenue)}
                     </td>
-                    <td className="px-4 py-2.5 text-right font-semibold text-gray-900">
+                    <td className="px-4 py-2.5 text-right font-semibold text-ink">
                       {formatCurrencyVND(group.actualRevenue)}
                     </td>
-                    <td className="px-4 py-2.5 text-right font-semibold text-navy-900">
+                    <td className="px-4 py-2.5 text-right font-semibold text-ink">
                       {group.completionPct != null ? `${group.completionPct}%` : "—"}
                     </td>
                   </tr>

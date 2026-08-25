@@ -8,8 +8,8 @@ export default async function KpiPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-gray-900">Đánh giá KPI hàng tháng</h1>
-        <p className="text-sm text-gray-500">
+        <h1 className="text-xl font-semibold text-ink">Đánh giá KPI hàng tháng</h1>
+        <p className="text-sm text-muted-foreground">
           {isAdmin
             ? "Chấm điểm KPI theo tháng cho từng nhân viên — Doanh số lấy tự động, các mục còn lại nhập tay"
             : "Kết quả KPI hàng tháng của bạn"}

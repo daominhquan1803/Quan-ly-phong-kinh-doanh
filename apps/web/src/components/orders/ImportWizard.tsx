@@ -92,11 +92,11 @@ export function ImportWizard() {
       )}
 
       {step === "upload" && (
-        <label className="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-gray-200 bg-white py-16 cursor-pointer hover:border-navy-900 transition-colors">
-          <UploadCloud className="h-10 w-10 text-navy-900" />
+        <label className="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-gray-200 bg-card py-16 cursor-pointer hover:border-amber-500 transition-colors">
+          <UploadCloud className="h-10 w-10 text-ink" />
           <div className="text-center">
-            <p className="font-medium text-gray-900">Chọn hoặc kéo thả file Excel xuất từ AMIS</p>
-            <p className="text-sm text-gray-500">Định dạng .xlsx hoặc .xls</p>
+            <p className="font-medium text-ink">Chọn hoặc kéo thả file Excel xuất từ AMIS</p>
+            <p className="text-sm text-muted-foreground">Định dạng .xlsx hoặc .xls</p>
           </div>
           <input
             type="file"
@@ -107,7 +107,7 @@ export function ImportWizard() {
               if (f) handleFileSelected(f);
             }}
           />
-          {loading && <p className="text-sm text-gray-500">Đang đọc file...</p>}
+          {loading && <p className="text-sm text-muted-foreground">Đang đọc file...</p>}
         </label>
       )}
 
@@ -125,12 +125,12 @@ export function ImportWizard() {
             </div>
           )}
 
-          <div className="rounded-lg border border-gray-200 bg-white p-5 space-y-3">
-            <h3 className="font-medium text-gray-900">Ánh xạ cột dữ liệu</h3>
+          <div className="rounded-lg border border-gray-200 bg-card p-5 space-y-3">
+            <h3 className="font-medium text-ink">Ánh xạ cột dữ liệu</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {ORDER_FIELDS.map((field) => (
                 <div key={field.key}>
-                  <label className="block text-sm text-gray-700 mb-1">
+                  <label className="block text-sm text-ink2 mb-1">
                     {field.label} {field.required && <span className="text-brandRed-600">*</span>}
                   </label>
                   <select
@@ -138,7 +138,7 @@ export function ImportWizard() {
                     onChange={(e) =>
                       setMapping((m) => ({ ...m, [field.key]: e.target.value || undefined }))
                     }
-                    className="w-full text-sm rounded-md border border-gray-200 py-2 px-2 focus:outline-none focus:ring-2 focus:ring-navy-900"
+                    className="w-full text-sm rounded-md border border-gray-200 py-2 px-2 focus:outline-none focus:ring-2 focus:ring-amber-500"
                   >
                     <option value="">— Không chọn —</option>
                     {preview.headers.map((h) => (
@@ -152,13 +152,13 @@ export function ImportWizard() {
             </div>
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-5 overflow-x-auto">
-            <h3 className="font-medium text-gray-900 mb-3">
+          <div className="rounded-lg border border-gray-200 bg-card p-5 overflow-x-auto">
+            <h3 className="font-medium text-ink mb-3">
               Xem trước {preview.sampleRows.length} dòng đầu (tổng {preview.totalRows} dòng)
             </h3>
             <table className="min-w-full text-xs">
               <thead>
-                <tr className="text-gray-500">
+                <tr className="text-muted-foreground">
                   {preview.headers.map((h) => (
                     <th key={h} className="text-left font-medium px-2 py-1">
                       {h}
@@ -170,7 +170,7 @@ export function ImportWizard() {
                 {preview.sampleRows.map((row, i) => (
                   <tr key={i}>
                     {row.map((cell, j) => (
-                      <td key={j} className="px-2 py-1 text-gray-700">
+                      <td key={j} className="px-2 py-1 text-ink2">
                         {cell}
                       </td>
                     ))}
@@ -181,15 +181,15 @@ export function ImportWizard() {
           </div>
 
           {!preview.matchedTemplate && (
-            <div className="rounded-lg border border-gray-200 bg-white p-5">
-              <label className="block text-sm text-gray-700 mb-1">
+            <div className="rounded-lg border border-gray-200 bg-card p-5">
+              <label className="block text-sm text-ink2 mb-1">
                 Lưu mapping này làm template (tuỳ chọn, để lần sau tự nhận diện)
               </label>
               <input
                 value={saveTemplateName}
                 onChange={(e) => setSaveTemplateName(e.target.value)}
                 placeholder="VD: Export đơn hàng AMIS chuẩn"
-                className="w-full sm:w-96 text-sm rounded-md border border-gray-200 py-2 px-3 focus:outline-none focus:ring-2 focus:ring-navy-900"
+                className="w-full sm:w-96 text-sm rounded-md border border-gray-200 py-2 px-3 focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
             </div>
           )}
@@ -203,7 +203,7 @@ export function ImportWizard() {
           <div className="flex gap-3">
             <button
               onClick={() => setStep("upload")}
-              className="rounded-md border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              className="rounded-md border border-gray-200 px-4 py-2 text-sm font-medium text-ink2 hover:bg-gray-50"
             >
               Chọn file khác
             </button>
@@ -222,30 +222,30 @@ export function ImportWizard() {
         <div className="space-y-4">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="kpi-card kpi-card--navy">
-              <p className="text-sm text-gray-500">Tạo mới</p>
-              <p className="text-2xl font-bold text-navy-900">{result.createdCount}</p>
+              <p className="text-sm text-muted-foreground">Tạo mới</p>
+              <p className="text-2xl font-bold text-ink">{result.createdCount}</p>
             </div>
             <div className="kpi-card kpi-card--navy">
-              <p className="text-sm text-gray-500">Cập nhật</p>
-              <p className="text-2xl font-bold text-navy-900">{result.updatedCount}</p>
+              <p className="text-sm text-muted-foreground">Cập nhật</p>
+              <p className="text-2xl font-bold text-ink">{result.updatedCount}</p>
             </div>
             <div className="kpi-card kpi-card--red">
-              <p className="text-sm text-gray-500">Lỗi</p>
+              <p className="text-sm text-muted-foreground">Lỗi</p>
               <p className="text-2xl font-bold text-brandRed-600">{result.errorCount}</p>
             </div>
             <div className="kpi-card kpi-card--red">
-              <p className="text-sm text-gray-500">NV chưa khớp</p>
+              <p className="text-sm text-muted-foreground">NV chưa khớp</p>
               <p className="text-2xl font-bold text-brandRed-600">{result.unmatchedEmployeeNames.length}</p>
             </div>
           </div>
 
           {result.unmatchedEmployeeNames.length > 0 && (
-            <div className="rounded-lg border border-gray-200 bg-white p-5">
-              <h3 className="font-medium text-gray-900 mb-2">Tên nhân viên chưa khớp với tài khoản nào</h3>
-              <p className="text-sm text-gray-500 mb-2">
+            <div className="rounded-lg border border-gray-200 bg-card p-5">
+              <h3 className="font-medium text-ink mb-2">Tên nhân viên chưa khớp với tài khoản nào</h3>
+              <p className="text-sm text-muted-foreground mb-2">
                 Vào Nhân viên → thêm alias để lần import sau tự khớp đúng.
               </p>
-              <ul className="text-sm text-gray-700 list-disc pl-5">
+              <ul className="text-sm text-ink2 list-disc pl-5">
                 {result.unmatchedEmployeeNames.map((n) => (
                   <li key={n}>{n}</li>
                 ))}
@@ -254,8 +254,8 @@ export function ImportWizard() {
           )}
 
           {result.errors.length > 0 && (
-            <div className="rounded-lg border border-gray-200 bg-white p-5">
-              <h3 className="font-medium text-gray-900 mb-2">Chi tiết lỗi</h3>
+            <div className="rounded-lg border border-gray-200 bg-card p-5">
+              <h3 className="font-medium text-ink mb-2">Chi tiết lỗi</h3>
               <ul className="text-sm text-brandRed-600 list-disc pl-5">
                 {result.errors.map((e, i) => (
                   <li key={i}>
@@ -267,7 +267,7 @@ export function ImportWizard() {
           )}
 
           <div className="flex gap-3">
-            <a href="/orders" className="rounded-md bg-navy-900 px-4 py-2 text-sm font-semibold text-white hover:bg-navy-700">
+            <a href="/orders" className="rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-amber-foreground hover:bg-amber-400">
               Xem danh sách đơn hàng
             </a>
             <button
@@ -277,7 +277,7 @@ export function ImportWizard() {
                 setPreview(null);
                 setResult(null);
               }}
-              className="rounded-md border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              className="rounded-md border border-gray-200 px-4 py-2 text-sm font-medium text-ink2 hover:bg-gray-50"
             >
               Nhập file khác
             </button>

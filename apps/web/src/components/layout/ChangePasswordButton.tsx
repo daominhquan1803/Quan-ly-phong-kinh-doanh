@@ -53,7 +53,7 @@ export function ChangePasswordButton() {
     <div className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-navy-900"
+        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-ink"
       >
         <KeyRound className="h-4 w-4" />
         Đổi mật khẩu
@@ -61,7 +61,7 @@ export function ChangePasswordButton() {
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={resetAndClose} />
-          <div className="absolute right-0 top-full mt-2 w-72 rounded-lg border border-gray-200 bg-white p-4 shadow-lg z-20 space-y-3">
+          <div className="absolute right-0 top-full mt-2 w-72 rounded-lg border border-gray-200 bg-card p-4 shadow-lg z-20 space-y-3">
             {error && <p className="text-xs text-brandRed-600">{error}</p>}
             {success && <p className="text-xs text-success-600">Đổi mật khẩu thành công</p>}
             <input
@@ -90,13 +90,13 @@ export function ChangePasswordButton() {
               <button
                 onClick={handleSubmit}
                 disabled={saving || !currentPassword || !newPassword || !confirmPassword}
-                className="flex-1 rounded-md bg-navy-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-navy-700 disabled:opacity-50"
+                className="flex-1 rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-amber-foreground hover:bg-amber-400 disabled:opacity-50"
               >
                 {saving ? "Đang lưu..." : "Lưu"}
               </button>
               <button
                 onClick={resetAndClose}
-                className="rounded-md border border-gray-200 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50"
+                className="rounded-md border border-gray-200 px-3 py-1.5 text-xs text-muted-foreground hover:bg-gray-50"
               >
                 Huỷ
               </button>

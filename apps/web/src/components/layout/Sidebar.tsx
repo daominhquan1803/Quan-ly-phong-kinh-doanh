@@ -57,7 +57,7 @@ export function Sidebar({ role }: { role?: "ADMIN" | "SALES" }) {
               className={cn(
                 "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                 active
-                  ? "bg-brandRed-600 text-white shadow-card"
+                  ? "bg-amber-500/10 text-amber-500 ring-1 ring-inset ring-amber-500/30"
                   : "text-white/70 hover:bg-white/10 hover:text-white"
               )}
             >

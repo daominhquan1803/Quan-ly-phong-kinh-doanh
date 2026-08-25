@@ -8,8 +8,8 @@ export default async function BusinessTripsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-gray-900">Đăng ký đi công tác</h1>
-        <p className="text-sm text-gray-500">
+        <h1 className="text-xl font-semibold text-ink">Đăng ký đi công tác</h1>
+        <p className="text-sm text-muted-foreground">
           {isAdmin
             ? "Duyệt đăng ký đi gặp khách hàng của nhân viên kinh doanh"
             : "Đăng ký lịch đi gặp khách hàng — cần Quản trị viên duyệt mới được ghi nhận vào KPI"}

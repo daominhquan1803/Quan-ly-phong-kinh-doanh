@@ -141,7 +141,7 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value)}
-            className="text-sm rounded-md border border-gray-200 py-2 px-2 focus:outline-none focus:ring-2 focus:ring-navy-900"
+            className="text-sm rounded-md border border-gray-200 py-2 px-2 focus:outline-none focus:ring-2 focus:ring-amber-500"
           >
             <option value="">Tất cả trạng thái</option>
             {Object.entries(ORDER_STATUS_LABEL).map(([k, v]) => (
@@ -150,7 +150,7 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
               </option>
             ))}
           </select>
-          <label className="flex items-center gap-1.5 text-sm text-gray-700">
+          <label className="flex items-center gap-1.5 text-sm text-ink2">
             <input type="checkbox" checked={overdueOnly} onChange={(e) => setOverdueOnly(e.target.checked)} />
             Chỉ đơn quá hạn
           </label>
@@ -161,7 +161,7 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
             <button
               onClick={handleSyncAmis}
               disabled={syncing}
-              className="flex items-center gap-1.5 rounded-md bg-navy-900 px-3 py-2 text-sm font-semibold text-white hover:bg-navy-700 disabled:opacity-60"
+              className="flex items-center gap-1.5 rounded-md bg-amber-500 px-3 py-2 text-sm font-semibold text-amber-foreground hover:bg-amber-400 disabled:opacity-60"
             >
               <RefreshCw className={cn("h-4 w-4", syncing && "animate-spin")} />
               {syncing ? "Đang đồng bộ..." : "Đồng bộ AMIS"}
@@ -180,7 +180,7 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
       {syncError && <div className="rounded-md bg-brandRed-50 text-brandRed-600 text-sm px-4 py-2.5">{syncError}</div>}
 
       {syncData?.lastSync && (
-        <div className="flex items-center gap-2 text-sm text-gray-500">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
           {syncData.lastSync.status === "SUCCESS" ? (
             <CheckCircle2 className="h-4 w-4 text-success-600" />
           ) : syncData.lastSync.status === "FAILED" ? (
@@ -199,9 +199,9 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
         </div>
       )}
 
-      <div className="rounded-lg border border-gray-200 bg-white overflow-x-auto">
+      <div className="rounded-lg border border-gray-200 bg-card overflow-x-auto">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-gray-500">
+          <thead className="bg-gray-50 text-muted-foreground">
             <tr>
               <th className="text-left font-medium px-4 py-2.5">Mã đơn</th>
               <th className="text-left font-medium px-4 py-2.5">Khách hàng</th>
@@ -217,7 +217,7 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
                 Giá trị
               </SortableTh>
             </tr>
-            <tr className="bg-white border-t border-gray-100">
+            <tr className="bg-card border-t border-gray-100">
               <th className="px-4 py-2 font-normal">
                 <FilterInput value={filterOrderCode} onChange={setFilterOrderCode} placeholder="Tìm mã đơn..." />
               </th>
@@ -231,7 +231,7 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
                 {hasActiveFilter && (
                   <button
                     onClick={clearFilters}
-                    className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-brandRed-600"
+                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-brandRed-600"
                   >
                     <X className="h-3 w-3" /> Xoá lọc
                   </button>
@@ -242,21 +242,21 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
           <tbody className="divide-y divide-gray-100">
             {isLoading && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-gray-500">
+                <td colSpan={7} className="px-4 py-6 text-center text-muted-foreground">
                   Đang tải...
                 </td>
               </tr>
             )}
             {!isLoading && visibleOrders.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-gray-500">
+                <td colSpan={7} className="px-4 py-6 text-center text-muted-foreground">
                   {hasActiveFilter ? "Không tìm thấy đơn phù hợp" : "Chưa có đơn hàng nào."}
                 </td>
               </tr>
             )}
             {visibleOrders.map((o) => (
               <tr key={o.id} className="hover:bg-gray-50">
-                <td className="px-4 py-2.5 font-medium text-navy-900">
+                <td className="px-4 py-2.5 font-medium text-ink">
                   <Link href={`/orders/${o.id}`}>{o.orderCode}</Link>
                 </td>
                 <td className="px-4 py-2.5">{o.customerName}</td>
@@ -273,7 +273,7 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
         </table>
       </div>
       {hasActiveFilter && !isLoading && (
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-muted-foreground">
           Đang hiển thị {visibleOrders.length} / {data?.orders.length ?? 0} đơn theo bộ lọc hiện tại.
         </p>
       )}

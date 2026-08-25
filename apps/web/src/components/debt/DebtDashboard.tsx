@@ -63,7 +63,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
           href="https://congno.hienvi.me/"
           target="_blank"
           rel="noreferrer"
-          className="flex items-center gap-1.5 text-sm text-navy-900 hover:underline"
+          className="flex items-center gap-1.5 text-sm text-ink hover:underline"
         >
           <ExternalLink className="h-4 w-4" />
           Xem chi tiết công nợ trên congno.hienvi.me
@@ -72,7 +72,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
           <button
             onClick={handleSync}
             disabled={syncing}
-            className="flex items-center gap-1.5 rounded-md bg-navy-900 px-3 py-2 text-sm font-semibold text-white hover:bg-navy-700 disabled:opacity-60"
+            className="flex items-center gap-1.5 rounded-md bg-amber-500 px-3 py-2 text-sm font-semibold text-amber-foreground hover:bg-amber-400 disabled:opacity-60"
           >
             <RefreshCw className={cn("h-4 w-4", syncing && "animate-spin")} />
             {syncing ? "Đang đồng bộ..." : "Đồng bộ thủ công"}
@@ -83,7 +83,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
       {syncError && <div className="rounded-md bg-brandRed-50 text-brandRed-600 text-sm px-4 py-2.5">{syncError}</div>}
 
       {data?.lastSync && (
-        <div className="flex items-center gap-2 text-sm text-gray-500">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
           {data.lastSync.status === "SUCCESS" ? (
             <CheckCircle2 className="h-4 w-4 text-success-600" />
           ) : (
@@ -98,22 +98,22 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="kpi-card kpi-card--navy">
-          <p className="text-sm text-gray-500">Tổng công nợ</p>
-          <p className="text-2xl font-bold text-navy-900 mt-1">
+          <p className="text-sm text-muted-foreground">Tổng công nợ</p>
+          <p className="text-2xl font-bold text-ink mt-1">
             {isLoading ? "—" : formatCurrencyVND(data?.totalDebt ?? 0)}
           </p>
         </div>
         <div className="kpi-card kpi-card--red">
-          <p className="text-sm text-gray-500">Công nợ quá hạn</p>
+          <p className="text-sm text-muted-foreground">Công nợ quá hạn</p>
           <p className="text-2xl font-bold text-brandRed-600 mt-1">
             {isLoading ? "—" : formatCurrencyVND(data?.overdueDebt ?? 0)}
           </p>
         </div>
       </div>
 
-      <div className="rounded-lg border border-gray-200 bg-white overflow-x-auto">
+      <div className="rounded-lg border border-gray-200 bg-card overflow-x-auto">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-gray-500">
+          <thead className="bg-gray-50 text-muted-foreground">
             <tr>
               <th className="text-left font-medium px-4 py-2.5">Khách hàng</th>
               <th className="text-right font-medium px-4 py-2.5">Tổng công nợ</th>
@@ -123,7 +123,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
           <tbody className="divide-y divide-gray-100">
             {!isLoading && (data?.rows.length ?? 0) === 0 && (
               <tr>
-                <td colSpan={3} className="px-4 py-6 text-center text-gray-500">
+                <td colSpan={3} className="px-4 py-6 text-center text-muted-foreground">
                   Chưa có dữ liệu công nợ. Bấm &ldquo;Đồng bộ thủ công&rdquo; để lấy dữ liệu lần đầu.
                 </td>
               </tr>

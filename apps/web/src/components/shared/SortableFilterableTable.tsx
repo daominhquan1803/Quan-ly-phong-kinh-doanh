@@ -33,10 +33,10 @@ export function SortableTh<T extends string>({
     <th className={cn("font-medium px-4 py-2.5 select-none", align === "right" ? "text-right" : "text-left")}>
       <button
         onClick={() => onSort(field)}
-        className={cn("inline-flex items-center gap-1 hover:text-navy-900", align === "right" && "flex-row-reverse")}
+        className={cn("inline-flex items-center gap-1 hover:text-ink", align === "right" && "flex-row-reverse")}
       >
         {children}
-        <Icon className={cn("h-3.5 w-3.5", isActive ? "text-navy-900" : "text-gray-300")} />
+        <Icon className={cn("h-3.5 w-3.5", isActive ? "text-ink" : "text-muted2")} />
       </button>
     </th>
   );
@@ -54,12 +54,12 @@ export function FilterInput({
 }) {
   return (
     <div className="relative">
-      <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+      <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted2" />
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full pl-7 pr-2 py-1.5 text-xs font-normal rounded-md border border-gray-200 focus:outline-none focus:ring-2 focus:ring-navy-900"
+        className="w-full pl-7 pr-2 py-1.5 text-xs font-normal rounded-md border border-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
       />
     </div>
   );

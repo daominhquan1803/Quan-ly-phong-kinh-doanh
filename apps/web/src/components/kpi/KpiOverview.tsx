@@ -114,9 +114,9 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
         </select>
       </div>
 
-      <div className="rounded-lg border border-gray-200 bg-white overflow-x-auto">
+      <div className="rounded-lg border border-gray-200 bg-card overflow-x-auto">
         <table className="min-w-full text-xs">
-          <thead className="bg-gray-50 text-gray-500">
+          <thead className="bg-gray-50 text-muted-foreground">
             <tr>
               <th rowSpan={2} className="text-left font-medium px-3 py-2 align-bottom">Nhân viên</th>
               <th colSpan={2} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">Doanh số (20đ)</th>
@@ -159,14 +159,14 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
           <tbody className="divide-y divide-gray-100">
             {isLoading && (
               <tr>
-                <td colSpan={26} className="px-4 py-6 text-center text-gray-500">
+                <td colSpan={26} className="px-4 py-6 text-center text-muted-foreground">
                   Đang tải...
                 </td>
               </tr>
             )}
             {!isLoading && (data?.rows.length ?? 0) === 0 && (
               <tr>
-                <td colSpan={26} className="px-4 py-6 text-center text-gray-500">
+                <td colSpan={26} className="px-4 py-6 text-center text-muted-foreground">
                   Chưa có dữ liệu nhân viên.
                 </td>
               </tr>
@@ -174,7 +174,7 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
             {data?.rows.map((r) => (
               <Fragment key={r.employeeId}>
                 <tr className="hover:bg-gray-50">
-                  <td className="px-3 py-2 font-medium text-gray-900 whitespace-nowrap">{r.employeeName}</td>
+                  <td className="px-3 py-2 font-medium text-ink whitespace-nowrap">{r.employeeName}</td>
                   <td
                     className="px-3 py-2 text-right border-l border-gray-100"
                     title={`${formatCurrencyVND(r.actualRevenue)} / ${formatCurrencyVND(r.targetRevenue)}`}
@@ -219,16 +219,16 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
                   <td className="px-3 py-2 text-right border-l border-gray-100">{numOrDash(r.attendanceDays)}</td>
                   <td className="px-3 py-2 text-right">{r.violationCount}</td>
                   <td className="px-3 py-2 text-right font-medium">{r.scoreAttitude}</td>
-                  <td className="px-3 py-2 text-right border-l border-gray-100 font-bold text-navy-900">{r.totalScore}</td>
+                  <td className="px-3 py-2 text-right border-l border-gray-100 font-bold text-ink">{r.totalScore}</td>
                   <td className="px-3 py-2 text-center">
                     <span className={cn("status-badge", GRADE_STYLE[r.grade])}>{r.gradeLabel}</span>
                   </td>
-                  <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{r.bonusSuggestion}</td>
+                  <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{r.bonusSuggestion}</td>
                   {isAdmin && (
                     <td className="px-3 py-2">
                       <button
                         onClick={() => setEditingId(editingId === r.employeeId ? null : r.employeeId)}
-                        className="text-gray-400 hover:text-navy-900"
+                        className="text-muted2 hover:text-ink"
                         title="Sửa chỉ tiêu KPI"
                       >
                         <Pencil className="h-3.5 w-3.5" />
@@ -257,7 +257,7 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-gray-400">
+      <p className="text-xs text-muted2">
         Doanh số &amp; DS ngành Sản xuất lấy tự động từ Kế hoạch kinh doanh (chỉ tiêu nhóm Sản xuất
         lấy theo Kế hoạch chi tiết đã nhập) — đạt từ 110% chỉ tiêu trở lên, cứ mỗi 10% vượt thêm được cộng 1đ thưởng, không giới hạn trần.
         Điểm &quot;Đi gặp KH&quot; tự tính theo số lượt đăng ký đi công tác đã được duyệt trong tháng. Các ô còn lại do
@@ -265,10 +265,10 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
       </p>
 
       {isAdmin && (
-        <div className="rounded-lg border border-gray-200 bg-white">
+        <div className="rounded-lg border border-gray-200 bg-card">
           <button
             onClick={() => setShowDefects((v) => !v)}
-            className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-900"
+            className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-ink"
           >
             Biên bản hàng lỗi tháng {month}/{year}
             {showDefects ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -309,14 +309,14 @@ function KpiEditForm({
 
   function field(key: keyof typeof form, label: string, opts?: { step?: string }) {
     return (
-      <label className="flex flex-col gap-1 text-xs text-gray-500">
+      <label className="flex flex-col gap-1 text-xs text-muted-foreground">
         {label}
         <input
           type="number"
           step={opts?.step ?? "1"}
           value={form[key]}
           onChange={(e) => setForm((prev) => ({ ...prev, [key]: e.target.value === "" ? "" : Number(e.target.value) }))}
-          className="rounded-md border border-gray-200 py-1.5 px-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-navy-900"
+          className="rounded-md border border-gray-200 py-1.5 px-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber-500"
         />
       </label>
     );
@@ -358,7 +358,7 @@ function KpiEditForm({
 
   return (
     <div className="space-y-3">
-      <p className="text-sm font-medium text-gray-900">Sửa chỉ tiêu KPI — {row.employeeName}</p>
+      <p className="text-sm font-medium text-ink">Sửa chỉ tiêu KPI — {row.employeeName}</p>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {field("targetHighPriceSkuCount", "Chỉ tiêu mã hàng giá cao hơn 3%")}
         {field("actualHighPriceSkuCount", "Thực tế mã hàng giá cao hơn")}
@@ -375,11 +375,11 @@ function KpiEditForm({
         <button
           onClick={handleSave}
           disabled={saving}
-          className="rounded-md bg-navy-900 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+          className="rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-amber-foreground hover:bg-amber-400 disabled:opacity-50"
         >
           {saving ? "Đang lưu..." : "Lưu"}
         </button>
-        <button onClick={onCancel} className="text-xs text-gray-500 hover:text-gray-900">
+        <button onClick={onCancel} className="text-xs text-muted-foreground hover:text-ink">
           Huỷ
         </button>
       </div>
@@ -487,7 +487,7 @@ function DefectsPanel({ year, month }: { year: number; month: number }) {
           <button
             onClick={handleCreate}
             disabled={saving}
-            className="rounded-md bg-navy-900 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 sm:col-span-2 w-fit"
+            className="rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-amber-foreground hover:bg-amber-400 disabled:opacity-50 sm:col-span-2 w-fit"
           >
             {saving ? "Đang lưu..." : "Lưu biên bản"}
           </button>
@@ -496,7 +496,7 @@ function DefectsPanel({ year, month }: { year: number; month: number }) {
 
       <div className="overflow-x-auto">
         <table className="min-w-full text-xs">
-          <thead className="text-gray-500">
+          <thead className="text-muted-foreground">
             <tr>
               <th className="text-left font-medium px-2 py-1.5">Số biên bản</th>
               <th className="text-left font-medium px-2 py-1.5">NVKD</th>
@@ -508,19 +508,19 @@ function DefectsPanel({ year, month }: { year: number; month: number }) {
           <tbody className="divide-y divide-gray-100">
             {(data?.defects.length ?? 0) === 0 && (
               <tr>
-                <td colSpan={5} className="px-2 py-4 text-center text-gray-500">
+                <td colSpan={5} className="px-2 py-4 text-center text-muted-foreground">
                   Chưa có biên bản hàng lỗi tháng này.
                 </td>
               </tr>
             )}
             {data?.defects.map((d) => (
               <tr key={d.id}>
-                <td className="px-2 py-1.5 font-medium text-navy-900">{d.reportNumber}</td>
+                <td className="px-2 py-1.5 font-medium text-ink">{d.reportNumber}</td>
                 <td className="px-2 py-1.5">{d.employee.name}</td>
                 <td className="px-2 py-1.5">{formatDateVN(d.reportDate)}</td>
                 <td className="px-2 py-1.5">{d.description}</td>
                 <td className="px-2 py-1.5">
-                  <button onClick={() => handleDelete(d.id)} className="text-gray-400 hover:text-brandRed-600">
+                  <button onClick={() => handleDelete(d.id)} className="text-muted2 hover:text-brandRed-600">
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </td>

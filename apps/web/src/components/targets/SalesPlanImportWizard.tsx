@@ -129,14 +129,14 @@ export function SalesPlanImportWizard({ onDone }: { onDone: () => void }) {
                 </option>
               ))}
             </select>
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-muted-foreground">
               Với file có riêng 1 cột cho mỗi tháng (vd &quot;Thg1.26&quot;), hệ thống tự nhận diện theo Năm chọn ở
               đây — mục Tháng chỉ dùng khi file chỉ có 1 cột doanh số duy nhất.
             </span>
           </div>
-          <label className="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-gray-200 bg-white py-12 cursor-pointer hover:border-navy-900 transition-colors">
-            <UploadCloud className="h-8 w-8 text-navy-900" />
-            <p className="font-medium text-gray-900 text-sm">Chọn file Excel kế hoạch kinh doanh</p>
+          <label className="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-gray-200 bg-card py-12 cursor-pointer hover:border-amber-500 transition-colors">
+            <UploadCloud className="h-8 w-8 text-ink" />
+            <p className="font-medium text-ink text-sm">Chọn file Excel kế hoạch kinh doanh</p>
             <input
               type="file"
               accept=".xlsx,.xls"
@@ -146,7 +146,7 @@ export function SalesPlanImportWizard({ onDone }: { onDone: () => void }) {
                 if (f) handleFileSelected(f);
               }}
             />
-            {loading && <p className="text-sm text-gray-500">Đang đọc file...</p>}
+            {loading && <p className="text-sm text-muted-foreground">Đang đọc file...</p>}
           </label>
         </div>
       )}
@@ -155,7 +155,7 @@ export function SalesPlanImportWizard({ onDone }: { onDone: () => void }) {
         <div className="space-y-4">
           {preview.sheetNames.length > 1 && (
             <div className="flex items-center gap-2">
-              <label className="text-xs text-gray-700">Sheet dữ liệu:</label>
+              <label className="text-xs text-ink2">Sheet dữ liệu:</label>
               <select
                 value={preview.sheetName}
                 onChange={(e) => handleSheetChange(e.target.value)}
@@ -185,12 +185,12 @@ export function SalesPlanImportWizard({ onDone }: { onDone: () => void }) {
             </div>
           )}
 
-          <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-3">
-            <h3 className="font-medium text-gray-900 text-sm">Ánh xạ cột dữ liệu</h3>
+          <div className="rounded-lg border border-gray-200 bg-card p-4 space-y-3">
+            <h3 className="font-medium text-ink text-sm">Ánh xạ cột dữ liệu</h3>
             <div className="grid grid-cols-2 gap-3">
               {SALES_PLAN_FIELDS.filter((f) => !(wideMode && f.key === "targetRevenue")).map((field) => (
                 <div key={field.key}>
-                  <label className="block text-xs text-gray-700 mb-1">
+                  <label className="block text-xs text-ink2 mb-1">
                     {field.label} {field.required && <span className="text-brandRed-600">*</span>}
                   </label>
                   <select
@@ -210,14 +210,14 @@ export function SalesPlanImportWizard({ onDone }: { onDone: () => void }) {
             </div>
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-4 overflow-x-auto">
-            <p className="text-xs text-gray-500 mb-2">
+          <div className="rounded-lg border border-gray-200 bg-card p-4 overflow-x-auto">
+            <p className="text-xs text-muted-foreground mb-2">
               Xem trước {preview.sampleRows.length} dòng đầu (tổng {preview.totalRows} dòng, sheet &quot;
               {preview.sheetName}&quot;)
             </p>
             <table className="min-w-full text-xs">
               <thead>
-                <tr className="text-gray-500">
+                <tr className="text-muted-foreground">
                   {preview.headers.map((h) => (
                     <th key={h} className="text-left font-medium px-2 py-1">
                       {h}
@@ -229,7 +229,7 @@ export function SalesPlanImportWizard({ onDone }: { onDone: () => void }) {
                 {preview.sampleRows.map((row, i) => (
                   <tr key={i}>
                     {row.map((cell, j) => (
-                      <td key={j} className="px-2 py-1 text-gray-700">
+                      <td key={j} className="px-2 py-1 text-ink2">
                         {cell}
                       </td>
                     ))}
@@ -246,7 +246,7 @@ export function SalesPlanImportWizard({ onDone }: { onDone: () => void }) {
           )}
 
           <div className="flex gap-3">
-            <button onClick={() => setStep("upload")} className="rounded-md border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+            <button onClick={() => setStep("upload")} className="rounded-md border border-gray-200 px-4 py-2 text-sm font-medium text-ink2 hover:bg-gray-50">
               Chọn file khác
             </button>
             <button
@@ -264,25 +264,25 @@ export function SalesPlanImportWizard({ onDone }: { onDone: () => void }) {
         <div className="space-y-4">
           <div className="grid grid-cols-3 gap-4">
             <div className="kpi-card kpi-card--navy">
-              <p className="text-sm text-gray-500">Đã nhập</p>
-              <p className="text-2xl font-bold text-navy-900">{result.createdCount}</p>
+              <p className="text-sm text-muted-foreground">Đã nhập</p>
+              <p className="text-2xl font-bold text-ink">{result.createdCount}</p>
             </div>
             <div className="kpi-card kpi-card--red">
-              <p className="text-sm text-gray-500">Lỗi</p>
+              <p className="text-sm text-muted-foreground">Lỗi</p>
               <p className="text-2xl font-bold text-brandRed-600">{result.errorCount}</p>
             </div>
             <div className="kpi-card kpi-card--red">
-              <p className="text-sm text-gray-500">NV chưa khớp</p>
+              <p className="text-sm text-muted-foreground">NV chưa khớp</p>
               <p className="text-2xl font-bold text-brandRed-600">{result.unmatchedEmployeeNames.length}</p>
             </div>
           </div>
           {result.wideMode && result.monthsImported.length > 0 && (
-            <p className="text-sm text-gray-700">
+            <p className="text-sm text-ink2">
               Đã nhập kế hoạch cho các tháng {result.monthsImported.map((m) => `T${m}`).join(", ")}/{result.year}.
             </p>
           )}
           {result.unmatchedEmployeeNames.length > 0 && (
-            <p className="text-sm text-gray-700">
+            <p className="text-sm text-ink2">
               Tên chưa khớp: {result.unmatchedEmployeeNames.join(", ")} — vào trang Nhân viên thêm alias.
             </p>
           )}
@@ -293,7 +293,7 @@ export function SalesPlanImportWizard({ onDone }: { onDone: () => void }) {
               setPreview(null);
               setResult(null);
             }}
-            className="rounded-md border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="rounded-md border border-gray-200 px-4 py-2 text-sm font-medium text-ink2 hover:bg-gray-50"
           >
             Nhập file khác
           </button>

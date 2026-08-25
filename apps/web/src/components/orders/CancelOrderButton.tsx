@@ -36,7 +36,7 @@ export function CancelOrderButton({ orderId, isCancelled }: { orderId: string; i
         <button
           onClick={() => handleSetStatus("NEW")}
           disabled={loading}
-          className="flex items-center gap-1.5 rounded-md border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          className="flex items-center gap-1.5 rounded-md border border-gray-200 px-3 py-1.5 text-sm font-medium text-ink2 hover:bg-gray-50 disabled:opacity-50"
         >
           <RotateCcw className="h-4 w-4" />
           {loading ? "Đang xử lý..." : "Khôi phục đơn hàng"}
@@ -50,7 +50,7 @@ export function CancelOrderButton({ orderId, isCancelled }: { orderId: string; i
     return (
       <div className="flex flex-col items-end gap-1.5">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-700">Xác nhận huỷ đơn này?</span>
+          <span className="text-sm text-ink2">Xác nhận huỷ đơn này?</span>
           <button
             onClick={() => handleSetStatus("CANCELLED")}
             disabled={loading}
@@ -61,7 +61,7 @@ export function CancelOrderButton({ orderId, isCancelled }: { orderId: string; i
           <button
             onClick={() => setConfirming(false)}
             disabled={loading}
-            className="rounded-md border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+            className="rounded-md border border-gray-200 px-3 py-1.5 text-sm text-ink2 hover:bg-gray-50"
           >
             Thôi
           </button>

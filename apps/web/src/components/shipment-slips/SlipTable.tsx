@@ -78,12 +78,12 @@ export function SlipTable({ isAdmin }: { isAdmin: boolean }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="relative">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Tìm số phiếu, khách hàng..."
-            className="pl-8 pr-3 py-2 text-sm rounded-md border border-gray-200 w-64 focus:outline-none focus:ring-2 focus:ring-navy-900"
+            className="pl-8 pr-3 py-2 text-sm rounded-md border border-gray-200 w-64 focus:outline-none focus:ring-2 focus:ring-amber-500"
           />
         </div>
         <div className="flex items-center gap-2">
@@ -91,7 +91,7 @@ export function SlipTable({ isAdmin }: { isAdmin: boolean }) {
             <button
               onClick={handleResync}
               disabled={syncing}
-              className="flex items-center gap-1.5 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-ink2 hover:bg-gray-50 disabled:opacity-50"
               title="Chạy lại việc khớp toàn bộ phiếu với dữ liệu Tiến độ giao hàng hiện tại"
             >
               <RefreshCw className={syncing ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
@@ -107,7 +107,7 @@ export function SlipTable({ isAdmin }: { isAdmin: boolean }) {
           </Link>
           <Link
             href="/shipment-slips/new"
-            className="flex items-center gap-1.5 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            className="flex items-center gap-1.5 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-ink2 hover:bg-gray-50"
             title="Cần cấu hình ANTHROPIC_API_KEY mới dùng được"
           >
             <Plus className="h-4 w-4" />
@@ -126,13 +126,13 @@ export function SlipTable({ isAdmin }: { isAdmin: boolean }) {
             hàng/Doanh số.
           </div>
           {syncResult.totalUnmatchedItems > 0 && (
-            <div className="rounded-lg border border-gray-200 bg-white p-4 text-sm">
+            <div className="rounded-lg border border-gray-200 bg-card p-4 text-sm">
               <p className="flex items-center gap-2 font-medium text-warning-500 mb-2">
                 <AlertTriangle className="h-4 w-4" />
                 {syncResult.totalUnmatchedItems} dòng hàng không khớp được (thiếu Số PO/SL thực xuất, hoặc không tìm
                 thấy đúng dòng PO tương ứng) — kiểm tra lại cột đã map khi nhập phiếu:
               </p>
-              <ul className="space-y-1 text-gray-700">
+              <ul className="space-y-1 text-ink2">
                 {syncResult.unmatchedSamples.slice(0, 20).map((m, i) => (
                   <li key={i}>{m}</li>
                 ))}
@@ -143,15 +143,15 @@ export function SlipTable({ isAdmin }: { isAdmin: boolean }) {
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-        {isLoading && <p className="text-sm text-gray-500 col-span-full">Đang tải...</p>}
+        {isLoading && <p className="text-sm text-muted-foreground col-span-full">Đang tải...</p>}
         {!isLoading && (data?.slips.length ?? 0) === 0 && (
-          <p className="text-sm text-gray-500 col-span-full">Chưa có phiếu đi hàng nào.</p>
+          <p className="text-sm text-muted-foreground col-span-full">Chưa có phiếu đi hàng nào.</p>
         )}
         {data?.slips.map((s) => (
           <Link
             key={s.id}
             href={`/shipment-slips/${s.id}`}
-            className="rounded-lg border border-gray-200 bg-white overflow-hidden hover:shadow-card transition-shadow"
+            className="rounded-lg border border-gray-200 bg-card overflow-hidden hover:shadow-card transition-shadow"
           >
             <div className="aspect-[4/3] bg-gray-50">
               {s.imageThumbPath && (
@@ -160,11 +160,11 @@ export function SlipTable({ isAdmin }: { isAdmin: boolean }) {
               )}
             </div>
             <div className="p-3">
-              <p className="font-medium text-navy-900 text-sm">{s.slipNumber}</p>
-              <p className="text-xs text-gray-500 truncate">{s.customerName ?? "—"}</p>
+              <p className="font-medium text-ink text-sm">{s.slipNumber}</p>
+              <p className="text-xs text-muted-foreground truncate">{s.customerName ?? "—"}</p>
               <div className="flex items-center justify-between mt-1.5">
-                <span className="text-xs text-gray-500">{formatDateVN(s.slipDate)}</span>
-                {s.order && <span className="text-xs text-navy-900 font-medium">{s.order.orderCode}</span>}
+                <span className="text-xs text-muted-foreground">{formatDateVN(s.slipDate)}</span>
+                {s.order && <span className="text-xs text-ink font-medium">{s.order.orderCode}</span>}
               </div>
             </div>
           </Link>

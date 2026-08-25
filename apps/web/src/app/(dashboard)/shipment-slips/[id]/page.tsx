@@ -26,8 +26,8 @@ export default async function ShipmentSlipDetailPage({ params }: { params: { id:
     <div className="space-y-6 max-w-4xl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">Phiếu {slip.slipNumber}</h1>
-          <p className="text-sm text-gray-500">
+          <h1 className="text-xl font-semibold text-ink">Phiếu {slip.slipNumber}</h1>
+          <p className="text-sm text-muted-foreground">
             Lập bởi {slip.createdBy.name} · {formatDateVN(slip.slipDate)}
           </p>
         </div>
@@ -43,7 +43,7 @@ export default async function ShipmentSlipDetailPage({ params }: { params: { id:
 
       <div className={cn("grid grid-cols-1 gap-6", slip.imagePath && "lg:grid-cols-2")}>
         <div className="space-y-4">
-          <div className="rounded-lg border border-gray-200 bg-white p-5 grid grid-cols-2 gap-4 text-sm">
+          <div className="rounded-lg border border-gray-200 bg-card p-5 grid grid-cols-2 gap-4 text-sm">
             <Info label="Người nhận hàng" value={slip.receiverName} />
             <Info label="Khách hàng" value={slip.customerName} />
             <Info label="Địa chỉ giao hàng" value={slip.deliveryAddress} full />
@@ -52,10 +52,10 @@ export default async function ShipmentSlipDetailPage({ params }: { params: { id:
             <Info label="Người lập phiếu" value={slip.preparedBy} />
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-5 overflow-x-auto">
-            <h2 className="font-medium text-gray-900 mb-3">Chi tiết hàng hoá</h2>
+          <div className="rounded-lg border border-gray-200 bg-card p-5 overflow-x-auto">
+            <h2 className="font-medium text-ink mb-3">Chi tiết hàng hoá</h2>
             <table className="min-w-full text-xs">
-              <thead className="text-gray-500">
+              <thead className="text-muted-foreground">
                 <tr>
                   <th className="text-left px-2 py-1">Mã hàng</th>
                   <th className="text-left px-2 py-1">Tên hàng</th>
@@ -82,14 +82,14 @@ export default async function ShipmentSlipDetailPage({ params }: { params: { id:
         </div>
 
         {slip.imagePath && (
-          <div className="rounded-lg border border-gray-200 bg-white p-3">
+          <div className="rounded-lg border border-gray-200 bg-card p-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={slip.imageThumbPath ?? slip.imagePath} alt={slip.slipNumber} className="w-full rounded-md" />
             <a
               href={slip.imagePath}
               target="_blank"
               rel="noreferrer"
-              className="block text-center text-xs text-navy-900 mt-2 hover:underline"
+              className="block text-center text-xs text-ink mt-2 hover:underline"
             >
               {slip.imagePath.toLowerCase().endsWith(".pdf") ? "Xem file PDF gốc" : "Xem ảnh gốc kích thước đầy đủ"}
             </a>
@@ -103,8 +103,8 @@ export default async function ShipmentSlipDetailPage({ params }: { params: { id:
 function Info({ label, value, full }: { label: string; value: string | null; full?: boolean }) {
   return (
     <div className={full ? "col-span-2" : undefined}>
-      <p className="text-gray-500">{label}</p>
-      <p className="font-medium text-gray-900">{value ?? "—"}</p>
+      <p className="text-muted-foreground">{label}</p>
+      <p className="font-medium text-ink">{value ?? "—"}</p>
     </div>
   );
 }

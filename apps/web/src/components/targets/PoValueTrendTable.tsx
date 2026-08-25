@@ -41,8 +41,8 @@ export function PoValueTrendTable() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="font-medium text-gray-900">PO lên trong tháng — so sánh 3 tháng gần nhất</h2>
-          <p className="text-xs text-gray-500">Giá trị PO đặt hàng theo từng nhân viên, theo ngày đặt PO.</p>
+          <h2 className="font-medium text-ink">PO lên trong tháng — so sánh 3 tháng gần nhất</h2>
+          <p className="text-xs text-muted-foreground">Giá trị PO đặt hàng theo từng nhân viên, theo ngày đặt PO.</p>
         </div>
         <div className="flex items-center gap-2">
           <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="text-sm rounded-md border border-gray-200 py-2 px-2">
@@ -62,9 +62,9 @@ export function PoValueTrendTable() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-gray-200 bg-white overflow-x-auto">
+      <div className="rounded-lg border border-gray-200 bg-card overflow-x-auto">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-gray-500">
+          <thead className="bg-gray-50 text-muted-foreground">
             <tr>
               <th className="text-left font-medium px-4 py-2.5">Nhân viên</th>
               {data?.months.map((m, idx) => (
@@ -73,7 +73,7 @@ export function PoValueTrendTable() {
                   className="text-right font-medium px-4 py-2.5"
                 >
                   {m.label}
-                  {idx === monthCount - 1 && <span className="block text-[11px] text-gray-400 font-normal">(đang xem)</span>}
+                  {idx === monthCount - 1 && <span className="block text-[11px] text-muted2 font-normal">(đang xem)</span>}
                 </th>
               ))}
             </tr>
@@ -81,21 +81,21 @@ export function PoValueTrendTable() {
           <tbody className="divide-y divide-gray-100">
             {isLoading && (
               <tr>
-                <td colSpan={colSpanCount} className="px-4 py-6 text-center text-gray-500">
+                <td colSpan={colSpanCount} className="px-4 py-6 text-center text-muted-foreground">
                   Đang tải...
                 </td>
               </tr>
             )}
             {!isLoading && (data?.rows.length ?? 0) === 0 && (
               <tr>
-                <td colSpan={colSpanCount} className="px-4 py-6 text-center text-gray-500">
+                <td colSpan={colSpanCount} className="px-4 py-6 text-center text-muted-foreground">
                   Chưa có dữ liệu PO trong khoảng này.
                 </td>
               </tr>
             )}
             {data?.rows.map((r) => (
               <tr key={r.employeeId} className="hover:bg-gray-50">
-                <td className="px-4 py-2.5 font-medium text-gray-900">{r.employeeName}</td>
+                <td className="px-4 py-2.5 font-medium text-ink">{r.employeeName}</td>
                 {r.values.map((v, idx) => (
                   <td key={idx} className="px-4 py-2.5 text-right">
                     {v > 0 ? formatCurrencyVND(v) : "—"}
@@ -107,9 +107,9 @@ export function PoValueTrendTable() {
           {data && data.rows.length > 0 && (
             <tfoot className="border-t-2 border-gray-200 bg-gray-50">
               <tr>
-                <td className="px-4 py-2.5 font-semibold text-gray-900">Tổng</td>
+                <td className="px-4 py-2.5 font-semibold text-ink">Tổng</td>
                 {data.totals.map((t, idx) => (
-                  <td key={idx} className="px-4 py-2.5 text-right font-semibold text-navy-900">
+                  <td key={idx} className="px-4 py-2.5 text-right font-semibold text-ink">
                     {formatCurrencyVND(t)}
                   </td>
                 ))}

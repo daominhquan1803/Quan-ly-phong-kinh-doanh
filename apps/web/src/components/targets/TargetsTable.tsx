@@ -58,9 +58,9 @@ export function TargetsTable() {
         </select>
       </div>
 
-      <div className="rounded-lg border border-gray-200 bg-white overflow-x-auto">
+      <div className="rounded-lg border border-gray-200 bg-card overflow-x-auto">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-gray-500">
+          <thead className="bg-gray-50 text-muted-foreground">
             <tr>
               <th className="text-left font-medium px-4 py-2.5">Nhân viên</th>
               <th className="text-right font-medium px-4 py-2.5">Chỉ tiêu</th>
@@ -75,7 +75,7 @@ export function TargetsTable() {
           <tbody className="divide-y divide-gray-100">
             {isLoading && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-gray-500">
+                <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
                   Đang tải...
                 </td>
               </tr>
@@ -84,7 +84,7 @@ export function TargetsTable() {
               const shortfall = Math.max(0, r.targetRevenue - r.actualRevenue);
               return (
                 <tr key={r.employeeId} className="hover:bg-gray-50">
-                  <td className="px-4 py-2.5 font-medium text-gray-900">{r.employeeName}</td>
+                  <td className="px-4 py-2.5 font-medium text-ink">{r.employeeName}</td>
                   <td className="px-4 py-2.5 text-right">{formatCurrencyVND(r.targetRevenue)}</td>
                   <td className="px-4 py-2.5 text-right">{formatCurrencyVND(r.actualRevenue)}</td>
                   <td
@@ -94,15 +94,15 @@ export function TargetsTable() {
                         ? "text-success-600"
                         : r.completionPct != null && r.completionPct < 60
                         ? "text-brandRed-600"
-                        : "text-gray-900"
+                        : "text-ink"
                     )}
                   >
                     {r.completionPct != null ? `${r.completionPct}%` : "—"}
                   </td>
-                  <td className={cn("px-4 py-2.5 text-right", shortfall > 0 ? "text-brandRed-600 font-medium" : "text-gray-500")}>
+                  <td className={cn("px-4 py-2.5 text-right", shortfall > 0 ? "text-brandRed-600 font-medium" : "text-muted-foreground")}>
                     {shortfall > 0 ? formatCurrencyVND(shortfall) : "—"}
                   </td>
-                  <td className="px-4 py-2.5 text-right text-gray-500">{formatCurrencyVND(r.oihValue)}</td>
+                  <td className="px-4 py-2.5 text-right text-muted-foreground">{formatCurrencyVND(r.oihValue)}</td>
                 </tr>
               );
             })}
@@ -110,14 +110,14 @@ export function TargetsTable() {
           {data && data.rows.length > 0 && (
             <tfoot className="border-t-2 border-gray-200 bg-gray-50">
               <tr>
-                <td className="px-4 py-2.5 font-semibold text-gray-900">Tổng</td>
-                <td className="px-4 py-2.5 text-right font-semibold text-gray-900">
+                <td className="px-4 py-2.5 font-semibold text-ink">Tổng</td>
+                <td className="px-4 py-2.5 text-right font-semibold text-ink">
                   {formatCurrencyVND(data.rows.reduce((s, r) => s + r.targetRevenue, 0))}
                 </td>
-                <td className="px-4 py-2.5 text-right font-semibold text-gray-900">
+                <td className="px-4 py-2.5 text-right font-semibold text-ink">
                   {formatCurrencyVND(data.rows.reduce((s, r) => s + r.actualRevenue, 0))}
                 </td>
-                <td className="px-4 py-2.5 text-right font-semibold text-navy-900">
+                <td className="px-4 py-2.5 text-right font-semibold text-ink">
                   {(() => {
                     const totalTarget = data.rows.reduce((s, r) => s + r.targetRevenue, 0);
                     const totalActual = data.rows.reduce((s, r) => s + r.actualRevenue, 0);
@@ -127,7 +127,7 @@ export function TargetsTable() {
                 <td className="px-4 py-2.5 text-right font-semibold text-brandRed-600">
                   {formatCurrencyVND(data.rows.reduce((s, r) => s + Math.max(0, r.targetRevenue - r.actualRevenue), 0))}
                 </td>
-                <td className="px-4 py-2.5 text-right font-semibold text-gray-900">
+                <td className="px-4 py-2.5 text-right font-semibold text-ink">
                   {formatCurrencyVND(data.rows.reduce((s, r) => s + r.oihValue, 0))}
                 </td>
               </tr>

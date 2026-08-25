@@ -146,7 +146,7 @@ export function UsersPanel() {
     <div className="space-y-8">
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-medium text-gray-900">Danh sách nhân viên</h2>
+          <h2 className="font-medium text-ink">Danh sách nhân viên</h2>
           <button
             onClick={() => setShowForm((v) => !v)}
             className="flex items-center gap-1.5 rounded-md bg-brandRed-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brandRed-700"
@@ -156,7 +156,7 @@ export function UsersPanel() {
         </div>
 
         {showForm && (
-          <div className="rounded-lg border border-gray-200 bg-white p-4 mb-4 space-y-3">
+          <div className="rounded-lg border border-gray-200 bg-card p-4 mb-4 space-y-3">
             {error && <p className="text-sm text-brandRed-600">{error}</p>}
             <div className="grid grid-cols-2 gap-3">
               <input placeholder="Họ tên" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className="input" />
@@ -173,7 +173,7 @@ export function UsersPanel() {
                 className="input"
               />
             </div>
-            <button onClick={handleCreateUser} className="rounded-md bg-navy-900 px-4 py-2 text-sm font-semibold text-white hover:bg-navy-700">
+            <button onClick={handleCreateUser} className="rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-amber-foreground hover:bg-amber-400">
               Tạo tài khoản
             </button>
           </div>
@@ -181,9 +181,9 @@ export function UsersPanel() {
 
         {error && !showForm && <p className="text-sm text-brandRed-600 mb-3">{error}</p>}
 
-        <div className="rounded-lg border border-gray-200 bg-white overflow-x-auto">
+        <div className="rounded-lg border border-gray-200 bg-card overflow-x-auto">
           <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 text-gray-500">
+            <thead className="bg-gray-50 text-muted-foreground">
               <tr>
                 <th className="text-left font-medium px-4 py-2.5">Tên</th>
                 <th className="text-left font-medium px-4 py-2.5">Email</th>
@@ -197,8 +197,8 @@ export function UsersPanel() {
             <tbody className="divide-y divide-gray-100">
               {usersData?.users.map((u) => (
                 <tr key={u.id} className={u.active ? "" : "opacity-50"}>
-                  <td className="px-4 py-2.5 font-medium text-gray-900">{u.name}</td>
-                  <td className="px-4 py-2.5 text-gray-500">{u.email}</td>
+                  <td className="px-4 py-2.5 font-medium text-ink">{u.name}</td>
+                  <td className="px-4 py-2.5 text-muted-foreground">{u.email}</td>
                   <td className="px-4 py-2.5">
                     <select
                       value={u.role}
@@ -215,7 +215,7 @@ export function UsersPanel() {
                       onClick={() => handleToggleActive(u.id, !u.active)}
                       disabled={rowBusy === u.id}
                       className={`rounded-full px-2.5 py-1 text-xs font-medium disabled:opacity-40 ${
-                        u.active ? "bg-success-600/10 text-success-600" : "bg-gray-200 text-gray-600"
+                        u.active ? "bg-success-600/10 text-success-600" : "bg-gray-200 text-muted-foreground"
                       }`}
                     >
                       {u.active ? "Đang hoạt động" : "Đã khoá"}
@@ -233,7 +233,7 @@ export function UsersPanel() {
                         <button
                           onClick={() => handleSaveAmisCode(u.id)}
                           disabled={savingAmisCode === u.id}
-                          className="text-xs font-medium text-navy-900 hover:underline disabled:opacity-40"
+                          className="text-xs font-medium text-ink hover:underline disabled:opacity-40"
                         >
                           Lưu
                         </button>
@@ -246,7 +246,7 @@ export function UsersPanel() {
                       disabled={rowBusy === u.id || !u.amisEmployeeCode}
                       title={!u.amisEmployeeCode ? "Chưa gán mã AMIS nên không tính vào thống kê" : undefined}
                       className={`rounded-full px-2.5 py-1 text-xs font-medium disabled:opacity-40 ${
-                        u.includeInSalesStats ? "bg-success-600/10 text-success-600" : "bg-gray-200 text-gray-600"
+                        u.includeInSalesStats ? "bg-success-600/10 text-success-600" : "bg-gray-200 text-muted-foreground"
                       }`}
                     >
                       {u.includeInSalesStats ? "Có tính" : "Không tính"}
@@ -266,7 +266,7 @@ export function UsersPanel() {
                         <button
                           onClick={() => handleSubmitResetPassword(u.id)}
                           disabled={rowBusy === u.id}
-                          className="text-xs font-medium text-navy-900 hover:underline disabled:opacity-40"
+                          className="text-xs font-medium text-ink hover:underline disabled:opacity-40"
                         >
                           Lưu
                         </button>
@@ -275,7 +275,7 @@ export function UsersPanel() {
                             setResetPasswordFor(null);
                             setResetPasswordValue("");
                           }}
-                          className="text-xs text-gray-500 hover:underline"
+                          className="text-xs text-muted-foreground hover:underline"
                         >
                           Huỷ
                         </button>
@@ -286,7 +286,7 @@ export function UsersPanel() {
                           setResetPasswordFor(u.id);
                           setResetPasswordValue("");
                         }}
-                        className="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-navy-900"
+                        className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-ink"
                       >
                         <KeyRound className="h-3.5 w-3.5" /> Đặt lại
                       </button>
@@ -297,7 +297,7 @@ export function UsersPanel() {
             </tbody>
           </table>
         </div>
-        <p className="text-xs text-gray-500 mt-2">
+        <p className="text-xs text-muted-foreground mt-2">
           Mã nhân viên AMIS (vd DANGTAN) dùng để đồng bộ đơn hàng tự động khớp đúng người phụ trách — xem tại
           AMIS CRM, thông tin nhân viên. Đổi vai trò/khoá tài khoản áp dụng ngay lập tức; hệ thống luôn giữ lại
           ít nhất 1 quản trị viên đang hoạt động. Cột &quot;Thống kê doanh số&quot;: bật cho tài khoản nào thì doanh số
@@ -307,10 +307,10 @@ export function UsersPanel() {
       </div>
 
       <div>
-        <h2 className="font-medium text-gray-900 mb-3">
+        <h2 className="font-medium text-ink mb-3">
           Ánh xạ tên (alias) — khi Excel AMIS ghi tên nhân viên khác với tài khoản hệ thống
         </h2>
-        <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-3">
+        <div className="rounded-lg border border-gray-200 bg-card p-4 space-y-3">
           <div className="flex items-center gap-2">
             <input
               placeholder="Tên trong file Excel (vd: Tấn - KD1)"
@@ -330,15 +330,15 @@ export function UsersPanel() {
                 </option>
               ))}
             </select>
-            <button onClick={handleCreateAlias} className="shrink-0 rounded-md bg-navy-900 px-4 py-2 text-sm font-semibold text-white hover:bg-navy-700">
+            <button onClick={handleCreateAlias} className="shrink-0 rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-amber-foreground hover:bg-amber-400">
               Lưu
             </button>
           </div>
-          <ul className="text-sm text-gray-700 divide-y divide-gray-100">
+          <ul className="text-sm text-ink2 divide-y divide-gray-100">
             {aliasData?.aliases.map((a) => (
               <li key={a.aliasName} className="py-1.5 flex items-center justify-between">
                 <span>{a.aliasName}</span>
-                <span className="text-gray-500">→ {a.employee.name}</span>
+                <span className="text-muted-foreground">→ {a.employee.name}</span>
               </li>
             ))}
           </ul>

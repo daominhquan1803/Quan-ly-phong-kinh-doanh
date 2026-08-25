@@ -8,8 +8,8 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold text-gray-900">Tổng quan</h1>
-        <p className="text-sm text-gray-500">
+        <h1 className="text-xl font-semibold text-ink">Tổng quan</h1>
+        <p className="text-sm text-muted-foreground">
           {isAdmin
             ? "Kế hoạch kinh doanh, đơn hàng quá hạn và công nợ toàn phòng"
             : "Kế hoạch kinh doanh và đơn hàng quá hạn của bạn"}
