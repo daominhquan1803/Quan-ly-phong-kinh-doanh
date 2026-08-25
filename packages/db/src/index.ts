@@ -19,3 +19,4 @@ export * from "@prisma/client";
 export * from "./employee-match";
 export * from "./po-delivery-sync";
 export * from "./po-tracking-from-orders";
+export * from "./quote-color";

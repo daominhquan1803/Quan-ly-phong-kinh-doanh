@@ -2,8 +2,9 @@ import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
 // Bảo vệ toàn bộ route trừ /login, /api/auth, và static assets.
-// /admin/* và /debt chỉ ADMIN được vào — công nợ là số liệu tổng của cả phòng, không
-// gắn được theo từng nhân viên nên không cho SALES xem (chỉ xem số liệu của chính mình).
+// /admin/*, /debt, /quotes chỉ ADMIN được vào — công nợ và báo giá là số liệu tổng của cả
+// phòng, không gắn được theo từng nhân viên đăng nhập nên không cho SALES xem (chỉ xem số
+// liệu của chính mình).
 export default auth((req) => {
   const { pathname } = req.nextUrl;
   const isLoggedIn = !!req.auth;
@@ -23,7 +24,7 @@ export default auth((req) => {
     return NextResponse.redirect(loginUrl);
   }
 
-  if ((pathname.startsWith("/admin") || pathname.startsWith("/debt")) && !isAdmin) {
+  if ((pathname.startsWith("/admin") || pathname.startsWith("/debt") || pathname.startsWith("/quotes")) && !isAdmin) {
     return NextResponse.redirect(new URL("/", req.nextUrl));
   }
 

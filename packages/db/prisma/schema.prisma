@@ -48,6 +48,16 @@ enum TripStatus {
   REJECTED
 }
 
+// Trạng thái báo giá — SUY ĐOÁN từ màu nền dòng trong Google Sheet nguồn (không có cột chữ ghi
+// trạng thái tường minh, xem lib/quote-color.ts trong @hoanggia/db để biết quy tắc suy đoán và
+// lý do không thể chắc chắn 100%, đã trao đổi và anh Quân xác nhận chấp nhận rủi ro này).
+enum QuoteStatus {
+  NOT_QUOTED // Chưa báo giá — dòng không tô màu/trắng
+  NEGOTIATING // Đang thương thảo — dòng tô màu vàng
+  WON // Chốt được giá — dòng tô màu xanh lá (mọi sắc độ)
+  LOST // Không bán được — dòng tô màu đỏ/hồng
+}
+
 // ---------- Core ----------
 
 model User {
@@ -359,6 +369,57 @@ model SyncLog {
 
   @@index([jobType, startedAt])
   @@map("sync_logs")
+}
+
+// ---------- Báo giá (đồng bộ tự động từ Google Sheet dùng chung của phòng) ----------
+// Nguồn: 1 Google Sheet phòng đang dùng thủ công hàng ngày để ghi nhận khách hàng hỏi giá, có 1
+// sheet riêng cho mỗi tháng (vd "THÁNG 6", "THÁNG 8"...). Worker tải lại toàn bộ file mỗi ngày
+// (xem apps/worker/src/sync/quotes.ts), XOÁ HẾT và GHI LẠI từ đầu các dòng của đúng (year, month)
+// tương ứng mỗi sheet — vì sheet không có cột ID/khoá ổn định nào để upsert từng dòng an toàn
+// (người dùng có thể chèn/xoá dòng giữa chừng), cùng cách làm với import Kế hoạch kinh doanh chi
+// tiết (SalesPlanLine). Trạng thái (WON/NEGOTIATING/LOST/NOT_QUOTED) suy đoán từ MÀU NỀN dòng
+// trong sheet gốc (không có cột chữ) — xem QuoteStatus + lib/quote-color.ts, độ chính xác không
+// tuyệt đối vì cách tô màu của người nhập không nhất quán giữa các tháng.
+model QuoteRequest {
+  id   String @id @default(cuid())
+  year  Int
+  month Int
+  requestDay Int? // "Ngày" — chỉ ngày trong tháng, không suy ra được năm/tháng đầy đủ từ cột này
+  // "Phụ trách" trong file — mã/tên NVKD phụ trách khách hàng, GIỮ NGUYÊN VĂN vì không khớp tin
+  // cậy được với tài khoản User đang có (mã ghi kiểu "TAN.DV" khác hẳn amisEmployeeCode
+  // "DANGTAN", và nhiều mã không thuộc 4 NVKD đang quản lý trong hệ thống — có thể là nhân sự
+  // khác của phòng không có tài khoản đăng nhập).
+  assigneeRaw        String?
+  customerField       String? // "Lĩnh vực hoạt động của KH"
+  customerType        String? // "Phân loại KH"
+  customerName        String
+  productInterest     String? // "Mặt hàng KH quan tâm"
+  companyNationality  String? // "Quốc tịch DN"
+  scale               String? // "Quy mô"
+  quantity            String? // "Sản lượng" — giữ dạng chữ vì có ô ghi khoảng (vd "300-500") hoặc "MOQ"
+  unit                String?
+  potentialItems      String? // "Mặt hàng Tiềm năng phát triển thêm"
+  deliveryAddress     String?
+  pricingStaff        String? // "Nhân viên báo giá" — nhân sự nội bộ tính giá, khác Phụ trách
+  quoteL1             String? // "Báo giá PKH L1"
+  feedbackL1          String? // "Phản hồi PKD L1"
+  quoteL2             String? // "Báo giá PKH L2"
+  feedbackL2          String? // "Phản hồi PKD L2"
+  note                String?
+  status              QuoteStatus @default(NOT_QUOTED)
+  // Mã màu nền gốc (hex) dùng để suy đoán status — lưu lại để đối chiếu/audit khi anh phát hiện
+  // suy đoán sai ở dòng nào đó, không phải dữ liệu nghiệp vụ.
+  sourceColorHex      String?
+  sourceSheetName     String
+  sourceRowNumber     Int // số dòng trong sheet gốc lúc đồng bộ — chỉ để đối chiếu, không phải khoá
+  syncedAt            DateTime    @default(now())
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  @@index([year, month])
+  @@index([status])
+  @@index([assigneeRaw])
+  @@map("quote_requests")
 }
 
 // ---------- Kế hoạch kinh doanh ----------

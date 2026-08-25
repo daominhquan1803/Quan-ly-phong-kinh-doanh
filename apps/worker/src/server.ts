@@ -1,6 +1,7 @@
 import Fastify, { FastifyReply, FastifyRequest } from "fastify";
 import { runDebtSync } from "./scraper/hienvi";
 import { runAmisOrderSync } from "./sync/amis";
+import { runQuoteSync } from "./sync/quotes";
 import { logger } from "./logger";
 
 function checkInternalToken(req: FastifyRequest, reply: FastifyReply): boolean {
@@ -31,6 +32,15 @@ export function buildServer() {
     const triggeredBy = (req.body as { triggeredBy?: string } | undefined)?.triggeredBy ?? "MANUAL";
     logger.info(`Nhận yêu cầu đồng bộ đơn hàng AMIS thủ công từ: ${triggeredBy}`);
     const outcome = await runAmisOrderSync(triggeredBy);
+    if (outcome.status === "FAILED") reply.code(502);
+    return outcome;
+  });
+
+  app.post("/sync-quotes", async (req, reply) => {
+    if (!checkInternalToken(req, reply)) return;
+    const triggeredBy = (req.body as { triggeredBy?: string } | undefined)?.triggeredBy ?? "MANUAL";
+    logger.info(`Nhận yêu cầu đồng bộ Báo giá thủ công từ: ${triggeredBy}`);
+    const outcome = await runQuoteSync(triggeredBy);
     if (outcome.status === "FAILED") reply.code(502);
     return outcome;
   });

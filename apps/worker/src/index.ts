@@ -2,6 +2,7 @@ import cron from "node-cron";
 import { buildServer } from "./server";
 import { runDebtSync } from "./scraper/hienvi";
 import { runAmisOrderSync } from "./sync/amis";
+import { runQuoteSync } from "./sync/quotes";
 import { logger } from "./logger";
 
 const PORT = Number(process.env.WORKER_PORT || 4001);
@@ -10,6 +11,8 @@ const HIENVI_CRON = process.env.HIENVI_SYNC_CRON || "30 6 * * *"; // 06:30 hàng
 // Đơn hàng/Tiến độ giao hàng để đồng bộ thủ công ngay khi cần, không phải đợi lịch.
 const AMIS_CRON = process.env.AMIS_SYNC_CRON || "0 6 * * *"; // 06:00 giờ Việt Nam hàng ngày
 const AMIS_CRON_TIMEZONE = process.env.AMIS_SYNC_CRON_TIMEZONE || "Asia/Ho_Chi_Minh";
+const QUOTE_CRON = process.env.QUOTE_SYNC_CRON || "15 6 * * *"; // 06:15 hàng ngày
+const QUOTE_CRON_TIMEZONE = process.env.QUOTE_SYNC_CRON_TIMEZONE || "Asia/Ho_Chi_Minh";
 
 async function main() {
   const app = buildServer();
@@ -34,6 +37,20 @@ async function main() {
     logger.info(`Đã lên lịch đồng bộ đơn hàng AMIS: "${AMIS_CRON}" (múi giờ ${AMIS_CRON_TIMEZONE})`);
   } else {
     logger.warn("Chưa cấu hình AMIS_APP_ID/AMIS_CLIENT_SECRET — bỏ qua lịch đồng bộ đơn hàng AMIS.");
+  }
+
+  if (process.env.GOOGLE_SHEETS_QUOTE_ID) {
+    cron.schedule(
+      QUOTE_CRON,
+      () => {
+        logger.info("Cron kích hoạt đồng bộ Báo giá");
+        runQuoteSync("CRON").catch((err) => logger.error("Lỗi cron đồng bộ Báo giá:", err));
+      },
+      { timezone: QUOTE_CRON_TIMEZONE }
+    );
+    logger.info(`Đã lên lịch đồng bộ Báo giá: "${QUOTE_CRON}" (múi giờ ${QUOTE_CRON_TIMEZONE})`);
+  } else {
+    logger.warn("Chưa cấu hình GOOGLE_SHEETS_QUOTE_ID — bỏ qua lịch đồng bộ Báo giá.");
   }
 }
 

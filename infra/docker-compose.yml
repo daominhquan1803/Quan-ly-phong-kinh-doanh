@@ -70,6 +70,9 @@ services:
       HIENVI_PASSWORD: ${HIENVI_PASSWORD}
       HIENVI_MOCK_MODE: ${HIENVI_MOCK_MODE:-false}
       HIENVI_SYNC_CRON: ${HIENVI_SYNC_CRON:-30 6 * * *}
+      GOOGLE_SHEETS_QUOTE_ID: ${GOOGLE_SHEETS_QUOTE_ID}
+      QUOTE_SYNC_CRON: ${QUOTE_SYNC_CRON:-15 6 * * *}
+      QUOTE_SYNC_CRON_TIMEZONE: ${QUOTE_SYNC_CRON_TIMEZONE:-Asia/Ho_Chi_Minh}
     volumes:
       - worker_debug:/app/debug
     expose:
