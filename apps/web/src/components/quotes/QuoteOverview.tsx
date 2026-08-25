@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { cn, formatDateVN } from "@/lib/utils";
 import { normalizeVN } from "@/lib/text-normalize";
 import { FilterInput, SortableTh, toggleSort, type SortState } from "@/components/shared/SortableFilterableTable";
@@ -283,18 +283,51 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {donutData.length > 0 && (
           <div className="rounded-lg border border-gray-200 bg-white p-5">
-            <h2 className="font-medium text-gray-900 mb-4">Tỷ lệ theo trạng thái</h2>
-            <ResponsiveContainer width="100%" height={240}>
-              <PieChart>
-                <Pie data={donutData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={85} paddingAngle={2}>
-                  {donutData.map((d) => (
-                    <Cell key={d.status} fill={STATUS_CHART_COLOR[d.status]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
+            <h2 className="font-medium text-gray-900 mb-1">Tỷ lệ theo trạng thái</h2>
+            <p className="text-xs text-gray-400 mb-2">{summary?.month ? `Tháng ${summary.month}/${summary.year}` : ""}</p>
+            <div className="relative">
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie
+                    data={donutData}
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius={68}
+                    outerRadius={96}
+                    paddingAngle={3}
+                    cornerRadius={4}
+                    stroke="#fff"
+                    strokeWidth={2}
+                  >
+                    {donutData.map((d) => (
+                      <Cell key={d.status} fill={STATUS_CHART_COLOR[d.status]} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    formatter={(value: number, name: string) => [
+                      `${value} báo giá (${summary?.total ? Math.round((value / summary.total) * 100) : 0}%)`,
+                      name,
+                    ]}
+                    contentStyle={{ borderRadius: 8, border: "1px solid #E2E6ED", fontSize: 13 }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span className="text-2xl font-bold text-navy-900">{summary?.total ?? 0}</span>
+                <span className="text-[11px] text-gray-400">báo giá</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 mt-3 pt-3 border-t border-gray-100">
+              {(summary?.byStatus ?? []).map((s) => (
+                <div key={s.status} className="flex items-center gap-2 text-xs">
+                  <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: STATUS_CHART_COLOR[s.status] }} />
+                  <span className="text-gray-600 truncate">{s.label}</span>
+                  <span className="ml-auto font-medium text-gray-900 whitespace-nowrap">
+                    {s.count} <span className="text-gray-400 font-normal">({s.pct}%)</span>
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
