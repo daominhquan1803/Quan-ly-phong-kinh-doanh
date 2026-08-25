@@ -138,7 +138,7 @@ export function ImportWizard() {
                     onChange={(e) =>
                       setMapping((m) => ({ ...m, [field.key]: e.target.value || undefined }))
                     }
-                    className="w-full text-sm rounded-md border border-gray-200 py-2 px-2 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    className="w-full text-sm bg-card text-ink rounded-md border border-gray-200 py-2 px-2 focus:outline-none focus:ring-2 focus:ring-amber-500"
                   >
                     <option value="">— Không chọn —</option>
                     {preview.headers.map((h) => (
@@ -189,7 +189,7 @@ export function ImportWizard() {
                 value={saveTemplateName}
                 onChange={(e) => setSaveTemplateName(e.target.value)}
                 placeholder="VD: Export đơn hàng AMIS chuẩn"
-                className="w-full sm:w-96 text-sm rounded-md border border-gray-200 py-2 px-3 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="w-full sm:w-96 text-sm bg-card text-ink rounded-md border border-gray-200 py-2 px-3 focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
             </div>
           )}

@@ -216,7 +216,7 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
                 setAssigneeFilter("");
               }
             }}
-            className="text-sm rounded-md border border-gray-200 py-2 px-2 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="text-sm bg-card text-ink rounded-md border border-gray-200 py-2 px-2 focus:outline-none focus:ring-2 focus:ring-amber-500"
           >
             {(summary?.availableMonths ?? []).map((m) => (
               <option key={`${m.year}-${m.month}`} value={m.month}>
@@ -382,7 +382,7 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as QuoteStatus | "")}
-              className="text-sm rounded-md border border-gray-200 py-1.5 px-2"
+              className="text-sm bg-card text-ink rounded-md border border-gray-200 py-1.5 px-2"
             >
               <option value="">Tất cả trạng thái</option>
               {(summary?.byStatus ?? []).map((s) => (

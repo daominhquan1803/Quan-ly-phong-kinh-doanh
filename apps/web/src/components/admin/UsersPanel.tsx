@@ -204,7 +204,7 @@ export function UsersPanel() {
                       value={u.role}
                       disabled={rowBusy === u.id}
                       onChange={(e) => handleRoleChange(u.id, e.target.value as "ADMIN" | "SALES")}
-                      className="text-sm rounded-md border border-gray-200 py-1 px-2 disabled:opacity-40"
+                      className="text-sm bg-card text-ink rounded-md border border-gray-200 py-1 px-2 disabled:opacity-40"
                     >
                       <option value="SALES">Nhân viên kinh doanh</option>
                       <option value="ADMIN">Quản trị viên</option>
@@ -227,7 +227,7 @@ export function UsersPanel() {
                         placeholder="vd: DANGTAN"
                         defaultValue={u.amisEmployeeCode ?? ""}
                         onChange={(e) => setAmisCodeEdits((prev) => ({ ...prev, [u.id]: e.target.value }))}
-                        className="w-32 text-sm rounded-md border border-gray-200 py-1 px-2"
+                        className="w-32 text-sm bg-card text-ink rounded-md border border-gray-200 py-1 px-2"
                       />
                       {amisCodeEdits[u.id] !== undefined && (
                         <button
@@ -260,7 +260,7 @@ export function UsersPanel() {
                           placeholder="Mật khẩu mới"
                           value={resetPasswordValue}
                           onChange={(e) => setResetPasswordValue(e.target.value)}
-                          className="w-32 text-sm rounded-md border border-gray-200 py-1 px-2"
+                          className="w-32 text-sm bg-card text-ink rounded-md border border-gray-200 py-1 px-2"
                           autoFocus
                         />
                         <button

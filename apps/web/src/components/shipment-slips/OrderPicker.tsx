@@ -49,7 +49,7 @@ export function OrderPicker({
         }}
         onFocus={() => setOpen(true)}
         placeholder="Tìm theo mã đơn, khách hàng, PO..."
-        className="w-full text-sm rounded-md border border-gray-200 py-2 px-3 focus:outline-none focus:ring-2 focus:ring-amber-500"
+        className="w-full text-sm bg-card text-ink rounded-md border border-gray-200 py-2 px-3 focus:outline-none focus:ring-2 focus:ring-amber-500"
       />
       {value && (
         <button

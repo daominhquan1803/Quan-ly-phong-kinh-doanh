@@ -59,7 +59,7 @@ export function FilterInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full pl-7 pr-2 py-1.5 text-xs font-normal rounded-md border border-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
+        className="w-full pl-7 pr-2 py-1.5 text-xs font-normal bg-card text-ink rounded-md border border-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
       />
     </div>
   );

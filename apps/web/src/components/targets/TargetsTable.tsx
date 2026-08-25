@@ -37,7 +37,7 @@ export function TargetsTable() {
         <select
           value={month}
           onChange={(e) => setMonth(Number(e.target.value))}
-          className="text-sm rounded-md border border-gray-200 py-2 px-2"
+          className="text-sm bg-card text-ink rounded-md border border-gray-200 py-2 px-2"
         >
           {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
             <option key={m} value={m}>
@@ -48,7 +48,7 @@ export function TargetsTable() {
         <select
           value={year}
           onChange={(e) => setYear(Number(e.target.value))}
-          className="text-sm rounded-md border border-gray-200 py-2 px-2"
+          className="text-sm bg-card text-ink rounded-md border border-gray-200 py-2 px-2"
         >
           {[year - 1, year, year + 1].map((y) => (
             <option key={y} value={y}>

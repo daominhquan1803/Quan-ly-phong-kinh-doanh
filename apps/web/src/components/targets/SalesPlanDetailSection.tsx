@@ -47,14 +47,14 @@ export function SalesPlanDetailSection({ isAdmin }: { isAdmin: boolean }) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="text-sm rounded-md border border-gray-200 py-2 px-2">
+          <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="text-sm bg-card text-ink rounded-md border border-gray-200 py-2 px-2">
             {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
               <option key={m} value={m}>
                 Tháng {m}
               </option>
             ))}
           </select>
-          <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="text-sm rounded-md border border-gray-200 py-2 px-2">
+          <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="text-sm bg-card text-ink rounded-md border border-gray-200 py-2 px-2">
             {[year - 1, year, year + 1].map((y) => (
               <option key={y} value={y}>
                 {y}

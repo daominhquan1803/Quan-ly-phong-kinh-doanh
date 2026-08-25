@@ -51,7 +51,7 @@ export function LoginForm() {
         <input
           type="email"
           {...register("email")}
-          className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+          className="w-full bg-card text-ink rounded-md border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
           placeholder="ban@hoanggia.local"
         />
         {errors.email && <p className="text-xs text-brandRed-600 mt-1">{errors.email.message}</p>}
@@ -61,7 +61,7 @@ export function LoginForm() {
         <input
           type="password"
           {...register("password")}
-          className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+          className="w-full bg-card text-ink rounded-md border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
           placeholder="••••••••"
         />
         {errors.password && <p className="text-xs text-brandRed-600 mt-1">{errors.password.message}</p>}

@@ -75,7 +75,7 @@ export function OrderTrendChart({ isAdmin }: { isAdmin: boolean }) {
           <select
             value={compareMonths}
             onChange={(e) => setCompareMonths(Number(e.target.value))}
-            className="text-sm rounded-md border border-gray-200 py-2 px-2 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="text-sm bg-card text-ink rounded-md border border-gray-200 py-2 px-2 focus:outline-none focus:ring-2 focus:ring-amber-500"
           >
             {COMPARE_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>

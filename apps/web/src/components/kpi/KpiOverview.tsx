@@ -98,14 +98,14 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2">
-        <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="text-sm rounded-md border border-gray-200 py-2 px-2">
+        <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="text-sm bg-card text-ink rounded-md border border-gray-200 py-2 px-2">
           {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
             <option key={m} value={m}>
               Tháng {m}
             </option>
           ))}
         </select>
-        <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="text-sm rounded-md border border-gray-200 py-2 px-2">
+        <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="text-sm bg-card text-ink rounded-md border border-gray-200 py-2 px-2">
           {[year - 1, year, year + 1].map((y) => (
             <option key={y} value={y}>
               {y}
@@ -316,7 +316,7 @@ function KpiEditForm({
           step={opts?.step ?? "1"}
           value={form[key]}
           onChange={(e) => setForm((prev) => ({ ...prev, [key]: e.target.value === "" ? "" : Number(e.target.value) }))}
-          className="rounded-md border border-gray-200 py-1.5 px-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber-500"
+          className="bg-card text-ink rounded-md border border-gray-200 py-1.5 px-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber-500"
         />
       </label>
     );
@@ -457,12 +457,12 @@ function DefectsPanel({ year, month }: { year: number; month: number }) {
             placeholder="Số biên bản hàng lỗi"
             value={form.reportNumber}
             onChange={(e) => setForm((p) => ({ ...p, reportNumber: e.target.value }))}
-            className="rounded-md border border-gray-200 py-1.5 px-2 text-sm"
+            className="bg-card text-ink rounded-md border border-gray-200 py-1.5 px-2 text-sm"
           />
           <select
             value={form.employeeId}
             onChange={(e) => setForm((p) => ({ ...p, employeeId: e.target.value }))}
-            className="rounded-md border border-gray-200 py-1.5 px-2 text-sm"
+            className="bg-card text-ink rounded-md border border-gray-200 py-1.5 px-2 text-sm"
           >
             <option value="">— Chọn NVKD chịu trách nhiệm —</option>
             {employeesData?.users.map((u) => (
@@ -475,13 +475,13 @@ function DefectsPanel({ year, month }: { year: number; month: number }) {
             type="date"
             value={form.reportDate}
             onChange={(e) => setForm((p) => ({ ...p, reportDate: e.target.value }))}
-            className="rounded-md border border-gray-200 py-1.5 px-2 text-sm"
+            className="bg-card text-ink rounded-md border border-gray-200 py-1.5 px-2 text-sm"
           />
           <input
             placeholder="Nội dung lỗi"
             value={form.description}
             onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-            className="rounded-md border border-gray-200 py-1.5 px-2 text-sm sm:col-span-2"
+            className="bg-card text-ink rounded-md border border-gray-200 py-1.5 px-2 text-sm sm:col-span-2"
           />
           {error && <p className="text-xs text-brandRed-600 sm:col-span-2">{error}</p>}
           <button
