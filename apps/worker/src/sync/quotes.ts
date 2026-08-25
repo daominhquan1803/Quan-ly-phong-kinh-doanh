@@ -21,6 +21,17 @@ const GOOGLE_SHEETS_QUOTE_ID = process.env.GOOGLE_SHEETS_QUOTE_ID;
 // sheet khác trong file (BÁO GIÁ PKD1/2/3, Trang tính3...) không được đồng bộ theo yêu cầu.
 const MONTH_SHEET_PATTERN = /^\s*th[aá]ng\s+(\d{1,2})\s*$/i;
 
+// Sheet Google này dùng CHUNG cho cả 3 phòng kinh doanh của công ty (cột "Phụ trách" trộn lẫn
+// mã của cả PKD1/PKD2/PKD3) — nhưng anh Quân chỉ quản lý Phòng Kinh doanh 1 (PKD1), nên chỉ
+// đồng bộ đúng mã của 4 NVKD PKD1 (đã xác nhận qua đối chiếu amisEmployeeCode), bỏ qua mọi mã
+// khác (HAI.NH, LIEN.NK, HIEU.TT, HIEU.LD, TOAN.NK...) dù chúng cũng xuất hiện trong cùng sheet.
+// Lọc theo danh sách mã đã XÁC NHẬN RÕ (không đoán mờ các biến thể tên tắt mơ hồ như "Mr Tùng"/
+// "Hiếu" một mình có thể trùng hoặc không trùng người trong PKD1 — thà bỏ sót còn hơn lẫn nhầm
+// dữ liệu người ngoài phòng vào thống kê của anh Quân).
+const PKD1_ASSIGNEE_CODES = new Set(
+  ["QUAN.DM", "QUANDM", "TUNG.NT", "DUNG.PT", "TAN.DV"].map((c) => normalizeVN(c))
+);
+
 interface ColumnMap {
   assignee?: number;
   customerField?: number;
@@ -143,13 +154,18 @@ function parseMonthSheet(ws: XLSX.WorkSheet): ParsedQuoteRow[] {
     // đã thấy thật trong file, dòng bị tô màu lẫn vào giữa dữ liệu do copy nhầm).
     if (!customerName || normalizeVN(customerName) === "ten khach hang") continue;
 
+    // Chỉ lấy đúng báo giá của 4 NVKD Phòng Kinh doanh 1 — bỏ qua báo giá của phòng/nhân viên
+    // khác dù cùng nằm trong sheet (xem PKD1_ASSIGNEE_CODES).
+    const assigneeRaw = cellText(row, colMap.assignee);
+    if (!assigneeRaw || !PKD1_ASSIGNEE_CODES.has(normalizeVN(assigneeRaw))) continue;
+
     const dayRaw = cellText(row, 0);
     const requestDay = dayRaw ? Number(dayRaw) : null;
     const colorHex = rowColorHex(ws, r);
 
     result.push({
       requestDay: requestDay != null && Number.isFinite(requestDay) ? requestDay : null,
-      assigneeRaw: cellText(row, colMap.assignee),
+      assigneeRaw,
       customerField: cellText(row, colMap.customerField),
       customerType: cellText(row, colMap.customerType),
       customerName,

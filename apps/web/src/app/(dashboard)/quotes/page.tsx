@@ -8,7 +8,8 @@ export default async function QuotesPage() {
       <div>
         <h1 className="text-xl font-semibold text-gray-900">Báo giá</h1>
         <p className="text-sm text-gray-500">
-          Danh sách khách hàng đang hỏi giá của phòng kinh doanh — đồng bộ tự động hàng ngày từ Google Sheet
+          Danh sách khách hàng đang hỏi giá của Phòng Kinh doanh 1 — đồng bộ tự động hàng ngày từ Google Sheet, đã lọc
+          bỏ báo giá của các phòng kinh doanh khác cùng dùng chung file
         </p>
       </div>
       <QuoteOverview isAdmin={session?.user?.role === "ADMIN"} />
