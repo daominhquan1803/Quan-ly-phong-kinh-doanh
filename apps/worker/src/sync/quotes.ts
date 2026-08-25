@@ -28,8 +28,20 @@ const MONTH_SHEET_PATTERN = /^\s*th[aá]ng\s+(\d{1,2})\s*$/i;
 // Lọc theo danh sách mã đã XÁC NHẬN RÕ (không đoán mờ các biến thể tên tắt mơ hồ như "Mr Tùng"/
 // "Hiếu" một mình có thể trùng hoặc không trùng người trong PKD1 — thà bỏ sót còn hơn lẫn nhầm
 // dữ liệu người ngoài phòng vào thống kê của anh Quân).
-const PKD1_ASSIGNEE_CODES = new Set(
-  ["QUAN.DM", "QUANDM", "TUNG.NT", "DUNG.PT", "TAN.DV"].map((c) => normalizeVN(c))
+//
+// Người nhập liệu ghi cùng 1 người theo nhiều cách viết hoa/thường khác nhau (đã thấy thật:
+// "QUAN.DM"/"QUANDM" cùng là Đào Minh Quân, "TAN.DV"/"Tan.DV" cùng là Đặng Văn Tấn) — map về
+// đúng 1 MÃ CHUẨN duy nhất mỗi người (giá trị) để "Theo nhân viên phụ trách" gộp đúng 1 dòng cho
+// 1 người, không tách thành nhiều dòng trùng chỉ vì khác cách viết hoa/thường (khoá là dạng đã
+// chuẩn hoá qua normalizeVN — không phân biệt hoa/thường/dấu).
+const PKD1_ASSIGNEE_CANONICAL: Record<string, string> = Object.fromEntries(
+  [
+    ["QUAN.DM", "QUAN.DM"],
+    ["QUANDM", "QUAN.DM"],
+    ["TUNG.NT", "TUNG.NT"],
+    ["DUNG.PT", "DUNG.PT"],
+    ["TAN.DV", "TAN.DV"],
+  ].map(([variant, canonical]) => [normalizeVN(variant), canonical])
 );
 
 interface ColumnMap {
@@ -155,9 +167,11 @@ function parseMonthSheet(ws: XLSX.WorkSheet): ParsedQuoteRow[] {
     if (!customerName || normalizeVN(customerName) === "ten khach hang") continue;
 
     // Chỉ lấy đúng báo giá của 4 NVKD Phòng Kinh doanh 1 — bỏ qua báo giá của phòng/nhân viên
-    // khác dù cùng nằm trong sheet (xem PKD1_ASSIGNEE_CODES).
-    const assigneeRaw = cellText(row, colMap.assignee);
-    if (!assigneeRaw || !PKD1_ASSIGNEE_CODES.has(normalizeVN(assigneeRaw))) continue;
+    // khác dù cùng nằm trong sheet, và quy về đúng 1 mã chuẩn cho mỗi người (xem
+    // PKD1_ASSIGNEE_CANONICAL) để không tách trùng dòng chỉ vì khác cách viết hoa/thường.
+    const assigneeRawInput = cellText(row, colMap.assignee);
+    const assigneeRaw = assigneeRawInput ? PKD1_ASSIGNEE_CANONICAL[normalizeVN(assigneeRawInput)] : undefined;
+    if (!assigneeRaw) continue;
 
     const dayRaw = cellText(row, 0);
     const requestDay = dayRaw ? Number(dayRaw) : null;
