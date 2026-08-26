@@ -14,10 +14,12 @@ import {
   Award,
   Briefcase,
   Receipt,
+  ClipboardList,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/", label: "Tổng quan", icon: LayoutDashboard, adminOnly: false },
+  { href: "/week-plan", label: "Kế hoạch làm việc tuần", icon: ClipboardList, adminOnly: false },
   { href: "/orders", label: "Đơn hàng", icon: ShoppingCart, adminOnly: false },
   { href: "/shipping-status", label: "Tiến độ giao hàng", icon: Gauge, adminOnly: false },
   { href: "/shipment-slips", label: "Phiếu đi hàng", icon: Truck, adminOnly: false },

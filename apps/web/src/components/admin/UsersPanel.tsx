@@ -11,6 +11,7 @@ interface UserRow {
   role: "ADMIN" | "SALES";
   active: boolean;
   amisEmployeeCode: string | null;
+  quoteAssigneeCode: string | null;
   includeInSalesStats: boolean;
 }
 interface AliasRow {
@@ -127,6 +128,24 @@ export function UsersPanel() {
     setSavingAmisCode(null);
   }
 
+  const [quoteCodeEdits, setQuoteCodeEdits] = useState<Record<string, string>>({});
+  const [savingQuoteCode, setSavingQuoteCode] = useState<string | null>(null);
+
+  async function handleSaveQuoteCode(userId: string) {
+    const value = quoteCodeEdits[userId];
+    if (value === undefined) return;
+    setSavingQuoteCode(userId);
+    const ok = await patchUser(userId, { quoteAssigneeCode: value || null });
+    if (ok) {
+      setQuoteCodeEdits((prev) => {
+        const next = { ...prev };
+        delete next[userId];
+        return next;
+      });
+    }
+    setSavingQuoteCode(null);
+  }
+
   async function handleCreateAlias() {
     if (!aliasForm.aliasName.trim() || !aliasForm.employeeId) return;
     await fetch("/api/admin/aliases", {
@@ -190,6 +209,7 @@ export function UsersPanel() {
                 <th className="text-left font-medium px-4 py-2.5">Vai trò</th>
                 <th className="text-left font-medium px-4 py-2.5">Trạng thái</th>
                 <th className="text-left font-medium px-4 py-2.5">Mã nhân viên AMIS</th>
+                <th className="text-left font-medium px-4 py-2.5">Mã Báo giá</th>
                 <th className="text-left font-medium px-4 py-2.5">Thống kê doanh số</th>
                 <th className="text-left font-medium px-4 py-2.5">Mật khẩu</th>
               </tr>
@@ -233,6 +253,25 @@ export function UsersPanel() {
                         <button
                           onClick={() => handleSaveAmisCode(u.id)}
                           disabled={savingAmisCode === u.id}
+                          className="text-xs font-medium text-ink hover:underline disabled:opacity-40"
+                        >
+                          Lưu
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <input
+                        placeholder="vd: TAN.DV"
+                        defaultValue={u.quoteAssigneeCode ?? ""}
+                        onChange={(e) => setQuoteCodeEdits((prev) => ({ ...prev, [u.id]: e.target.value }))}
+                        className="w-24 text-sm bg-card text-ink rounded-md border border-gray-200 py-1 px-2"
+                      />
+                      {quoteCodeEdits[u.id] !== undefined && (
+                        <button
+                          onClick={() => handleSaveQuoteCode(u.id)}
+                          disabled={savingQuoteCode === u.id}
                           className="text-xs font-medium text-ink hover:underline disabled:opacity-40"
                         >
                           Lưu

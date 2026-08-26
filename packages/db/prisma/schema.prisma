@@ -48,6 +48,20 @@ enum TripStatus {
   REJECTED
 }
 
+// 6 đầu mục cố định của Kế hoạch làm việc tuần — theo đúng file mẫu "KẾ HOẠCH LÀM VIỆC TUẦN"
+// anh Quân gửi. 3 mục đầu đo bằng cách NVKD tự ghi lại từng khách hàng đã liên hệ/gặp
+// (WeekPlanResultEntry) — 3 mục sau tính tự động từ dữ liệu đã có sẵn trong hệ thống, không cần
+// nhập tay: NEW_CUSTOMER_SALE từ Order, NEW_QUOTE từ QuoteRequest, BUSINESS_TRIP từ
+// BusinessTripRequest (xem apps/web/src/lib/week-plan.ts).
+enum WeekPlanMetric {
+  NEW_CONTACT // Số khách hàng liên hệ mới — nhập tay
+  NEW_MEETING // Số khách hàng mới hẹn gặp được — nhập tay
+  EXISTING_VISIT // Số khách hàng cũ liên hệ gặp thăm hỏi — nhập tay
+  NEW_CUSTOMER_SALE // Số khách hàng mới bán được hàng — tự động
+  NEW_QUOTE // Số báo giá mới — tự động
+  BUSINESS_TRIP // Số buổi đi công tác — tự động
+}
+
 // Trạng thái báo giá — SUY ĐOÁN từ màu nền dòng trong Google Sheet nguồn (không có cột chữ ghi
 // trạng thái tường minh, xem lib/quote-color.ts trong @hoanggia/db để biết quy tắc suy đoán và
 // lý do không thể chắc chắn 100%, đã trao đổi và anh Quân xác nhận chấp nhận rủi ro này).
@@ -70,6 +84,11 @@ model User {
   // Mã nhân viên trên AMIS (vd "DANGTAN") — dùng để khớp đơn hàng đồng bộ tự động từ AMIS
   // API chính xác hơn khớp theo tên. Điền tại trang Nhân viên.
   amisEmployeeCode String?  @unique
+  // Mã "Phụ trách" trong Google Sheet Báo giá (vd "TUNG.NT") — dùng để đếm tự động "Số báo giá
+  // mới" trong Kế hoạch làm việc tuần (QuoteRequest.assigneeRaw không có FK tới User vì không
+  // khớp tin cậy được, xem ghi chú ở model QuoteRequest). Điền tại trang Nhân viên, độc lập với
+  // amisEmployeeCode vì 2 hệ thống nguồn dùng 2 kiểu mã khác nhau.
+  quoteAssigneeCode String? @unique
   // Có tính vào phần thống kê doanh số theo nhân viên (Kế hoạch kinh doanh, Tổng quan) hay
   // không — mặc định true cho mọi nhân viên có amisEmployeeCode. Dùng để ẩn các tài khoản có
   // gán mã AMIS nhưng không phải nhân viên kinh doanh thật (vd tài khoản quản trị hệ thống
@@ -98,6 +117,11 @@ model User {
   poTrackingBatches PoTrackingImportBatch[]
   shipmentSlipBatches ShipmentSlipImportBatch[]
   manuallyClosedPoLines PoTrackingLine[] @relation("PoLineManuallyClosedBy")
+  weekPlanTargets        WeekPlanTarget[]       @relation("WeekPlanTargetEmployee")
+  weekPlanTargetsSet     WeekPlanTarget[]       @relation("WeekPlanTargetCreatedBy")
+  weekPlanResultEntries  WeekPlanResultEntry[]  @relation("WeekPlanResultEmployee")
+  weekPlanResultsCreated WeekPlanResultEntry[]  @relation("WeekPlanResultCreatedBy")
+  weekPlanResultBatches  WeekPlanResultImportBatch[]
 
   @@map("users")
 }
@@ -724,4 +748,71 @@ model PoDeliveryEvent {
   @@index([salesEmployeeId, eventDate])
   @@index([sourceShipmentSlipId])
   @@map("po_delivery_events")
+}
+
+// ---------- Kế hoạch làm việc tuần ----------
+// Chỉ Quản trị viên được giao chỉ tiêu (targetValue) — có thể giao trước cho các tuần tương lai.
+// weekStart luôn là 00:00 thứ Hai đầu tuần (không dùng số tuần ISO để tránh rắc rối biên năm,
+// và để so sánh khoảng ngày trực tiếp với Order/QuoteRequest/BusinessTripRequest khi tính tự
+// động 3 mục cuối).
+
+model WeekPlanTarget {
+  id          String         @id @default(cuid())
+  employeeId  String
+  employee    User           @relation("WeekPlanTargetEmployee", fields: [employeeId], references: [id])
+  weekStart   DateTime
+  metric      WeekPlanMetric
+  targetValue Int            @default(0)
+  createdById String
+  createdBy   User           @relation("WeekPlanTargetCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@unique([employeeId, weekStart, metric])
+  @@index([weekStart])
+  @@map("week_plan_targets")
+}
+
+// Nhập hàng loạt từ Excel theo đúng cấu trúc sheet "KẾT QUẢ" trong file mẫu (STT, Mục, Ngày
+// tháng, Khách hàng, Địa chỉ, Nội dung, Sản phẩm quan tâm) — cách 2 bên cạnh nhập từng dòng qua
+// form. Giữ lại batch để đối chiếu/xoá hàng loạt nếu tải nhầm file, cùng quy ước với các
+// ImportBatch khác trong hệ thống.
+model WeekPlanResultImportBatch {
+  id           String   @id @default(cuid())
+  fileName     String
+  totalRows    Int
+  createdCount Int
+  errorCount   Int
+  errorReport  Json?
+  createdById  String
+  createdBy    User     @relation(fields: [createdById], references: [id])
+  createdAt    DateTime @default(now())
+
+  entries WeekPlanResultEntry[]
+
+  @@map("week_plan_result_import_batches")
+}
+
+model WeekPlanResultEntry {
+  id              String                     @id @default(cuid())
+  employeeId      String
+  employee        User                       @relation("WeekPlanResultEmployee", fields: [employeeId], references: [id])
+  weekStart       DateTime
+  // Chỉ áp dụng cho 3 mục nhập tay (NEW_CONTACT | NEW_MEETING | EXISTING_VISIT) — không ràng
+  // buộc được ở tầng DB, kiểm tra ở tầng ứng dụng lúc ghi.
+  metric          WeekPlanMetric
+  entryDate       DateTime
+  customerName    String
+  address         String?
+  content         String?
+  productInterest String?
+  importBatchId   String?
+  importBatch     WeekPlanResultImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  createdById     String
+  createdBy       User                       @relation("WeekPlanResultCreatedBy", fields: [createdById], references: [id])
+  createdAt       DateTime                   @default(now())
+  updatedAt       DateTime                   @updatedAt
+
+  @@index([employeeId, weekStart, metric])
+  @@map("week_plan_result_entries")
 }

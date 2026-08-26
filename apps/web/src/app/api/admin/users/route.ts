@@ -18,6 +18,7 @@ export async function GET() {
         role: true,
         active: true,
         amisEmployeeCode: true,
+        quoteAssigneeCode: true,
         includeInSalesStats: true,
         createdAt: true,
       },

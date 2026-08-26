@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 
 const updateUserSchema = z.object({
   amisEmployeeCode: z.string().trim().max(50).optional().nullable(),
+  quoteAssigneeCode: z.string().trim().max(50).optional().nullable(),
   role: z.enum(["ADMIN", "SALES"]).optional(),
   active: z.boolean().optional(),
   includeInSalesStats: z.boolean().optional(),
@@ -28,6 +29,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     const data: {
       amisEmployeeCode?: string | null;
+      quoteAssigneeCode?: string | null;
       role?: "ADMIN" | "SALES";
       active?: boolean;
       includeInSalesStats?: boolean;
@@ -43,6 +45,20 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         }
       }
       data.amisEmployeeCode = amisEmployeeCode;
+    }
+
+    if (parsed.data.quoteAssigneeCode !== undefined) {
+      const quoteAssigneeCode = parsed.data.quoteAssigneeCode?.trim() || null;
+      if (quoteAssigneeCode) {
+        const dup = await prisma.user.findUnique({ where: { quoteAssigneeCode } });
+        if (dup && dup.id !== params.id) {
+          return NextResponse.json(
+            { error: `Mã Báo giá "${quoteAssigneeCode}" đã gán cho nhân viên khác` },
+            { status: 409 }
+          );
+        }
+      }
+      data.quoteAssigneeCode = quoteAssigneeCode;
     }
 
     if (parsed.data.role !== undefined) data.role = parsed.data.role;
@@ -78,6 +94,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         role: true,
         active: true,
         amisEmployeeCode: true,
+        quoteAssigneeCode: true,
         includeInSalesStats: true,
       },
     });
