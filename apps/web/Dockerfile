@@ -30,7 +30,12 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # Alpine không có sẵn openssl — Prisma cần nó ở runtime để nhận diện đúng
 # bản OpenSSL và nạp đúng file engine (linux-musl-openssl-3.0.x), thiếu nó
 # Prisma sẽ đoán nhầm sang engine cũ build cho OpenSSL 1.1 và lỗi khi load.
-RUN apk add --no-cache openssl
+# tzdata: Alpine không có sẵn múi giờ hệ thống — thiếu nó, biến môi trường TZ
+# (đặt ở docker-compose.yml) bị Node.js/ICU âm thầm bỏ qua và server vẫn chạy
+# giờ UTC, khiến các phép tính ngày-tháng phía server (vd tuần/tháng của Kế
+# hoạch làm việc tuần) lệch múi với trình duyệt của người dùng ở Việt Nam.
+RUN apk add --no-cache openssl tzdata
+ENV TZ=Asia/Ho_Chi_Minh
 
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 
