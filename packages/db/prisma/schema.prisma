@@ -577,6 +577,12 @@ model DefectReport {
 // đã có sẵn; Điểm Đi Gặp Khách đếm từ BusinessTripRequest đã duyệt trong tháng; Hàng lỗi đếm
 // từ DefectReport trong tháng — không lưu lặp lại ở đây, tính trực tiếp lúc đọc báo cáo
 // (xem apps/web/src/lib/kpi-metrics.ts) để không bị lệch dữ liệu giữa 2 nơi.
+// Cơ cấu điểm KPI — lần cập nhật (26/08, file KPI_PKD1_HoanggiaPS.xlsx) đổi cả cơ cấu chỉ tiêu:
+// bỏ hẳn "Giá bán cao" và "Chuyên cần"; Doanh số tổng/DS ngành SX/KH mới/CSKH (đi gặp KH) giờ
+// dùng TRỌNG SỐ do Quản trị viên tự phân bổ riêng cho từng nhân viên mỗi tháng (không còn cố
+// định 20/10/10/10) — 4 trọng số này cộng lại luôn bằng 70 (còn lại 30 chia cố định cho Nợ quá
+// hạn 10 + Thu hồi nợ 10 + Thái độ 2 + Điểm tuần 8, không đổi theo người). Xem
+// apps/web/src/lib/kpi-metrics.ts để biết công thức đầy đủ.
 model KpiMonthlyEntry {
   id         String @id @default(cuid())
   employeeId String
@@ -584,25 +590,28 @@ model KpiMonthlyEntry {
   year       Int
   month      Int
 
-  // 2. Giá bán cao (mã hàng bán cao hơn giá SX báo ≥3%) — đếm số mã hàng, nhập tay cả chỉ tiêu
-  // lẫn thực tế (chưa có khái niệm "giá SX báo" trong dữ liệu đơn hàng).
-  targetHighPriceSkuCount Int?
-  actualHighPriceSkuCount Int?
+  // Trọng số do Quản trị viên phân bổ riêng cho nhân viên này/tháng này — mặc định theo mức
+  // chuẩn (30/20/10/10), có thể đổi tuỳ định hướng phát triển của từng người, miễn tổng 4 số này
+  // luôn bằng 70.
+  weightRevenue      Int @default(30) // Trọng số DST — Doanh số tổng
+  weightRevenueSX    Int @default(20) // Trọng số HSX — DS ngành Sản xuất
+  weightNewCustomers Int @default(10) // Trọng số KHM — KH mới
+  weightVisit        Int @default(10) // Trọng số GK — CSKH/Đi gặp KH
 
-  // 3. Phát triển khách hàng mới — chưa có khái niệm "khách hàng mới" trong dữ liệu đơn hàng.
+  // KH mới — chưa có khái niệm "khách hàng mới" trong dữ liệu đơn hàng nên vẫn nhập tay.
   targetNewCustomers Int?
   actualNewCustomers Int?
 
-  // 4. Công nợ — tạm thời nhập tay vì congno.hienvi.me chưa hoạt động (HIENVI_MOCK_MODE).
+  // Công nợ — tạm thời nhập tay vì congno.hienvi.me chưa hoạt động (HIENVI_MOCK_MODE). Điểm cố
+  // định tối đa 10+10, không có trọng số riêng.
   debtOverduePct        Decimal? @db.Decimal(6, 2) // % công nợ quá hạn
   debtCollectionRatePct Decimal? @db.Decimal(6, 2) // % tỷ lệ thu hồi công nợ trong tháng
 
   // Chỉ tiêu số lượt đi gặp khách hàng/tháng — dùng quy đổi điểm từ số lượt đăng ký đã duyệt.
   visitTarget Int @default(8)
 
-  // 6. Thái độ & kỷ luật
-  attendanceDays Decimal? @db.Decimal(5, 2) // ngày công / 26
-  violationCount Int?     @default(0)
+  // Thái độ & kỷ luật — chỉ còn dựa số lần vi phạm (đã bỏ "chuyên cần" khỏi công thức), tối đa 2đ.
+  violationCount Int? @default(0)
 
   updatedById String?
   updatedBy   User?    @relation("KpiUpdatedBy", fields: [updatedById], references: [id])
@@ -763,6 +772,10 @@ model WeekPlanTarget {
   weekStart   DateTime
   metric      WeekPlanMetric
   targetValue Int            @default(0)
+  // Trọng số mục này trong tuần — Quản trị viên tự phân bổ riêng cho từng nhân viên/từng tuần,
+  // tổng 6 mục của 1 người trong 1 tuần LUÔN phải bằng 100 (validate ở tầng ứng dụng, xem
+  // lib/week-plan.ts). Dùng tính "Điểm" = tỉ lệ hoàn thành × trọng số cho từng mục.
+  weight      Int            @default(0)
   createdById String
   createdBy   User           @relation("WeekPlanTargetCreatedBy", fields: [createdById], references: [id])
   createdAt   DateTime       @default(now())

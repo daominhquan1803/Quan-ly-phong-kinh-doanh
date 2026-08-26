@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Plus, Trash2, UploadCloud, Info, Save } from "lucide-react";
@@ -9,6 +9,7 @@ import { cn, formatDateVN } from "@/lib/utils";
 type Metric = "NEW_CONTACT" | "NEW_MEETING" | "EXISTING_VISIT" | "NEW_CUSTOMER_SALE" | "NEW_QUOTE" | "BUSINESS_TRIP";
 const METRICS: Metric[] = ["NEW_CONTACT", "NEW_MEETING", "EXISTING_VISIT", "NEW_CUSTOMER_SALE", "NEW_QUOTE", "BUSINESS_TRIP"];
 const MANUAL_METRICS: Metric[] = ["NEW_CONTACT", "NEW_MEETING", "EXISTING_VISIT"];
+const WEIGHT_TOTAL = 100;
 
 const METRIC_LABEL: Record<Metric, string> = {
   NEW_CONTACT: "KH liên hệ mới",
@@ -28,13 +29,16 @@ const METRIC_NOTE: Record<Metric, string> = {
 };
 
 interface Employee { id: string; name: string }
-interface ReportCell { target: number; actual: number }
+interface ReportCell { target: number; actual: number; weight: number; point: number }
 interface ReportRow {
   employeeId: string;
   employeeName: string;
   metrics: Record<Metric, ReportCell>;
   totalTarget: number;
   totalActual: number;
+  totalWeight: number;
+  totalPoints: number;
+  weekGrade: 0 | 1 | 2;
 }
 interface SummaryResponse { weekStart: string; rows: ReportRow[]; isAdmin: boolean }
 interface ResultEntry {
@@ -46,23 +50,68 @@ interface ResultEntry {
   productInterest: string | null;
 }
 
-function startOfWeek(d: Date): Date {
-  const date = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const day = date.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  date.setDate(date.getDate() + diff);
-  return date;
+// ---- "Tuần" riêng của Kế hoạch làm việc tuần — luôn đúng 4 tuần/tháng, không vắt qua tháng ----
+// (bản JS thuần dùng ở client, khớp 1-1 với apps/web/src/lib/week-plan.ts phía server).
+
+function firstMondayOnOrAfter(d: Date): Date {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const day = x.getDay();
+  const diff = day === 1 ? 0 : day === 0 ? 1 : 8 - day;
+  x.setDate(x.getDate() + diff);
+  return x;
 }
-function addWeeks(d: Date, n: number): Date {
-  const next = new Date(d);
-  next.setDate(next.getDate() + n * 7);
-  return next;
+function addDays(d: Date, n: number): Date {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+}
+function getMonthWeekRanges(year: number, month: number) {
+  const monthStart = new Date(year, month - 1, 1);
+  const monthEnd = new Date(year, month, 0);
+  const m1 = firstMondayOnOrAfter(monthStart);
+  const m2 = addDays(m1, 7);
+  const m3 = addDays(m1, 14);
+  const m4 = addDays(m1, 21);
+  return [
+    { weekIndex: 1 as const, start: monthStart, end: addDays(m2, -1) },
+    { weekIndex: 2 as const, start: m2, end: addDays(m3, -1) },
+    { weekIndex: 3 as const, start: m3, end: addDays(m4, -1) },
+    { weekIndex: 4 as const, start: m4, end: monthEnd },
+  ];
+}
+function findMonthWeek(d: Date) {
+  const year = d.getFullYear();
+  const month = d.getMonth() + 1;
+  const ranges = getMonthWeekRanges(year, month);
+  const key = new Date(year, d.getMonth(), d.getDate()).getTime();
+  const match = ranges.find((r) => key >= r.start.getTime() && key <= r.end.getTime()) ?? ranges[0];
+  return { ...match, year, month };
+}
+function startOfCurrentMonthWeek(d: Date): Date {
+  return findMonthWeek(d).start;
+}
+function adjacentWeekStart(weekStart: Date, direction: 1 | -1): Date {
+  const { year, month, weekIndex } = findMonthWeek(weekStart);
+  let targetIndex = weekIndex + direction;
+  let targetYear = year;
+  let targetMonth = month;
+  if (targetIndex < 1) {
+    targetIndex = 4;
+    targetMonth -= 1;
+    if (targetMonth < 1) { targetMonth = 12; targetYear -= 1; }
+  } else if (targetIndex > 4) {
+    targetIndex = 1;
+    targetMonth += 1;
+    if (targetMonth > 12) { targetMonth = 1; targetYear += 1; }
+  }
+  return getMonthWeekRanges(targetYear, targetMonth)[targetIndex - 1].start;
+}
+function fmtDM(d: Date): string {
+  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 function weekLabel(weekStart: Date): string {
-  const end = new Date(weekStart);
-  end.setDate(end.getDate() + 6);
-  const fmt = (x: Date) => `${String(x.getDate()).padStart(2, "0")}/${String(x.getMonth() + 1).padStart(2, "0")}`;
-  return `Tuần ${fmt(weekStart)} – ${fmt(end)}/${end.getFullYear()}`;
+  const { year, month, weekIndex, start, end } = findMonthWeek(weekStart);
+  return `Tuần ${weekIndex} tháng ${month} (${fmtDM(start)} – ${fmtDM(end)}/${year})`;
 }
 function toISODate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -76,13 +125,18 @@ function barColor(p: number): string {
   if (p >= 60) return "bg-amber-500";
   return "bg-brandRed-600";
 }
+function gradeBadge(g: 0 | 1 | 2): { label: string; cls: string } {
+  if (g === 2) return { label: "Đạt", cls: "bg-success-600/10 text-success-600" };
+  if (g === 1) return { label: "Cần cố gắng", cls: "bg-warning-500/10 text-warning-500" };
+  return { label: "Không hoàn thành", cls: "bg-brandRed-50 text-brandRed-600" };
+}
 
 export function WeekPlanOverview({ isAdmin }: { isAdmin: boolean }) {
   const { data: session } = useSession();
   const currentUserId = session?.user?.id;
   const queryClient = useQueryClient();
 
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
+  const [weekStart, setWeekStart] = useState(() => startOfCurrentMonthWeek(new Date()));
   const weekStartISO = weekStart.toISOString();
 
   const { data: employeesData } = useQuery({
@@ -142,22 +196,22 @@ export function WeekPlanOverview({ isAdmin }: { isAdmin: boolean }) {
 }
 
 function WeekNav({ weekStart, onChange }: { weekStart: Date; onChange: (d: Date) => void }) {
-  const isCurrent = toISODate(weekStart) === toISODate(startOfWeek(new Date()));
+  const isCurrent = toISODate(weekStart) === toISODate(startOfCurrentMonthWeek(new Date()));
   return (
     <div className="flex items-center justify-between flex-wrap gap-3">
       <div className="flex items-center gap-1.5">
         <button
-          onClick={() => onChange(addWeeks(weekStart, -1))}
+          onClick={() => onChange(adjacentWeekStart(weekStart, -1))}
           className="rounded-md border border-gray-200 p-1.5 text-ink2 hover:bg-gray-50"
           aria-label="Tuần trước"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
-        <div className="rounded-md border border-gray-200 bg-card px-4 py-1.5 text-sm font-semibold text-ink min-w-[220px] text-center">
+        <div className="rounded-md border border-gray-200 bg-card px-4 py-1.5 text-sm font-semibold text-ink min-w-[260px] text-center">
           {weekLabel(weekStart)}
         </div>
         <button
-          onClick={() => onChange(addWeeks(weekStart, 1))}
+          onClick={() => onChange(adjacentWeekStart(weekStart, 1))}
           className="rounded-md border border-gray-200 p-1.5 text-ink2 hover:bg-gray-50"
           aria-label="Tuần sau"
         >
@@ -166,7 +220,7 @@ function WeekNav({ weekStart, onChange }: { weekStart: Date; onChange: (d: Date)
       </div>
       {!isCurrent && (
         <button
-          onClick={() => onChange(startOfWeek(new Date()))}
+          onClick={() => onChange(startOfCurrentMonthWeek(new Date()))}
           className="text-xs font-medium text-amber-500 hover:underline"
         >
           Về tuần hiện tại
@@ -176,7 +230,7 @@ function WeekNav({ weekStart, onChange }: { weekStart: Date; onChange: (d: Date)
   );
 }
 
-// ---------------- Giao chỉ tiêu tuần (ADMIN) ----------------
+// ---------------- Giao chỉ tiêu + trọng số tuần (ADMIN) ----------------
 
 function TargetGrid({
   weekStartISO,
@@ -189,35 +243,57 @@ function TargetGrid({
   isLoading: boolean;
   onSaved: () => void;
 }) {
-  const [edits, setEdits] = useState<Record<string, number>>({});
+  const [targetEdits, setTargetEdits] = useState<Record<string, number>>({});
+  const [weightEdits, setWeightEdits] = useState<Record<string, number>>({});
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    setEdits({});
+    setTargetEdits({});
+    setWeightEdits({});
     setSavedMsg(null);
   }, [weekStartISO]);
 
-  function valueFor(employeeId: string, metric: Metric): number {
+  function targetFor(employeeId: string, metric: Metric): number {
     const key = `${employeeId}:${metric}`;
-    return edits[key] ?? rows.find((r) => r.employeeId === employeeId)?.metrics[metric]?.target ?? 0;
+    return targetEdits[key] ?? rows.find((r) => r.employeeId === employeeId)?.metrics[metric]?.target ?? 0;
+  }
+  function weightFor(employeeId: string, metric: Metric): number {
+    const key = `${employeeId}:${metric}`;
+    return weightEdits[key] ?? rows.find((r) => r.employeeId === employeeId)?.metrics[metric]?.weight ?? 0;
+  }
+  function weightSumFor(employeeId: string): number {
+    return METRICS.reduce((s, m) => s + weightFor(employeeId, m), 0);
   }
 
   async function handleSave() {
-    if (Object.keys(edits).length === 0) return;
+    if (Object.keys(targetEdits).length === 0 && Object.keys(weightEdits).length === 0) return;
     setSaving(true);
     setSavedMsg(null);
-    const targets = Object.entries(edits).map(([key, targetValue]) => {
-      const [employeeId, metric] = key.split(":");
-      return { employeeId, metric, targetValue };
-    });
+    // Chỉ gửi trọn bộ 6 mục cho NHỮNG NHÂN VIÊN thực sự có ô vừa sửa (không phải mọi người đang
+    // hiển thị) — để API validate tổng trọng số = 100 đúng người đó, không chặn nhầm lưu vì các
+    // nhân viên KHÁC (chưa từng đụng tới) đang có trọng số 0.
+    const editedEmployeeIds = new Set(
+      [...Object.keys(targetEdits), ...Object.keys(weightEdits)].map((key) => key.split(":")[0])
+    );
+    const targets = rows
+      .filter((r) => editedEmployeeIds.has(r.employeeId))
+      .flatMap((r) =>
+        METRICS.map((m) => ({
+          employeeId: r.employeeId,
+          metric: m,
+          targetValue: targetFor(r.employeeId, m),
+          weight: weightFor(r.employeeId, m),
+        }))
+      );
     const res = await fetch("/api/week-plan/targets", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ weekStart: weekStartISO, targets }),
     });
     if (res.ok) {
-      setEdits({});
+      setTargetEdits({});
+      setWeightEdits({});
       setSavedMsg("Đã lưu chỉ tiêu tuần.");
       onSaved();
     } else {
@@ -230,16 +306,18 @@ function TargetGrid({
   return (
     <div className="rounded-lg border border-gray-200 bg-card p-5">
       <div className="flex items-center justify-between gap-3 mb-1">
-        <h2 className="font-medium text-ink">Giao chỉ tiêu tuần</h2>
+        <h2 className="font-medium text-ink">Giao chỉ tiêu &amp; trọng số tuần</h2>
         <button
           onClick={handleSave}
-          disabled={saving || Object.keys(edits).length === 0}
+          disabled={saving || (Object.keys(targetEdits).length === 0 && Object.keys(weightEdits).length === 0)}
           className="flex items-center gap-1.5 rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-amber-foreground hover:bg-amber-400 disabled:opacity-40"
         >
           <Save className="h-3.5 w-3.5" /> Lưu chỉ tiêu
         </button>
       </div>
-      <p className="text-xs text-muted2 mb-4">Có thể giao trước chỉ tiêu cho các tuần tương lai — chỉ Quản trị viên nhập được.</p>
+      <p className="text-xs text-muted2 mb-4">
+        Có thể giao trước cho các tuần tương lai — chỉ Quản trị viên nhập được. Tổng 6 trọng số của mỗi người bắt buộc = 100.
+      </p>
       {savedMsg && <p className="text-xs text-amber-500 mb-3">{savedMsg}</p>}
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Đang tải...</p>
@@ -252,37 +330,74 @@ function TargetGrid({
               <tr className="text-left text-xs text-muted-foreground">
                 <th className="font-medium px-3 py-2">Nhân viên</th>
                 {METRICS.map((m) => (
-                  <th key={m} className="font-medium px-3 py-2 text-center">
+                  <th key={m} colSpan={2} className="font-medium px-3 py-2 text-center border-l border-gray-100">
                     {METRIC_LABEL[m]}
                   </th>
                 ))}
+                <th className="font-medium px-3 py-2 text-center border-l border-gray-100">Tổng trọng số</th>
+              </tr>
+              <tr className="text-left text-[10px] text-muted2">
+                <th></th>
+                {METRICS.map((m) => (
+                  <Fragment2 key={m}>
+                    <th className="font-normal px-2 py-1 text-center border-l border-gray-100">Chỉ tiêu</th>
+                    <th className="font-normal px-2 py-1 text-center">Trọng số</th>
+                  </Fragment2>
+                ))}
+                <th></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {rows.map((r) => (
-                <tr key={r.employeeId}>
-                  <td className="px-3 py-2 font-medium text-ink whitespace-nowrap">{r.employeeName}</td>
-                  {METRICS.map((m) => (
-                    <td key={m} className="px-3 py-2 text-center">
-                      <input
-                        type="number"
-                        min={0}
-                        value={valueFor(r.employeeId, m)}
-                        onChange={(e) =>
-                          setEdits((prev) => ({ ...prev, [`${r.employeeId}:${m}`]: Number(e.target.value) }))
-                        }
-                        className="w-16 text-center text-sm bg-card text-ink rounded-md border border-gray-200 py-1 px-1 focus:outline-none focus:ring-2 focus:ring-amber-500"
-                      />
+              {rows.map((r) => {
+                const wSum = weightSumFor(r.employeeId);
+                return (
+                  <tr key={r.employeeId}>
+                    <td className="px-3 py-2 font-medium text-ink whitespace-nowrap">{r.employeeName}</td>
+                    {METRICS.map((m) => (
+                      <Fragment2 key={m}>
+                        <td className="px-2 py-2 text-center border-l border-gray-100">
+                          <input
+                            type="number"
+                            min={0}
+                            value={targetFor(r.employeeId, m)}
+                            onChange={(e) =>
+                              setTargetEdits((prev) => ({ ...prev, [`${r.employeeId}:${m}`]: Number(e.target.value) }))
+                            }
+                            className="w-14 text-center text-sm bg-card text-ink rounded-md border border-gray-200 py-1 px-1 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                          />
+                        </td>
+                        <td className="px-2 py-2 text-center">
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            value={weightFor(r.employeeId, m)}
+                            onChange={(e) =>
+                              setWeightEdits((prev) => ({ ...prev, [`${r.employeeId}:${m}`]: Number(e.target.value) }))
+                            }
+                            className="w-14 text-center text-sm bg-card text-ink rounded-md border border-gray-200 py-1 px-1 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                          />
+                        </td>
+                      </Fragment2>
+                    ))}
+                    <td className={cn("px-3 py-2 text-center font-semibold border-l border-gray-100", wSum === WEIGHT_TOTAL ? "text-success-600" : "text-brandRed-600")}>
+                      {wSum}
                     </td>
-                  ))}
-                </tr>
-              ))}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
     </div>
   );
+}
+
+// Fragment không cần key riêng ngoài key trên phần tử cha — đặt tên khác "Fragment" của React để
+// khỏi phải import thêm, dùng luôn React.Fragment qua JSX runtime tự động.
+function Fragment2({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
 }
 
 // ---------------- Báo cáo tiến độ ----------------
@@ -294,44 +409,56 @@ function ProgressReport({ rows, isLoading, isAdmin }: { rows: ReportRow[]; isLoa
         <h2 className="font-medium text-ink">Báo cáo tiến độ tuần</h2>
         <span className="text-xs text-muted2">Cập nhật theo thời gian thực</span>
       </div>
-      <p className="text-xs text-muted2 mb-4">Chỉ tiêu / thực tế từng mục — 3 mục tự động lấy trực tiếp từ Đơn hàng, Báo giá, Đăng ký đi công tác.</p>
+      <p className="text-xs text-muted2 mb-4">
+        Điểm từng mục = tỉ lệ hoàn thành × trọng số. Tổng điểm tuần quy về Điểm tuần 0/1/2 (80-100 → Đạt, 60-79 → Cần
+        cố gắng, dưới 60 → Không hoàn thành) — cộng dồn 4 tuần vào KPI tháng.
+      </p>
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Đang tải...</p>
       ) : rows.length === 0 ? (
         <p className="text-sm text-muted-foreground">Chưa có dữ liệu.</p>
       ) : (
         <div className="space-y-5">
-          {rows.map((r) => (
-            <div key={r.employeeId}>
-              <div className="flex items-center justify-between mb-2">
-                <p className="font-medium text-ink text-sm">{r.employeeName}</p>
-                <p className="text-xs text-muted-foreground">
-                  Tổng: <span className="font-mono tabular-nums text-ink">{r.totalActual}</span> / {r.totalTarget}
-                </p>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {METRICS.map((m) => {
-                  const cell = r.metrics[m];
-                  const p = pct(cell.actual, cell.target);
-                  return (
-                    <div key={m} className="rounded-md border border-gray-200 px-3 py-2.5">
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <span className="text-xs text-muted-foreground truncate" title={METRIC_NOTE[m]}>
-                          {METRIC_LABEL[m]}
-                        </span>
-                        <span className="text-xs font-mono tabular-nums font-semibold text-ink shrink-0">
-                          {cell.actual}/{cell.target}
-                        </span>
+          {rows.map((r) => {
+            const badge = gradeBadge(r.weekGrade);
+            return (
+              <div key={r.employeeId}>
+                <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                  <p className="font-medium text-ink text-sm">{r.employeeName}</p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      Tổng điểm: <span className="font-mono tabular-nums text-ink font-semibold">{r.totalPoints}</span>/100
+                    </span>
+                    <span className={cn("status-badge", badge.cls)}>Điểm tuần {r.weekGrade} — {badge.label}</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {METRICS.map((m) => {
+                    const cell = r.metrics[m];
+                    const p = pct(cell.actual, cell.target);
+                    return (
+                      <div key={m} className="rounded-md border border-gray-200 px-3 py-2.5">
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <span className="text-xs text-muted-foreground truncate" title={METRIC_NOTE[m]}>
+                            {METRIC_LABEL[m]}
+                          </span>
+                          <span className="text-xs font-mono tabular-nums font-semibold text-ink shrink-0">
+                            {cell.actual}/{cell.target}
+                          </span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-gray-200 overflow-hidden mb-1">
+                          <div className={cn("h-full rounded-full", barColor(p))} style={{ width: `${Math.min(p, 100)}%` }} />
+                        </div>
+                        <p className="text-[11px] text-muted2 text-right">
+                          Trọng số {cell.weight} · Điểm <span className="font-mono">{cell.point}</span>
+                        </p>
                       </div>
-                      <div className="h-1.5 rounded-full bg-gray-200 overflow-hidden">
-                        <div className={cn("h-full rounded-full", barColor(p))} style={{ width: `${Math.min(p, 100)}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

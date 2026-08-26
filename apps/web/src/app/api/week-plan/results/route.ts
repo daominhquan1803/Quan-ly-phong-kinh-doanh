@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@hoanggia/db";
 import { requireSession, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
-import { isManualMetric, MANUAL_METRICS, startOfWeek, weekRange } from "@/lib/week-plan";
+import { isManualMetric, MANUAL_METRICS, snapToWeekStart, weekRange } from "@/lib/week-plan";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     const employeeIdParam = searchParams.get("employeeId");
     if (!weekStartParam) return NextResponse.json({ error: "Thiếu weekStart" }, { status: 400 });
 
-    const weekStart = startOfWeek(new Date(weekStartParam));
+    const weekStart = snapToWeekStart(new Date(weekStartParam));
     if (Number.isNaN(weekStart.getTime())) {
       return NextResponse.json({ error: "weekStart không hợp lệ" }, { status: 400 });
     }
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
     const employeeId =
       session.user.role === "ADMIN" && parsed.data.employeeId ? parsed.data.employeeId : session.user.id;
 
-    const weekStart = startOfWeek(new Date(parsed.data.weekStart));
+    const weekStart = snapToWeekStart(new Date(parsed.data.weekStart));
     const entryDate = new Date(parsed.data.entryDate);
     if (Number.isNaN(weekStart.getTime()) || Number.isNaN(entryDate.getTime())) {
       return NextResponse.json({ error: "Ngày không hợp lệ" }, { status: 400 });

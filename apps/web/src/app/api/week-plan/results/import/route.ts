@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import { prisma } from "@hoanggia/db";
 import { parseExcelDate } from "@/lib/excel-parser";
 import { requireSession, UnauthorizedError } from "@/lib/rbac";
-import { matchMetricFromSectionLabel, startOfWeek } from "@/lib/week-plan";
+import { matchMetricFromSectionLabel, snapToWeekStart } from "@/lib/week-plan";
 
 export const dynamic = "force-dynamic";
 
@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
 
       toCreate.push({
         employeeId,
-        weekStart: startOfWeek(entryDate),
+        weekStart: snapToWeekStart(entryDate),
         metric: currentMetric,
         entryDate,
         customerName,

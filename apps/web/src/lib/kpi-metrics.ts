@@ -1,60 +1,70 @@
 import { prisma } from "@hoanggia/db";
 import { monthRange, getEmployeeTargetVsActual, getProductGroupTargetVsActual } from "./dashboard-metrics";
+import { getMonthlyWeekPlanScore } from "./week-plan";
 
 /**
- * Công thức tính điểm KPI hàng tháng — dựa theo file mẫu KPI_KD_HoanggiaPS.xlsx (sheet
- * KPI_Danh_gia_thang + Thang_diem_va_xep_loai + Huong_dan). Đã qua 3 lần cập nhật (anh Quân gửi
- * lại file/yêu cầu đổi tiêu chí):
- *  - Lần 1: "DS Sản xuất" (so tỷ lệ Doanh số SX thực hiện/chỉ tiêu) → đổi thành "Cơ cấu ngành
- *    hàng TM/SX" (so % cơ cấu thực tế với chỉ tiêu cố định 65% TM / 35% SX, chấm theo mức lệch) —
- *    "Lợi nhuận" (% lợi nhuận) → đổi thành "Giá bán cao" (đếm SỐ MÃ HÀNG bán cao hơn giá SX báo
- *    ≥3%).
- *  - Lần 2 (file gửi lại 24/08): thêm THƯỞNG VƯỢT CHỈ TIÊU cho Doanh số tổng — xem sheet
- *    "Thang_diem_va_xep_loai" mục 1a, dòng "Tỷ lệ cao >110%": từ tỷ lệ đạt 110% trở lên, cứ mỗi
- *    10% vượt thêm được cộng 1đ, KHÔNG giới hạn trần (khác 6 đầu điểm còn lại vẫn giữ nguyên
- *    trần tối đa).
- *  - Lần 3: đổi LẠI đầu điểm #2 — từ "Cơ cấu ngành hàng TM/SX" (mức lệch so với chỉ tiêu cố định
- *    65/35 ở Lần 1) sang "Doanh số ngành Sản xuất" thuần tỷ lệ thực hiện/chỉ tiêu riêng của
- *    NGÀNH SẢN XUẤT (không còn liên quan Thương mại/cơ cấu nữa) — đúng công thức MIN(10, tỷ lệ
- *    đạt DS SX × 20) ở sheet "Thang_diem_va_xep_loai" mục 1b, kèm THƯỞNG vượt 110% giống hệt cơ
- *    chế của Doanh số tổng (mục 1b cũng có dòng "Tỷ lệ cao >110%" y hệt mục 1a) — áp dụng cùng
- *    cách đọc cho nhất quán với đầu điểm #1. Chỉ tiêu/thực tế DS ngành SX lấy từ SalesPlanLine
- *    nhóm "Sản xuất" (cùng nguồn getProductGroupTargetVsActual dùng ở trang Kế hoạch kinh doanh),
- *    không cần nhập tay.
+ * Công thức tính điểm KPI hàng tháng — dựa theo file mẫu KPI_KD_HoanggiaPS.xlsx / KPI_PKD1_
+ * HoanggiaPS.xlsx (sheet KPI_Danh_gia_thang + Thang_diem_va_xep_loai). Lịch sử cập nhật:
+ *  - Lần 1-3 (trước 26/08): xem lịch sử cũ trong git log — đã đổi qua lại "Cơ cấu ngành hàng"
+ *    ↔ "DS ngành Sản xuất" và thêm thưởng vượt chỉ tiêu Doanh số.
+ *  - Lần 4 (26/08, file KPI_PKD1_HoanggiaPS.xlsx): đổi CẢ CƠ CẤU CHỈ TIÊU —
+ *      + BỎ HẲN "Giá bán cao" (không còn cột nào trong file mới).
+ *      + BỎ HẲN "Chuyên cần" khỏi Thái độ & kỷ luật — giờ Thái độ chỉ còn tối đa 2đ, tính thuần
+ *        theo số lần vi phạm: max(2 − số lần vi phạm, 0).
+ *      + BỎ trừ điểm "hàng lỗi" (DefectReport) khỏi CSKH/Đi gặp KH — giờ tính thuần tỷ lệ đạt ×
+ *        trọng số, có trần, KHÔNG có thưởng vượt (khác Doanh số/DS SX). DefectReport vẫn giữ lại
+ *        trong app để ghi nhận/theo dõi, chỉ không dùng để trừ điểm KPI nữa.
+ *      + Doanh số tổng, DS ngành Sản xuất, KH mới, CSKH/Đi gặp KH giờ dùng TRỌNG SỐ do Quản trị
+ *        viên tự phân bổ RIÊNG CHO TỪNG NHÂN VIÊN mỗi tháng (tuỳ định hướng phát triển từng
+ *        người) — mặc định 30/20/10/10, nhưng có thể đổi miễn tổng 4 trọng số này luôn = 70
+ *        (giữ đúng thang 100 chung, vì 30 điểm còn lại — Nợ quá hạn 10 + Thu hồi nợ 10 + Thái độ
+ *        2 + Điểm tuần 8 — vẫn cố định, không có trọng số riêng).
+ *      + Mốc thưởng vượt chỉ tiêu (Doanh số tổng + DS ngành Sản xuất) đổi từ "mỗi 10% vượt thêm
+ *        +1đ" xuống "mỗi 5% vượt thêm +1đ" (vẫn bắt đầu tính từ 110% chỉ tiêu, không giới hạn
+ *        trần) — áp dụng CẢ 2 mục như nhau.
+ *      + Thêm đầu điểm MỚI "Điểm tuần" (tối đa 8đ, = tổng 4 "Điểm tuần" 0/1/2 của Kế hoạch làm
+ *        việc tuần trong đúng tháng đó — xem lib/week-plan.ts).
  *
  * Tổng 100 điểm, 8 đầu điểm:
- *  1. Doanh số            tối đa 20đ (+thưởng vượt 110%, không trần) — MIN(20, tỷ lệ đạt DS × 20) + thưởng — tự động, từ SalesTarget
- *  2. DS ngành Sản xuất    tối đa 10đ (+thưởng vượt 110%, không trần) — MIN(10, tỷ lệ đạt DS SX × 10) + thưởng — tự động, từ SalesPlanLine nhóm Sản xuất
- *  3. Giá bán cao          tối đa 10đ — MIN(10, số mã hàng thực tế / chỉ tiêu × 10)    — nhập tay (chưa có dữ liệu giá SX báo)
- *  4. KH mới               tối đa 10đ — MIN(10, tỷ lệ đạt KH mới × 10)                 — nhập tay
- *  5. Nợ quá hạn           tối đa 10đ — bậc thang theo %                              — nhập tay (chờ nối congno.hienvi.me)
- *  6. Thu hồi nợ           tối đa 10đ — MIN(10, tỷ lệ thu hồi × 10)                    — nhập tay (chờ nối congno.hienvi.me)
- *  7. CSKH & Chất lượng    tối đa 20đ — (Điểm đi gặp KH/10)×20 − hàng lỗi×3           — tự động, từ BusinessTripRequest + DefectReport
- *  8. Thái độ & kỷ luật    tối đa 10đ — (Chuyên cần/26)×10 − vi phạm×2                — nhập tay
+ *  1. Doanh số tổng     tối đa = weightRevenue (mặc định 30, +thưởng vượt 110% mỗi 5% +1đ, không trần) — tự động, từ SalesTarget
+ *  2. DS ngành Sản xuất tối đa = weightRevenueSX (mặc định 20, +thưởng như trên)             — tự động, từ SalesPlanLine nhóm Sản xuất
+ *  3. KH mới            tối đa = weightNewCustomers (mặc định 10) — MIN(weight, tỷ lệ đạt × weight) — nhập tay
+ *  4. CSKH/Đi gặp KH    tối đa = weightVisit (mặc định 10) — MIN(weight, tỷ lệ đạt gặp KH × weight) — tự động, từ BusinessTripRequest
+ *  5. Nợ quá hạn        tối đa 10đ — bậc thang theo % (KHÔNG có trọng số riêng)     — nhập tay (chờ nối congno.hienvi.me)
+ *  6. Thu hồi nợ        tối đa 10đ — MIN(10, tỷ lệ thu hồi × 10) (KHÔNG có trọng số riêng) — nhập tay
+ *  7. Thái độ & kỷ luật tối đa 2đ  — max(2 − số lần vi phạm, 0)                      — nhập tay
+ *  8. Điểm tuần         tối đa 8đ  — tổng 4 "Điểm tuần" (0/1/2) của Kế hoạch làm việc tuần trong tháng — tự động
  *
- * "Điểm đi gặp KH" (1-10) trong công thức #7 tự tính = MIN(10, số lượt đã duyệt / chỉ tiêu ×10).
+ * weightRevenue + weightRevenueSX + weightNewCustomers + weightVisit LUÔN phải = 70 (không ép ở
+ * tầng hàm tính điểm — chỉ cảnh báo ở API/UI — vì đây là số Quản trị viên tự nhập, có thể tạm
+ * thời sai trước khi kịp sửa).
  */
 
 export type KpiGrade = "A" | "B" | "C" | "D" | "F";
 
+// Tổng 4 trọng số linh hoạt (Doanh số/DS SX/KH mới/CSKH) phải luôn bằng mốc này.
+export const KPI_FLEXIBLE_WEIGHT_TOTAL = 70;
+
 export interface KpiScoreInput {
   targetRevenue: number;
   actualRevenue: number;
-  // DS ngành Sản xuất — chỉ tiêu/thực hiện riêng nhóm Sản xuất trong tháng (từ SalesPlanLine),
-  // dùng tính tỷ lệ đạt để chấm điểm #2 (không còn liên quan tới Thương mại/cơ cấu nữa).
+  weightRevenue: number;
+  // DS ngành Sản xuất — chỉ tiêu/thực hiện riêng nhóm Sản xuất trong tháng (từ SalesPlanLine).
   targetRevenueSX: number;
   actualRevenueSX: number;
-  targetHighPriceSkuCount: number | null;
-  actualHighPriceSkuCount: number | null;
+  weightRevenueSX: number;
   targetNewCustomers: number | null;
   actualNewCustomers: number | null;
+  weightNewCustomers: number;
   debtOverduePct: number | null;
   debtCollectionRatePct: number | null;
   visitTarget: number;
   approvedVisitCount: number;
-  defectCount: number;
-  attendanceDays: number | null;
+  weightVisit: number;
   violationCount: number;
+  // Tổng điểm 0/1/2 của 4 tuần trong tháng (Kế hoạch làm việc tuần) — tính sẵn từ bên ngoài
+  // (getMonthlyWeekPlanScore) rồi truyền vào, để computeKpiScores thuần không cần đụng DB.
+  weekScore: number;
 }
 
 export interface KpiScoreResult {
@@ -69,13 +79,12 @@ export interface KpiScoreResult {
   // Phần điểm THƯỞNG vượt chỉ tiêu của DS ngành SX (đã cộng sẵn vào scoreSX) — cùng cơ chế với
   // revenueBonus.
   revenueSXBonus: number;
-  scoreHighPrice: number;
   scoreNewCustomers: number;
   scoreDebtOverdue: number;
   scoreDebtCollection: number;
   scoreVisit: number;
-  scoreCskh: number;
   scoreAttitude: number;
+  scoreWeek: number;
   totalScore: number;
   grade: KpiGrade;
   gradeLabel: string;
@@ -98,23 +107,26 @@ function scoreDebtOverdueBand(pct: number | null): number {
 }
 
 /**
- * Điểm theo tỷ lệ đạt (thực tế/chỉ tiêu) với trần `maxScore` — CỘNG THÊM thưởng vượt chỉ tiêu —
- * dùng chung cho Doanh số tổng (mục 1a, trần 20đ) và DS ngành Sản xuất (mục 1b, trần 10đ) trong
- * sheet "Thang_diem_va_xep_loai", cả 2 mục đều có cùng dòng "Tỷ lệ cao >110%": "Từ 110% tỷ lệ
- * cao hơn mỗi 10% cộng 1đ". Đọc là: đạt đúng 110% đã có +1đ, mỗi mốc 10% tiếp theo (120%,
- * 130%...) cộng thêm 1đ nữa — không giới hạn trần (khác phần MIN(maxScore,...) bên dưới), nên
- * điểm mục đó và Điểm tổng có thể vượt quá mức tối đa thông thường khi vượt xa chỉ tiêu — đúng
- * tinh thần khuyến khích vượt chỉ tiêu của file mẫu. File không nêu mốc chẵn 110% có tính hay
- * phải vượt qua mới tính — chọn cách đọc bao gồm mốc chẵn (>=110%) vì khớp sát nghĩa "từ 110%"
- * hơn "trên 110%" ở dòng mô tả.
+ * Điểm theo tỷ lệ đạt (thực tế/chỉ tiêu) với trần `maxScore` (= trọng số do Quản trị viên nhập)
+ * — CỘNG THÊM thưởng vượt chỉ tiêu — dùng chung cho Doanh số tổng và DS ngành Sản xuất. Từ 110%
+ * chỉ tiêu trở lên, cứ mỗi 5% vượt thêm được cộng 1đ, KHÔNG giới hạn trần (khác các đầu điểm
+ * dùng scoreRatioCapped bên dưới) — nên điểm mục đó và Điểm tổng có thể vượt quá mức tối đa
+ * thông thường khi vượt xa chỉ tiêu, đúng tinh thần khuyến khích vượt chỉ tiêu của file mẫu.
  */
 function scoreRatioWithBonus(pct: number | null, maxScore: number): { score: number; bonus: number } {
   const base = clamp((pct ?? 0) * maxScore, 0, maxScore);
-  // % vượt chỉ tiêu, làm tròn về 1 chữ số thập phân TRƯỚC khi chia lấy số mốc 10% — tránh sai số
-  // dấu phẩy động (vd (1.2-1)*10 ra 1.9999999999999998 trong JS thay vì 2, làm floor() hụt 1 mốc).
+  // % vượt chỉ tiêu, làm tròn về 1 chữ số thập phân TRƯỚC khi chia lấy số mốc 5% — tránh sai số
+  // dấu phẩy động (vd (1.2-1)*10 ra 1.9999999999999998 trong JS thay vì 2, làm floor() hụt mốc).
   const overPct = pct != null ? Math.round((pct - 1) * 1000) / 10 : 0;
-  const bonus = pct != null && pct >= 1.1 ? Math.floor(overPct / 10) : 0;
+  const bonus = pct != null && pct >= 1.1 ? Math.floor(overPct / 5) : 0;
   return { score: base + bonus, bonus };
+}
+
+/** Điểm theo tỷ lệ đạt, CÓ TRẦN bằng đúng trọng số, KHÔNG có thưởng vượt — dùng cho KH mới và
+ * CSKH/Đi gặp KH (khác Doanh số/DS SX ở trên). */
+function scoreRatioCapped(actual: number | null, target: number | null, weight: number): number {
+  if (target == null || target <= 0 || actual == null) return 0;
+  return clamp((actual / target) * weight, 0, weight);
 }
 
 function gradeOf(total: number): { grade: KpiGrade; label: string; bonus: string } {
@@ -128,44 +140,36 @@ function gradeOf(total: number): { grade: KpiGrade; label: string; bonus: string
 /** Hàm tính điểm thuần (không đụng DB) — dễ test độc lập với công thức mẫu Excel. */
 export function computeKpiScores(input: KpiScoreInput): KpiScoreResult {
   const revenuePct = input.targetRevenue > 0 ? input.actualRevenue / input.targetRevenue : null;
-  const { score: scoreRevenue, bonus: revenueBonus } = scoreRatioWithBonus(revenuePct, 20);
+  const { score: scoreRevenue, bonus: revenueBonus } = scoreRatioWithBonus(revenuePct, input.weightRevenue);
 
   const revenueSXPct = input.targetRevenueSX > 0 ? input.actualRevenueSX / input.targetRevenueSX : null;
-  const { score: scoreSX, bonus: revenueSXBonus } = scoreRatioWithBonus(revenueSXPct, 10);
+  const { score: scoreSX, bonus: revenueSXBonus } = scoreRatioWithBonus(revenueSXPct, input.weightRevenueSX);
 
-  const scoreHighPrice =
-    input.targetHighPriceSkuCount && input.targetHighPriceSkuCount > 0 && input.actualHighPriceSkuCount != null
-      ? clamp((input.actualHighPriceSkuCount / input.targetHighPriceSkuCount) * 10, 0, 10)
-      : 0;
-
-  const scoreNewCustomers =
-    input.targetNewCustomers && input.targetNewCustomers > 0 && input.actualNewCustomers != null
-      ? clamp((input.actualNewCustomers / input.targetNewCustomers) * 10, 0, 10)
-      : 0;
+  const scoreNewCustomers = scoreRatioCapped(input.actualNewCustomers, input.targetNewCustomers, input.weightNewCustomers);
 
   const scoreDebtOverdue = scoreDebtOverdueBand(input.debtOverduePct);
   const scoreDebtCollection =
     input.debtCollectionRatePct != null ? clamp((input.debtCollectionRatePct / 100) * 10, 0, 10) : 0;
 
-  const scoreVisit = input.visitTarget > 0 ? clamp((input.approvedVisitCount / input.visitTarget) * 10, 0, 10) : 0;
-  const scoreCskh = clamp((scoreVisit / 10) * 20 - input.defectCount * 3, 0, 20);
+  const scoreVisit = scoreRatioCapped(input.approvedVisitCount, input.visitTarget, input.weightVisit);
 
-  const scoreAttitude =
-    input.attendanceDays != null ? clamp((input.attendanceDays / 26) * 10 - input.violationCount * 2, 0, 10) : 0;
+  const scoreAttitude = clamp(2 - input.violationCount, 0, 2);
+
+  const scoreWeek = input.weekScore;
 
   // Làm tròn từng điểm thành phần TRƯỚC khi cộng — để "Điểm tổng" hiển thị luôn đúng bằng
   // tổng các cột điểm thành phần đã hiển thị (tránh lệch 0.1đ do sai số làm tròn khi cộng
   // trước rồi mới làm tròn sau).
   const rRevenue = round1(scoreRevenue);
   const rSX = round1(scoreSX);
-  const rHighPrice = round1(scoreHighPrice);
   const rNewCustomers = round1(scoreNewCustomers);
   const rDebtCollection = round1(scoreDebtCollection);
-  const rCskh = round1(scoreCskh);
+  const rVisit = round1(scoreVisit);
   const rAttitude = round1(scoreAttitude);
+  const rWeek = round1(scoreWeek);
 
   const totalScore = round1(
-    rRevenue + rSX + rHighPrice + rNewCustomers + scoreDebtOverdue + rDebtCollection + rCskh + rAttitude
+    rRevenue + rSX + rNewCustomers + scoreDebtOverdue + rDebtCollection + rVisit + rAttitude + rWeek
   );
   const { grade, label, bonus } = gradeOf(totalScore);
 
@@ -176,13 +180,12 @@ export function computeKpiScores(input: KpiScoreInput): KpiScoreResult {
     revenueSXPct,
     scoreSX: rSX,
     revenueSXBonus,
-    scoreHighPrice: rHighPrice,
     scoreNewCustomers: rNewCustomers,
     scoreDebtOverdue,
     scoreDebtCollection: rDebtCollection,
-    scoreVisit: round1(scoreVisit),
-    scoreCskh: rCskh,
+    scoreVisit: rVisit,
     scoreAttitude: rAttitude,
+    scoreWeek: rWeek,
     totalScore,
     grade,
     gradeLabel: label,
@@ -197,18 +200,18 @@ export interface KpiMonthlyReportRow extends KpiScoreResult {
   month: number;
   targetRevenue: number;
   actualRevenue: number;
+  weightRevenue: number;
   targetRevenueSX: number;
   actualRevenueSX: number;
-  targetHighPriceSkuCount: number | null;
-  actualHighPriceSkuCount: number | null;
+  weightRevenueSX: number;
   targetNewCustomers: number | null;
   actualNewCustomers: number | null;
+  weightNewCustomers: number;
   debtOverduePct: number | null;
   debtCollectionRatePct: number | null;
   visitTarget: number;
   approvedVisitCount: number;
-  defectCount: number;
-  attendanceDays: number | null;
+  weightVisit: number;
   violationCount: number;
   hasManualEntry: boolean;
 }
@@ -220,7 +223,7 @@ export async function getKpiMonthlyReport(
 ): Promise<KpiMonthlyReportRow[]> {
   const { start, end } = monthRange(year, month);
 
-  const [revenueRows, entries, visitCounts, supporterVisitCounts, defectCounts] = await Promise.all([
+  const [revenueRows, entries, visitCounts, supporterVisitCounts] = await Promise.all([
     getEmployeeTargetVsActual(year, month, onlyEmployeeId),
     prisma.kpiMonthlyEntry.findMany({
       where: { year, month, ...(onlyEmployeeId ? { employeeId: onlyEmployeeId } : {}) },
@@ -244,14 +247,6 @@ export async function getKpiMonthlyReport(
       },
       _count: { _all: true },
     }),
-    prisma.defectReport.groupBy({
-      by: ["employeeId"],
-      where: {
-        reportDate: { gte: start, lt: end },
-        ...(onlyEmployeeId ? { employeeId: onlyEmployeeId } : {}),
-      },
-      _count: { _all: true },
-    }),
   ]);
 
   const entryByEmployee = new Map(entries.map((e) => [e.employeeId, e]));
@@ -259,7 +254,6 @@ export async function getKpiMonthlyReport(
   for (const v of supporterVisitCounts) {
     visitByEmployee.set(v.employeeId, (visitByEmployee.get(v.employeeId) ?? 0) + v._count._all);
   }
-  const defectByEmployee = new Map(defectCounts.map((d) => [d.employeeId, d._count._all]));
 
   const rows: KpiMonthlyReportRow[] = [];
 
@@ -268,25 +262,29 @@ export async function getKpiMonthlyReport(
 
     // DS ngành Sản xuất cần chỉ tiêu/thực tế riêng nhóm Sản xuất của riêng người này — luôn gọi
     // có lọc đúng 1 nhân viên để không bị cộng dồn nhầm khi báo cáo nhiều người.
-    const groups = await getProductGroupTargetVsActual(year, month, r.employeeId);
+    const [groups, weekScore] = await Promise.all([
+      getProductGroupTargetVsActual(year, month, r.employeeId),
+      getMonthlyWeekPlanScore(r.employeeId, year, month),
+    ]);
     const sx = groups.find((g) => g.group === "Sản xuất");
 
     const input: KpiScoreInput = {
       targetRevenue: r.targetRevenue,
       actualRevenue: r.actualRevenue,
+      weightRevenue: entry?.weightRevenue ?? 30,
       targetRevenueSX: sx?.targetRevenue ?? 0,
       actualRevenueSX: sx?.actualRevenue ?? 0,
-      targetHighPriceSkuCount: entry?.targetHighPriceSkuCount ?? null,
-      actualHighPriceSkuCount: entry?.actualHighPriceSkuCount ?? null,
+      weightRevenueSX: entry?.weightRevenueSX ?? 20,
       targetNewCustomers: entry?.targetNewCustomers ?? null,
       actualNewCustomers: entry?.actualNewCustomers ?? null,
+      weightNewCustomers: entry?.weightNewCustomers ?? 10,
       debtOverduePct: entry?.debtOverduePct != null ? Number(entry.debtOverduePct) : null,
       debtCollectionRatePct: entry?.debtCollectionRatePct != null ? Number(entry.debtCollectionRatePct) : null,
       visitTarget: entry?.visitTarget ?? 8,
       approvedVisitCount: visitByEmployee.get(r.employeeId) ?? 0,
-      defectCount: defectByEmployee.get(r.employeeId) ?? 0,
-      attendanceDays: entry?.attendanceDays != null ? Number(entry.attendanceDays) : null,
+      weightVisit: entry?.weightVisit ?? 10,
       violationCount: entry?.violationCount ?? 0,
+      weekScore,
     };
 
     const scores = computeKpiScores(input);

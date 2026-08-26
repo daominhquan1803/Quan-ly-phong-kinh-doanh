@@ -10,19 +10,19 @@ interface KpiRow {
   employeeName: string;
   targetRevenue: number;
   actualRevenue: number;
+  weightRevenue: number;
   revenuePct: number | null;
   scoreRevenue: number;
   revenueBonus: number;
   targetRevenueSX: number;
   actualRevenueSX: number;
+  weightRevenueSX: number;
   revenueSXPct: number | null;
   scoreSX: number;
   revenueSXBonus: number;
-  targetHighPriceSkuCount: number | null;
-  actualHighPriceSkuCount: number | null;
-  scoreHighPrice: number;
   targetNewCustomers: number | null;
   actualNewCustomers: number | null;
+  weightNewCustomers: number;
   scoreNewCustomers: number;
   debtOverduePct: number | null;
   scoreDebtOverdue: number;
@@ -30,12 +30,11 @@ interface KpiRow {
   scoreDebtCollection: number;
   visitTarget: number;
   approvedVisitCount: number;
+  weightVisit: number;
   scoreVisit: number;
-  defectCount: number;
-  scoreCskh: number;
-  attendanceDays: number | null;
   violationCount: number;
   scoreAttitude: number;
+  scoreWeek: number;
   totalScore: number;
   grade: "A" | "B" | "C" | "D" | "F";
   gradeLabel: string;
@@ -119,37 +118,36 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
           <thead className="bg-gray-50 text-muted-foreground">
             <tr>
               <th rowSpan={2} className="text-left font-medium px-3 py-2 align-bottom">Nhân viên</th>
-              <th colSpan={2} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">Doanh số (20đ)</th>
-              <th colSpan={3} className="text-center font-medium px-3 py-1.5 border-l border-gray-200" title="Tỷ lệ đạt chỉ tiêu doanh số riêng nhóm hàng Sản xuất — lấy từ Kế hoạch kinh doanh">DS ngành Sản xuất (10đ)</th>
-              <th colSpan={3} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">Giá bán cao (10đ)</th>
-              <th colSpan={3} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">KH mới (10đ)</th>
+              <th colSpan={3} className="text-center font-medium px-3 py-1.5 border-l border-gray-200" title="Trọng số do Quản trị viên tự phân bổ riêng từng người, mặc định 30">Doanh số tổng</th>
+              <th colSpan={4} className="text-center font-medium px-3 py-1.5 border-l border-gray-200" title="Tỷ lệ đạt chỉ tiêu doanh số riêng nhóm hàng Sản xuất — lấy từ Kế hoạch kinh doanh. Trọng số mặc định 20">DS ngành Sản xuất</th>
+              <th colSpan={4} className="text-center font-medium px-3 py-1.5 border-l border-gray-200" title="Trọng số mặc định 10">KH mới</th>
+              <th colSpan={3} className="text-center font-medium px-3 py-1.5 border-l border-gray-200" title="Trọng số mặc định 10 — không còn trừ điểm hàng lỗi">CSKH / Đi gặp KH</th>
               <th colSpan={4} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">Công nợ (20đ)</th>
-              <th colSpan={3} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">CSKH & Chất lượng (20đ)</th>
-              <th colSpan={3} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">Thái độ (10đ)</th>
+              <th colSpan={2} className="text-center font-medium px-3 py-1.5 border-l border-gray-200" title="max(2 − số lần vi phạm, 0)">Thái độ (2đ)</th>
+              <th rowSpan={2} className="text-right font-medium px-3 py-2 border-l border-gray-200 align-bottom" title="Tổng điểm 0/1/2 của 4 tuần trong tháng, từ Kế hoạch làm việc tuần">Điểm tuần (8đ)</th>
               <th colSpan={3} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">Tổng hợp</th>
               {isAdmin && <th rowSpan={2} className="px-3 py-2 align-bottom"></th>}
             </tr>
             <tr>
               <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">%</th>
+              <th className="text-right font-normal px-3 py-1.5">Trọng số</th>
               <th className="text-right font-normal px-3 py-1.5">Điểm</th>
               <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Chỉ tiêu</th>
               <th className="text-right font-normal px-3 py-1.5">Thực tế</th>
-              <th className="text-right font-normal px-3 py-1.5">Điểm</th>
-              <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Chỉ tiêu (mã)</th>
-              <th className="text-right font-normal px-3 py-1.5">Thực tế (mã)</th>
+              <th className="text-right font-normal px-3 py-1.5">Trọng số</th>
               <th className="text-right font-normal px-3 py-1.5">Điểm</th>
               <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Chỉ tiêu</th>
               <th className="text-right font-normal px-3 py-1.5">Thực tế</th>
+              <th className="text-right font-normal px-3 py-1.5">Trọng số</th>
+              <th className="text-right font-normal px-3 py-1.5">Điểm</th>
+              <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Đi gặp KH</th>
+              <th className="text-right font-normal px-3 py-1.5">Trọng số</th>
               <th className="text-right font-normal px-3 py-1.5">Điểm</th>
               <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Quá hạn</th>
               <th className="text-right font-normal px-3 py-1.5">Điểm</th>
               <th className="text-right font-normal px-3 py-1.5">Thu hồi</th>
               <th className="text-right font-normal px-3 py-1.5">Điểm</th>
-              <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Đi gặp KH</th>
-              <th className="text-right font-normal px-3 py-1.5">Hàng lỗi</th>
-              <th className="text-right font-normal px-3 py-1.5">Điểm</th>
-              <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Chuyên cần</th>
-              <th className="text-right font-normal px-3 py-1.5">Vi phạm</th>
+              <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Vi phạm</th>
               <th className="text-right font-normal px-3 py-1.5">Điểm</th>
               <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Điểm tổng</th>
               <th className="text-center font-normal px-3 py-1.5">Xếp loại</th>
@@ -159,14 +157,14 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
           <tbody className="divide-y divide-gray-100">
             {isLoading && (
               <tr>
-                <td colSpan={26} className="px-4 py-6 text-center text-muted-foreground">
+                <td colSpan={24} className="px-4 py-6 text-center text-muted-foreground">
                   Đang tải...
                 </td>
               </tr>
             )}
             {!isLoading && (data?.rows.length ?? 0) === 0 && (
               <tr>
-                <td colSpan={26} className="px-4 py-6 text-center text-muted-foreground">
+                <td colSpan={24} className="px-4 py-6 text-center text-muted-foreground">
                   Chưa có dữ liệu nhân viên.
                 </td>
               </tr>
@@ -181,9 +179,10 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
                   >
                     {pct(r.revenuePct)}
                   </td>
+                  <td className="px-3 py-2 text-right text-muted-foreground">{r.weightRevenue}</td>
                   <td
                     className="px-3 py-2 text-right font-medium"
-                    title={r.revenueBonus > 0 ? `Có thưởng vượt chỉ tiêu: +${r.revenueBonus}đ (đạt ${Math.round((r.revenuePct ?? 0) * 100)}% chỉ tiêu, từ 110% cứ mỗi 10% vượt thêm +1đ)` : undefined}
+                    title={r.revenueBonus > 0 ? `Có thưởng vượt chỉ tiêu: +${r.revenueBonus}đ (đạt ${Math.round((r.revenuePct ?? 0) * 100)}% chỉ tiêu, từ 110% cứ mỗi 5% vượt thêm +1đ)` : undefined}
                   >
                     {r.scoreRevenue}
                     {r.revenueBonus > 0 && <span className="text-success-600 font-normal"> (+{r.revenueBonus})</span>}
@@ -194,31 +193,30 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
                   <td className="px-3 py-2 text-right" title={r.revenueSXPct != null ? `Đạt ${Math.round(r.revenueSXPct * 100)}% chỉ tiêu` : undefined}>
                     {formatCurrencyVND(r.actualRevenueSX)}
                   </td>
+                  <td className="px-3 py-2 text-right text-muted-foreground">{r.weightRevenueSX}</td>
                   <td
                     className="px-3 py-2 text-right font-medium"
-                    title={r.revenueSXBonus > 0 ? `Có thưởng vượt chỉ tiêu: +${r.revenueSXBonus}đ (đạt ${Math.round((r.revenueSXPct ?? 0) * 100)}% chỉ tiêu, từ 110% cứ mỗi 10% vượt thêm +1đ)` : undefined}
+                    title={r.revenueSXBonus > 0 ? `Có thưởng vượt chỉ tiêu: +${r.revenueSXBonus}đ (đạt ${Math.round((r.revenueSXPct ?? 0) * 100)}% chỉ tiêu, từ 110% cứ mỗi 5% vượt thêm +1đ)` : undefined}
                   >
                     {r.scoreSX}
                     {r.revenueSXBonus > 0 && <span className="text-success-600 font-normal"> (+{r.revenueSXBonus})</span>}
                   </td>
-                  <td className="px-3 py-2 text-right border-l border-gray-100">{numOrDash(r.targetHighPriceSkuCount)}</td>
-                  <td className="px-3 py-2 text-right">{numOrDash(r.actualHighPriceSkuCount)}</td>
-                  <td className="px-3 py-2 text-right font-medium">{r.scoreHighPrice}</td>
                   <td className="px-3 py-2 text-right border-l border-gray-100">{numOrDash(r.targetNewCustomers)}</td>
                   <td className="px-3 py-2 text-right">{numOrDash(r.actualNewCustomers)}</td>
+                  <td className="px-3 py-2 text-right text-muted-foreground">{r.weightNewCustomers}</td>
                   <td className="px-3 py-2 text-right font-medium">{r.scoreNewCustomers}</td>
+                  <td className="px-3 py-2 text-right border-l border-gray-100">
+                    {r.approvedVisitCount}/{r.visitTarget}
+                  </td>
+                  <td className="px-3 py-2 text-right text-muted-foreground">{r.weightVisit}</td>
+                  <td className="px-3 py-2 text-right font-medium">{r.scoreVisit}</td>
                   <td className="px-3 py-2 text-right border-l border-gray-100">{pctRaw(r.debtOverduePct)}</td>
                   <td className="px-3 py-2 text-right font-medium">{r.scoreDebtOverdue}</td>
                   <td className="px-3 py-2 text-right">{pctRaw(r.debtCollectionRatePct)}</td>
                   <td className="px-3 py-2 text-right font-medium">{r.scoreDebtCollection}</td>
-                  <td className="px-3 py-2 text-right border-l border-gray-100">
-                    {r.approvedVisitCount}/{r.visitTarget}
-                  </td>
-                  <td className="px-3 py-2 text-right">{r.defectCount}</td>
-                  <td className="px-3 py-2 text-right font-medium">{r.scoreCskh}</td>
-                  <td className="px-3 py-2 text-right border-l border-gray-100">{numOrDash(r.attendanceDays)}</td>
-                  <td className="px-3 py-2 text-right">{r.violationCount}</td>
+                  <td className="px-3 py-2 text-right border-l border-gray-100">{r.violationCount}</td>
                   <td className="px-3 py-2 text-right font-medium">{r.scoreAttitude}</td>
+                  <td className="px-3 py-2 text-right border-l border-gray-100 font-medium">{r.scoreWeek}</td>
                   <td className="px-3 py-2 text-right border-l border-gray-100 font-bold text-ink">{r.totalScore}</td>
                   <td className="px-3 py-2 text-center">
                     <span className={cn("status-badge", GRADE_STYLE[r.grade])}>{r.gradeLabel}</span>
@@ -238,7 +236,7 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
                 </tr>
                 {isAdmin && editingId === r.employeeId && (
                   <tr>
-                    <td colSpan={26} className="bg-navy-50/40 px-4 py-4">
+                    <td colSpan={24} className="bg-navy-50/40 px-4 py-4">
                       <KpiEditForm
                         row={r}
                         year={year}
@@ -258,10 +256,11 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
         </table>
       </div>
       <p className="text-xs text-muted2">
-        Doanh số &amp; DS ngành Sản xuất lấy tự động từ Kế hoạch kinh doanh (chỉ tiêu nhóm Sản xuất
-        lấy theo Kế hoạch chi tiết đã nhập) — đạt từ 110% chỉ tiêu trở lên, cứ mỗi 10% vượt thêm được cộng 1đ thưởng, không giới hạn trần.
-        Điểm &quot;Đi gặp KH&quot; tự tính theo số lượt đăng ký đi công tác đã được duyệt trong tháng. Các ô còn lại do
-        Quản trị viên nhập.
+        Doanh số &amp; DS ngành Sản xuất lấy tự động từ Kế hoạch kinh doanh — đạt từ 110% chỉ tiêu trở
+        lên, cứ mỗi 5% vượt thêm được cộng 1đ thưởng, không giới hạn trần. Trọng số 4 mục Doanh số/DS
+        SX/KH mới/CSKH do Quản trị viên tự phân bổ riêng từng người (tổng luôn = 70). Điểm &quot;Đi gặp
+        KH&quot; tự tính theo số lượt đăng ký đi công tác đã được duyệt trong tháng. Điểm tuần tự cộng từ
+        Kế hoạch làm việc tuần. Các ô còn lại do Quản trị viên nhập.
       </p>
 
       {isAdmin && (
@@ -294,18 +293,25 @@ function KpiEditForm({
   onCancel: () => void;
 }) {
   const [form, setForm] = useState<Record<string, number | "">>({
-    targetHighPriceSkuCount: row.targetHighPriceSkuCount ?? "",
-    actualHighPriceSkuCount: row.actualHighPriceSkuCount ?? "",
+    weightRevenue: row.weightRevenue,
+    weightRevenueSX: row.weightRevenueSX,
+    weightNewCustomers: row.weightNewCustomers,
+    weightVisit: row.weightVisit,
     targetNewCustomers: row.targetNewCustomers ?? "",
     actualNewCustomers: row.actualNewCustomers ?? "",
     debtOverduePct: row.debtOverduePct ?? "",
     debtCollectionRatePct: row.debtCollectionRatePct ?? "",
     visitTarget: row.visitTarget,
-    attendanceDays: row.attendanceDays ?? "",
     violationCount: row.violationCount,
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const weightSum =
+    Number(form.weightRevenue || 0) +
+    Number(form.weightRevenueSX || 0) +
+    Number(form.weightNewCustomers || 0) +
+    Number(form.weightVisit || 0);
 
   function field(key: keyof typeof form, label: string, opts?: { step?: string }) {
     return (
@@ -333,14 +339,15 @@ function KpiEditForm({
           employeeId: row.employeeId,
           year,
           month,
-          targetHighPriceSkuCount: form.targetHighPriceSkuCount === "" ? null : Number(form.targetHighPriceSkuCount),
-          actualHighPriceSkuCount: form.actualHighPriceSkuCount === "" ? null : Number(form.actualHighPriceSkuCount),
+          weightRevenue: Number(form.weightRevenue) || 0,
+          weightRevenueSX: Number(form.weightRevenueSX) || 0,
+          weightNewCustomers: Number(form.weightNewCustomers) || 0,
+          weightVisit: Number(form.weightVisit) || 0,
           targetNewCustomers: form.targetNewCustomers === "" ? null : Number(form.targetNewCustomers),
           actualNewCustomers: form.actualNewCustomers === "" ? null : Number(form.actualNewCustomers),
           debtOverduePct: form.debtOverduePct === "" ? null : Number(form.debtOverduePct),
           debtCollectionRatePct: form.debtCollectionRatePct === "" ? null : Number(form.debtCollectionRatePct),
           visitTarget: Number(form.visitTarget) || 8,
-          attendanceDays: form.attendanceDays === "" ? null : Number(form.attendanceDays),
           violationCount: form.violationCount === "" ? 0 : Number(form.violationCount),
         }),
       });
@@ -359,15 +366,23 @@ function KpiEditForm({
   return (
     <div className="space-y-3">
       <p className="text-sm font-medium text-ink">Sửa chỉ tiêu KPI — {row.employeeName}</p>
+      <div>
+        <p className={cn("text-xs mb-1.5", weightSum === 70 ? "text-muted-foreground" : "text-brandRed-600 font-medium")}>
+          Tổng 4 trọng số bên dưới: {weightSum} (bắt buộc = 70)
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+          {field("weightRevenue", "Trọng số Doanh số tổng")}
+          {field("weightRevenueSX", "Trọng số DS ngành SX")}
+          {field("weightNewCustomers", "Trọng số KH mới")}
+          {field("weightVisit", "Trọng số CSKH/Đi gặp KH")}
+        </div>
+      </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {field("targetHighPriceSkuCount", "Chỉ tiêu mã hàng giá cao hơn 3%")}
-        {field("actualHighPriceSkuCount", "Thực tế mã hàng giá cao hơn")}
         {field("targetNewCustomers", "Chỉ tiêu KH mới")}
         {field("actualNewCustomers", "Thực tế KH mới")}
         {field("debtOverduePct", "Công nợ quá hạn (%)", { step: "0.1" })}
         {field("debtCollectionRatePct", "Tỷ lệ thu hồi nợ (%)", { step: "0.1" })}
         {field("visitTarget", "Chỉ tiêu lượt đi gặp KH/tháng")}
-        {field("attendanceDays", "Chuyên cần (ngày công/26)", { step: "0.5" })}
         {field("violationCount", "Vi phạm nội quy (lần)")}
       </div>
       {error && <p className="text-xs text-brandRed-600">{error}</p>}
@@ -428,7 +443,6 @@ function DefectsPanel({ year, month }: { year: number; month: number }) {
       setForm({ reportNumber: "", employeeId: "", reportDate: "", description: "" });
       setShowForm(false);
       queryClient.invalidateQueries({ queryKey: ["kpi-defects", year, month] });
-      queryClient.invalidateQueries({ queryKey: ["kpi-report", year, month] });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Lưu thất bại");
     } finally {
@@ -439,11 +453,13 @@ function DefectsPanel({ year, month }: { year: number; month: number }) {
   async function handleDelete(id: string) {
     await fetch(`/api/kpi/defects/${id}`, { method: "DELETE" });
     queryClient.invalidateQueries({ queryKey: ["kpi-defects", year, month] });
-    queryClient.invalidateQueries({ queryKey: ["kpi-report", year, month] });
   }
 
   return (
     <div className="border-t border-gray-200 px-4 py-3 space-y-3">
+      <p className="text-xs text-muted2">
+        Chỉ để ghi nhận/theo dõi — không còn dùng để trừ điểm KPI CSKH nữa.
+      </p>
       <button
         onClick={() => setShowForm((v) => !v)}
         className="rounded-md bg-brandRed-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brandRed-700"
