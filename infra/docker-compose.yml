@@ -48,6 +48,13 @@ services:
       - "traefik.http.routers.hoanggia-web.entrypoints=websecure"
       - "traefik.http.routers.hoanggia-web.tls.certresolver=letsencrypt"
       - "traefik.http.services.hoanggia-web.loadbalancer.server.port=3000"
+      # Router thứ 2 — truy cập trực tiếp bằng hostname VPS Hostinger cấp sẵn
+      # (vd srv1917023.hstgr.cloud), song song với domain riêng ở trên. Đặt
+      # EXTRA_DOMAIN="" trong .env nếu muốn tắt hẳn route này.
+      - "traefik.http.routers.hoanggia-web-alt.rule=Host(`${EXTRA_DOMAIN:-srv1917023.hstgr.cloud}`)"
+      - "traefik.http.routers.hoanggia-web-alt.entrypoints=websecure"
+      - "traefik.http.routers.hoanggia-web-alt.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.hoanggia-web-alt.service=hoanggia-web"
 
   worker:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-hoanggia}/hoanggia-worker:latest
