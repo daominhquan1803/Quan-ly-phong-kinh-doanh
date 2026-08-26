@@ -19,10 +19,10 @@ const METRIC_LABEL: Record<Metric, string> = {
   BUSINESS_TRIP: "Buổi đi công tác",
 };
 const METRIC_NOTE: Record<Metric, string> = {
-  NEW_CONTACT: "Khách chưa từng mua, hoặc khách cũ dừng mua ≥ 2 năm — tự ghi danh sách bên dưới.",
-  NEW_MEETING: "Khách chưa từng mua, hoặc khách cũ dừng mua ≥ 2 năm — tự ghi danh sách bên dưới.",
-  EXISTING_VISIT: "Khách đang mua, hoặc dừng mua < 2 năm — tự ghi danh sách bên dưới.",
-  NEW_CUSTOMER_SALE: "Tự động từ Đơn hàng — khách lần đầu có đơn trong tuần.",
+  NEW_CONTACT: "Khách chưa từng mua, hoặc khách cũ dừng mua ≥ 1 năm tính từ đơn cuối — tự ghi danh sách bên dưới.",
+  NEW_MEETING: "Khách chưa từng mua, hoặc khách cũ dừng mua ≥ 1 năm tính từ đơn cuối — tự ghi danh sách bên dưới.",
+  EXISTING_VISIT: "Khách đang mua, hoặc dừng mua < 1 năm tính từ đơn cuối — tự ghi danh sách bên dưới.",
+  NEW_CUSTOMER_SALE: "Tự động từ Đơn hàng — khách chưa từng mua, hoặc dừng mua ≥ 1 năm (đối chiếu toàn công ty).",
   NEW_QUOTE: "Tự động từ Báo giá — cần gán \"Mã Báo giá\" ở trang Nhân viên.",
   BUSINESS_TRIP: "Tự động từ Đăng ký đi công tác — mỗi ngày tính 1 buổi.",
 };

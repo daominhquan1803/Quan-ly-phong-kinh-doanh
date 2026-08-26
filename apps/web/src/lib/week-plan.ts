@@ -9,10 +9,11 @@ import { normalizeVN } from "./text-normalize";
  *    liên hệ/gặp (WeekPlanResultEntry) — qua form nhập từng dòng hoặc tải file Excel theo đúng
  *    cấu trúc sheet "KẾT QUẢ" trong file mẫu.
  *  - 3 mục sau: tính TỰ ĐỘNG, không cần nhập tay —
- *      NEW_CUSTOMER_SALE: khách hàng LẦN ĐẦU có đơn hàng trong tuần theo từng NVKD (Order) —
- *        xấp xỉ đúng "khách hàng mới" là chưa từng có đơn của chính NVKD đó TRƯỚC tuần đang xem;
- *        không tách được ca "khách cũ dừng mua ≥ 2 năm" vì hệ thống không lưu lịch sử đủ xa/rõ
- *        để phân biệt, đã nêu rõ trong UI.
+ *      NEW_CUSTOMER_SALE: khách hàng có đơn hàng trong tuần mà CHƯA TỪNG mua hàng trước đó, hoặc
+ *        đã dừng mua ít nhất 1 năm tính từ đơn hàng cuối cùng (đúng tiêu chí anh Quân xác nhận) —
+ *        đối chiếu lịch sử đơn hàng của khách trên TOÀN CÔNG TY (Order, mọi NVKD từng bán cho
+ *        khách đó), không giới hạn riêng NVKD đang xét — vì "khách hàng mới/cũ" là đặc tính của
+ *        khách hàng với công ty, không phải với 1 NVKD cụ thể.
  *      NEW_QUOTE: số báo giá phát sinh trong tuần theo User.quoteAssigneeCode (QuoteRequest).
  *      BUSINESS_TRIP: số NGÀY có lượt đi công tác đã duyệt (chính hoặc hỗ trợ) trong tuần — mỗi
  *        ngày tính 1 buổi dù có nhiều lượt đi cùng ngày, đúng yêu cầu "mỗi ngày tính 1 buổi".
@@ -46,13 +47,13 @@ export const WEEK_PLAN_METRIC_LABEL: Record<WeekPlanMetric, string> = {
 
 export const WEEK_PLAN_METRIC_NOTE: Record<WeekPlanMetric, string> = {
   NEW_CONTACT:
-    "Khách hàng chưa từng mua hàng, hoặc khách cũ đã dừng mua ít nhất 2 năm — NVKD tự ghi lại danh sách đã liên hệ.",
+    "Khách hàng chưa từng mua hàng, hoặc khách cũ đã dừng mua ít nhất 1 năm tính từ đơn hàng cuối cùng — NVKD tự ghi lại danh sách đã liên hệ.",
   NEW_MEETING:
-    "Khách hàng chưa từng mua hàng, hoặc khách cũ đã dừng mua ít nhất 2 năm — NVKD tự ghi lại danh sách đã hẹn gặp.",
+    "Khách hàng chưa từng mua hàng, hoặc khách cũ đã dừng mua ít nhất 1 năm tính từ đơn hàng cuối cùng — NVKD tự ghi lại danh sách đã hẹn gặp.",
   EXISTING_VISIT:
-    "Khách hàng đang mua hàng, hoặc khách dừng mua dưới 2 năm — NVKD tự ghi lại danh sách đã liên hệ/thăm hỏi.",
+    "Khách hàng đang mua hàng, hoặc khách dừng mua dưới 1 năm tính từ đơn hàng cuối cùng — NVKD tự ghi lại danh sách đã liên hệ/thăm hỏi.",
   NEW_CUSTOMER_SALE:
-    "Tự động — đếm khách hàng lần đầu có đơn hàng trong tuần theo dữ liệu Đơn hàng (xấp xỉ: chưa từng có đơn TRƯỚC tuần này).",
+    "Tự động — đếm khách hàng có đơn trong tuần mà chưa từng mua hàng trước đó, hoặc đã dừng mua ít nhất 1 năm tính từ đơn hàng cuối cùng (đối chiếu toàn bộ lịch sử đơn hàng công ty, không riêng NVKD này).",
   NEW_QUOTE: "Tự động — đếm số báo giá phát sinh trong tuần theo dữ liệu Báo giá.",
   BUSINESS_TRIP: "Tự động — đếm số ngày có lượt đi công tác đã duyệt trong tuần (mỗi ngày tính 1 buổi).",
 };
@@ -130,29 +131,42 @@ async function computeAutoMetrics(
   if (employeeIds.length === 0) return result;
 
   // ---- NEW_CUSTOMER_SALE ----
+  // "Khách hàng mới" là đặc tính của khách với CÔNG TY (không riêng NVKD nào) — chưa từng mua,
+  // hoặc lần mua gần nhất cách đây >= 1 năm. Nên bước 2 đối chiếu lịch sử KHÔNG lọc theo
+  // salesEmployeeId, lấy trên toàn bộ Order (đúng dữ liệu đã đồng bộ từ AMIS CRM).
   const weekOrders = await prisma.order.findMany({
     where: { orderDate: { gte: start, lt: end }, salesEmployeeId: { in: employeeIds } },
     select: { salesEmployeeId: true, customerName: true },
   });
   const pairsByEmployee = new Map<string, Set<string>>();
+  const allWeekCustomerNames = new Set<string>();
   for (const o of weekOrders) {
     if (!o.salesEmployeeId) continue;
     if (!pairsByEmployee.has(o.salesEmployeeId)) pairsByEmployee.set(o.salesEmployeeId, new Set());
     pairsByEmployee.get(o.salesEmployeeId)!.add(o.customerName);
+    allWeekCustomerNames.add(o.customerName);
   }
-  await Promise.all(
-    Array.from(pairsByEmployee.entries()).map(async ([employeeId, customerSet]) => {
-      const customerNames = Array.from(customerSet);
-      const priorOrders = await prisma.order.findMany({
-        where: { salesEmployeeId: employeeId, customerName: { in: customerNames }, orderDate: { lt: start } },
-        select: { customerName: true },
-        distinct: ["customerName"],
-      });
-      const priorSet = new Set(priorOrders.map((p) => p.customerName));
-      const newCount = customerNames.filter((c) => !priorSet.has(c)).length;
-      result.get(employeeId)!.NEW_CUSTOMER_SALE = newCount;
-    })
-  );
+  const lastPriorOrderByCustomer = new Map<string, Date>();
+  if (allWeekCustomerNames.size > 0) {
+    const priorOrders = await prisma.order.groupBy({
+      by: ["customerName"],
+      where: { customerName: { in: Array.from(allWeekCustomerNames) }, orderDate: { lt: start } },
+      _max: { orderDate: true },
+    });
+    for (const p of priorOrders) {
+      if (p._max.orderDate) lastPriorOrderByCustomer.set(p.customerName, p._max.orderDate);
+    }
+  }
+  const oneYearBeforeStart = new Date(start);
+  oneYearBeforeStart.setFullYear(oneYearBeforeStart.getFullYear() - 1);
+  for (const [employeeId, customerSet] of pairsByEmployee) {
+    let newCount = 0;
+    for (const customerName of customerSet) {
+      const lastPrior = lastPriorOrderByCustomer.get(customerName);
+      if (!lastPrior || lastPrior <= oneYearBeforeStart) newCount++;
+    }
+    result.get(employeeId)!.NEW_CUSTOMER_SALE = newCount;
+  }
 
   // ---- NEW_QUOTE ----
   const codeToEmployee = new Map(
