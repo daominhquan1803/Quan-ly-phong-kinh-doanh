@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
     const toCreate: {
       employeeId: string;
       weekStart: Date;
-      metric: "NEW_CONTACT" | "NEW_MEETING" | "EXISTING_VISIT";
+      metric: "NEW_CONTACT" | "NEW_MEETING";
       entryDate: Date;
       customerName: string;
       address: string | null;
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
       productInterest: string | null;
     }[] = [];
 
-    let currentMetric: "NEW_CONTACT" | "NEW_MEETING" | "EXISTING_VISIT" | null = null;
+    let currentMetric: "NEW_CONTACT" | "NEW_MEETING" | null = null;
 
     dataRows.forEach((row, i) => {
       const rowNumber = i + 2; // +1 header, +1 về 1-based

@@ -7,10 +7,17 @@ import { normalizeVN } from "./text-normalize";
  * 26/08, có thêm Trọng số + chấm điểm tuần).
  *
  * 6 đầu mục cố định (WeekPlanMetric):
- *  - 3 mục đầu (NEW_CONTACT/NEW_MEETING/EXISTING_VISIT): NVKD tự ghi lại từng khách hàng đã
- *    liên hệ/gặp (WeekPlanResultEntry) — qua form nhập từng dòng hoặc tải file Excel theo đúng
- *    cấu trúc sheet "KẾT QUẢ" trong file mẫu.
- *  - 3 mục sau: tính TỰ ĐỘNG, không cần nhập tay —
+ *  - 2 mục đầu (NEW_CONTACT/NEW_MEETING): NVKD tự ghi lại từng khách hàng đã liên hệ/hẹn gặp
+ *    (WeekPlanResultEntry) — qua form nhập từng dòng hoặc tải file Excel theo đúng cấu trúc sheet
+ *    "KẾT QUẢ" trong file mẫu.
+ *  - 4 mục sau: tính TỰ ĐỘNG, không cần nhập tay —
+ *      EXISTING_VISIT: lấy từ mục "Đăng ký đi công tác" (BusinessTripRequest) đã DUYỆT trong
+ *        tuần — đếm số khách hàng (companyName) được đăng ký gặp mà là "khách hàng cũ" (đang mua
+ *        hàng, hoặc đã dừng mua CHƯA ĐỦ 1 năm tính từ đơn hàng cuối cùng — đối chiếu company
+ *        đăng ký với lịch sử Order trên toàn công ty, đúng định nghĩa "khách cũ" đã dùng cho
+ *        NEW_CONTACT/NEW_MEETING/NEW_CUSTOMER_SALE). Tính điểm cho CẢ người đăng ký chính lẫn
+ *        người đi cùng hỗ trợ (BusinessTripSupporter) — ai cũng được cộng nếu có tên trong
+ *        chuyến đi đó, giống hệt cách BUSINESS_TRIP đang làm.
  *      NEW_CUSTOMER_SALE: khách hàng có đơn hàng trong tuần mà CHƯA TỪNG mua hàng trước đó, hoặc
  *        đã dừng mua ít nhất 1 năm tính từ đơn hàng cuối cùng — đối chiếu lịch sử đơn hàng của
  *        khách trên TOÀN CÔNG TY (Order, mọi NVKD từng bán cho khách đó), không giới hạn riêng
@@ -47,8 +54,13 @@ export const WEEK_PLAN_METRICS: WeekPlanMetric[] = [
   "BUSINESS_TRIP",
 ];
 
-export const MANUAL_METRICS: WeekPlanMetric[] = ["NEW_CONTACT", "NEW_MEETING", "EXISTING_VISIT"];
-export const AUTO_METRICS: WeekPlanMetric[] = ["NEW_CUSTOMER_SALE", "NEW_QUOTE", "BUSINESS_TRIP"];
+export const MANUAL_METRICS: WeekPlanMetric[] = ["NEW_CONTACT", "NEW_MEETING"];
+export const AUTO_METRICS: WeekPlanMetric[] = [
+  "EXISTING_VISIT",
+  "NEW_CUSTOMER_SALE",
+  "NEW_QUOTE",
+  "BUSINESS_TRIP",
+];
 
 // Tổng trọng số 6 mục của 1 người/1 tuần luôn phải bằng mốc này.
 export const WEEK_PLAN_WEIGHT_TOTAL = 100;
@@ -72,21 +84,23 @@ export const WEEK_PLAN_METRIC_NOTE: Record<WeekPlanMetric, string> = {
   NEW_MEETING:
     "Khách hàng chưa từng mua hàng, hoặc khách cũ đã dừng mua ít nhất 1 năm tính từ đơn hàng cuối cùng — NVKD tự ghi lại danh sách đã hẹn gặp.",
   EXISTING_VISIT:
-    "Khách hàng đang mua hàng, hoặc khách dừng mua dưới 1 năm tính từ đơn hàng cuối cùng — NVKD tự ghi lại danh sách đã liên hệ/thăm hỏi.",
+    "Tự động — lấy từ Đăng ký đi công tác đã duyệt trong tuần, đếm khách hàng cũ (đang mua hàng, hoặc dừng mua dưới 1 năm) được đăng ký gặp; tính điểm cho cả người đăng ký chính lẫn người đi cùng hỗ trợ.",
   NEW_CUSTOMER_SALE:
     "Tự động — đếm khách hàng có đơn trong tuần mà chưa từng mua hàng trước đó, hoặc đã dừng mua ít nhất 1 năm tính từ đơn hàng cuối cùng (đối chiếu toàn công ty).",
   NEW_QUOTE: "Tự động — đếm số báo giá phát sinh trong tuần theo dữ liệu Báo giá.",
   BUSINESS_TRIP: "Tự động — đếm số ngày có lượt đi công tác đã duyệt trong tuần (mỗi ngày tính 1 buổi).",
 };
 
-type ManualMetric = "NEW_CONTACT" | "NEW_MEETING" | "EXISTING_VISIT";
+type ManualMetric = "NEW_CONTACT" | "NEW_MEETING";
 
 /** Mục trong sheet "KẾT QUẢ" file mẫu → metric — so khớp mờ (không dấu, hoa/thường) vì cách ghi
- * có thể khác nhau đôi chút giữa các lần tải file. */
+ * có thể khác nhau đôi chút giữa các lần tải file. Chỉ còn 2 mục nhập tay — "Khách hàng cũ liên
+ * hệ gặp thăm hỏi" giờ tính TỰ ĐỘNG từ Đăng ký đi công tác (xem computeAutoMetrics), không còn
+ * nhận qua kênh nhập tay/import Excel này nữa — nếu file cũ vẫn còn sheet đó thì cố tình KHÔNG
+ * khớp (trả null) để không tạo dữ liệu nhập tay mồ côi cho 1 metric đã chuyển sang tự động. */
 export function matchMetricFromSectionLabel(label: string): ManualMetric | null {
   const n = normalizeVN(label);
   if (!n) return null;
-  if (n.includes("cu") && (n.includes("tham hoi") || n.includes("gap") || n.includes("lien he"))) return "EXISTING_VISIT";
   if (n.includes("moi") && n.includes("hen gap")) return "NEW_MEETING";
   if (n.includes("moi") && n.includes("lien he")) return "NEW_CONTACT";
   return null;
@@ -212,9 +226,9 @@ async function getEligibleEmployees() {
   });
 }
 
-// ---------- Tính tự động 3 mục cuối ----------
+// ---------- Tính tự động 4 mục cuối ----------
 
-type AutoCounts = Record<"NEW_CUSTOMER_SALE" | "NEW_QUOTE" | "BUSINESS_TRIP", number>;
+type AutoCounts = Record<"EXISTING_VISIT" | "NEW_CUSTOMER_SALE" | "NEW_QUOTE" | "BUSINESS_TRIP", number>;
 
 async function computeAutoMetrics(
   weekStart: Date,
@@ -223,9 +237,11 @@ async function computeAutoMetrics(
   const { start, end } = weekRange(weekStart);
   const employeeIds = employees.map((e) => e.id);
   const result = new Map<string, AutoCounts>(
-    employeeIds.map((id) => [id, { NEW_CUSTOMER_SALE: 0, NEW_QUOTE: 0, BUSINESS_TRIP: 0 }])
+    employeeIds.map((id) => [id, { EXISTING_VISIT: 0, NEW_CUSTOMER_SALE: 0, NEW_QUOTE: 0, BUSINESS_TRIP: 0 }])
   );
   if (employeeIds.length === 0) return result;
+  const oneYearBeforeStart = new Date(start);
+  oneYearBeforeStart.setFullYear(oneYearBeforeStart.getFullYear() - 1);
 
   // ---- NEW_CUSTOMER_SALE ----
   // "Khách hàng mới" là đặc tính của khách với CÔNG TY (không riêng NVKD nào) — chưa từng mua,
@@ -254,8 +270,6 @@ async function computeAutoMetrics(
       if (p._max.orderDate) lastPriorOrderByCustomer.set(p.customerName, p._max.orderDate);
     }
   }
-  const oneYearBeforeStart = new Date(start);
-  oneYearBeforeStart.setFullYear(oneYearBeforeStart.getFullYear() - 1);
   for (const [employeeId, customerSet] of pairsByEmployee) {
     let newCount = 0;
     for (const customerName of customerSet) {
@@ -263,6 +277,48 @@ async function computeAutoMetrics(
       if (!lastPrior || lastPrior <= oneYearBeforeStart) newCount++;
     }
     result.get(employeeId)!.NEW_CUSTOMER_SALE = newCount;
+  }
+
+  // ---- EXISTING_VISIT: khách hàng CŨ được đăng ký đi công tác gặp trong tuần (chính + hỗ trợ) ----
+  // Cùng định nghĩa "khách cũ" như NEW_CONTACT/NEW_MEETING/NEW_CUSTOMER_SALE, chỉ đảo ngược điều
+  // kiện: có đơn hàng trước tuần này (company-wide) mà lần mua gần nhất CÒN TRONG VÒNG 1 năm.
+  const [primaryVisits, supporterVisits] = await Promise.all([
+    prisma.businessTripRequest.findMany({
+      where: { status: "APPROVED", visitDate: { gte: start, lt: end }, employeeId: { in: employeeIds } },
+      select: { employeeId: true, companyName: true },
+    }),
+    prisma.businessTripSupporter.findMany({
+      where: { trip: { status: "APPROVED", visitDate: { gte: start, lt: end } }, employeeId: { in: employeeIds } },
+      select: { employeeId: true, trip: { select: { companyName: true } } },
+    }),
+  ]);
+  const visitCompaniesByEmployee = new Map<string, Set<string>>();
+  const allVisitCompanyNames = new Set<string>();
+  const addVisitCompany = (empId: string, company: string) => {
+    if (!visitCompaniesByEmployee.has(empId)) visitCompaniesByEmployee.set(empId, new Set());
+    visitCompaniesByEmployee.get(empId)!.add(company);
+    allVisitCompanyNames.add(company);
+  };
+  for (const v of primaryVisits) addVisitCompany(v.employeeId, v.companyName);
+  for (const v of supporterVisits) addVisitCompany(v.employeeId, v.trip.companyName);
+  const lastPriorOrderByVisitedCompany = new Map<string, Date>();
+  if (allVisitCompanyNames.size > 0) {
+    const priorVisitOrders = await prisma.order.groupBy({
+      by: ["customerName"],
+      where: { customerName: { in: Array.from(allVisitCompanyNames) }, orderDate: { lt: start } },
+      _max: { orderDate: true },
+    });
+    for (const p of priorVisitOrders) {
+      if (p._max.orderDate) lastPriorOrderByVisitedCompany.set(p.customerName, p._max.orderDate);
+    }
+  }
+  for (const [employeeId, companySet] of visitCompaniesByEmployee) {
+    let existingCount = 0;
+    for (const company of companySet) {
+      const lastPrior = lastPriorOrderByVisitedCompany.get(company);
+      if (lastPrior && lastPrior > oneYearBeforeStart) existingCount++;
+    }
+    result.get(employeeId)!.EXISTING_VISIT = existingCount;
   }
 
   // ---- NEW_QUOTE ----

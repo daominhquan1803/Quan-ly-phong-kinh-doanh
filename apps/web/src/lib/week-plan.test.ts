@@ -113,11 +113,14 @@ describe("weekGradeFromTotalPoints", () => {
 });
 
 describe("matchMetricFromSectionLabel", () => {
-  it("khớp đúng 3 mục nhập tay theo từ khoá, không phân biệt hoa/thường/dấu", () => {
+  it("khớp đúng 2 mục nhập tay còn lại theo từ khoá, không phân biệt hoa/thường/dấu", () => {
     expect(matchMetricFromSectionLabel("KHÁCH HÀNG MỚI LIÊN HỆ ĐƯỢC")).toBe("NEW_CONTACT");
     expect(matchMetricFromSectionLabel("khach hang moi lien he duoc")).toBe("NEW_CONTACT");
     expect(matchMetricFromSectionLabel("KHÁCH HÀNG MỚI HẸN GẶP ĐƯỢC")).toBe("NEW_MEETING");
-    expect(matchMetricFromSectionLabel("Khách hàng cũ liên hệ gặp thăm hỏi")).toBe("EXISTING_VISIT");
+  });
+
+  it("không còn khớp 'Khách hàng cũ...' — mục này đã chuyển sang tự động từ Đăng ký đi công tác", () => {
+    expect(matchMetricFromSectionLabel("Khách hàng cũ liên hệ gặp thăm hỏi")).toBeNull();
   });
 
   it("trả về null khi không khớp mục nào hoặc chuỗi rỗng", () => {

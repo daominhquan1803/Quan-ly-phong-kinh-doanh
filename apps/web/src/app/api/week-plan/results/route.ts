@@ -7,7 +7,7 @@ import { isManualMetric, MANUAL_METRICS, snapToWeekStart, weekRange } from "@/li
 export const dynamic = "force-dynamic";
 
 /**
- * Danh sách các dòng khách hàng đã ghi cho 1 trong 3 mục nhập tay của 1 tuần. SALES chỉ xem được
+ * Danh sách các dòng khách hàng đã ghi cho 1 trong 2 mục nhập tay của 1 tuần. SALES chỉ xem được
  * dòng của chính mình; ADMIN xem được của bất kỳ ai (truyền employeeId).
  */
 export async function GET(req: NextRequest) {

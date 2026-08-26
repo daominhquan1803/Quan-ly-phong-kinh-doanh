@@ -8,7 +8,7 @@ import { cn, formatDateVN } from "@/lib/utils";
 
 type Metric = "NEW_CONTACT" | "NEW_MEETING" | "EXISTING_VISIT" | "NEW_CUSTOMER_SALE" | "NEW_QUOTE" | "BUSINESS_TRIP";
 const METRICS: Metric[] = ["NEW_CONTACT", "NEW_MEETING", "EXISTING_VISIT", "NEW_CUSTOMER_SALE", "NEW_QUOTE", "BUSINESS_TRIP"];
-const MANUAL_METRICS: Metric[] = ["NEW_CONTACT", "NEW_MEETING", "EXISTING_VISIT"];
+const MANUAL_METRICS: Metric[] = ["NEW_CONTACT", "NEW_MEETING"];
 const WEIGHT_TOTAL = 100;
 
 const METRIC_LABEL: Record<Metric, string> = {
@@ -22,7 +22,7 @@ const METRIC_LABEL: Record<Metric, string> = {
 const METRIC_NOTE: Record<Metric, string> = {
   NEW_CONTACT: "Khách chưa từng mua, hoặc khách cũ dừng mua ≥ 1 năm tính từ đơn cuối — tự ghi danh sách bên dưới.",
   NEW_MEETING: "Khách chưa từng mua, hoặc khách cũ dừng mua ≥ 1 năm tính từ đơn cuối — tự ghi danh sách bên dưới.",
-  EXISTING_VISIT: "Khách đang mua, hoặc dừng mua < 1 năm tính từ đơn cuối — tự ghi danh sách bên dưới.",
+  EXISTING_VISIT: "Tự động từ Đăng ký đi công tác đã duyệt — khách cũ (đang mua, hoặc dừng mua < 1 năm) được đăng ký gặp trong tuần, tính cả người đi cùng hỗ trợ.",
   NEW_CUSTOMER_SALE: "Tự động từ Đơn hàng — khách chưa từng mua, hoặc dừng mua ≥ 1 năm (đối chiếu toàn công ty).",
   NEW_QUOTE: "Tự động từ Báo giá — cần gán \"Mã Báo giá\" ở trang Nhân viên.",
   BUSINESS_TRIP: "Tự động từ Đăng ký đi công tác — mỗi ngày tính 1 buổi.",
@@ -465,7 +465,7 @@ function ProgressReport({ rows, isLoading, isAdmin }: { rows: ReportRow[]; isLoa
   );
 }
 
-// ---------------- Nhập kết quả (3 mục nhập tay) ----------------
+// ---------------- Nhập kết quả (2 mục nhập tay) ----------------
 
 function ResultEntrySection({
   weekStart,
@@ -725,7 +725,8 @@ function UploadPanel({
     <div className="rounded-md border border-gray-200 bg-gray-50 p-3 mb-4 space-y-3">
       <p className="text-xs text-muted-foreground">
         File cần đúng cấu trúc sheet &quot;KẾT QUẢ&quot; trong file mẫu (STT, Mục, Ngày tháng, Khách hàng, Địa chỉ, Nội dung, Sản phẩm quan tâm) —
-        1 file có thể chứa cả 3 mục, mỗi dòng tự xếp đúng tuần theo Ngày tháng.
+        1 file có thể chứa cả 2 mục, mỗi dòng tự xếp đúng tuần theo Ngày tháng. (Mục &quot;Khách hàng cũ liên hệ gặp
+        thăm hỏi&quot; giờ tính tự động từ Đăng ký đi công tác, không cần nhập ở đây nữa.)
       </p>
       <div className="flex items-center gap-2 flex-wrap">
         {isAdmin && employees.length > 0 && (
