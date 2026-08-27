@@ -18,6 +18,11 @@ export interface SyncOutcome {
 }
 
 const MOCK_MODE = process.env.HIENVI_MOCK_MODE === "true" || !process.env.HIENVI_USERNAME;
+// Đặt HIENVI_SYNC_ENABLED=false khi trang congno.hienvi.me đang đóng/bảo trì — tạm dừng hẳn cả
+// lịch cron lẫn nút "Đồng bộ thủ công", KHÔNG sinh dữ liệu giả lẫn không ghi SyncLog, tránh hiện
+// số liệu Công nợ gây hiểu nhầm là số thật trong lúc chưa có credential/trang đang đóng. Đổi lại
+// thành true (hoặc bỏ biến này) khi trang mở lại và có tài khoản đăng nhập thật.
+const SYNC_ENABLED = process.env.HIENVI_SYNC_ENABLED !== "false";
 
 /**
  * Chạy 1 lần đồng bộ công nợ từ congno.hienvi.me, ghi DebtSnapshot + SyncLog.
@@ -25,6 +30,15 @@ const MOCK_MODE = process.env.HIENVI_MOCK_MODE === "true" || !process.env.HIENVI
  * để test luồng ghi DB mà không cần đăng nhập trang thật.
  */
 export async function runDebtSync(triggeredBy: string): Promise<SyncOutcome> {
+  if (!SYNC_ENABLED) {
+    logger.warn("Đồng bộ công nợ đang tạm dừng (HIENVI_SYNC_ENABLED=false) — bỏ qua, không ghi dữ liệu.");
+    return {
+      status: "FAILED",
+      recordsSynced: 0,
+      message: "Đồng bộ công nợ đang tạm dừng (trang congno.hienvi.me hiện đang đóng).",
+    };
+  }
+
   const syncLog = await prisma.syncLog.create({
     data: { jobType: "DEBT_SYNC", status: "RUNNING", triggeredBy },
   });
