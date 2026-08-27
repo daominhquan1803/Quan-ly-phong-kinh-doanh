@@ -12,12 +12,14 @@
     "@hoanggia/db": "*",
     "fastify": "^4.28.1",
     "node-cron": "^3.0.3",
+    "nodemailer": "^6.9.15",
     "playwright": "^1.47.2",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/node": "^20.16.5",
     "@types/node-cron": "^3.0.11",
+    "@types/nodemailer": "^6.4.16",
     "tsx": "^4.19.1",
     "typescript": "^5.6.2"
   }

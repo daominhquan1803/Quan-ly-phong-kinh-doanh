@@ -12,6 +12,7 @@ const updateUserSchema = z.object({
   role: z.enum(["ADMIN", "SALES"]).optional(),
   active: z.boolean().optional(),
   includeInSalesStats: z.boolean().optional(),
+  notifyEmail: z.string().trim().email("Email nhận thông báo không hợp lệ").max(255).optional().nullable().or(z.literal("")),
   password: z.string().min(6, "Mật khẩu tối thiểu 6 ký tự").optional(),
 });
 
@@ -33,6 +34,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       role?: "ADMIN" | "SALES";
       active?: boolean;
       includeInSalesStats?: boolean;
+      notifyEmail?: string | null;
       passwordHash?: string;
     } = {};
 
@@ -64,6 +66,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (parsed.data.role !== undefined) data.role = parsed.data.role;
     if (parsed.data.active !== undefined) data.active = parsed.data.active;
     if (parsed.data.includeInSalesStats !== undefined) data.includeInSalesStats = parsed.data.includeInSalesStats;
+    if (parsed.data.notifyEmail !== undefined) data.notifyEmail = parsed.data.notifyEmail?.trim() || null;
     if (parsed.data.password) data.passwordHash = await bcrypt.hash(parsed.data.password, 10);
 
     // Không cho phép thao tác làm hệ thống mất hết quản trị viên đang hoạt động
@@ -96,6 +99,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         amisEmployeeCode: true,
         quoteAssigneeCode: true,
         includeInSalesStats: true,
+        notifyEmail: true,
       },
     });
 

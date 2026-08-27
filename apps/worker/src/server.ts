@@ -2,6 +2,8 @@ import Fastify, { FastifyReply, FastifyRequest } from "fastify";
 import { runDebtSync } from "./scraper/hienvi";
 import { runAmisOrderSync } from "./sync/amis";
 import { runQuoteSync } from "./sync/quotes";
+import { runWeekPlanReminder } from "./notifications/weekPlanReminder";
+import { runKpiReminder } from "./notifications/kpiReminder";
 import { logger } from "./logger";
 
 function checkInternalToken(req: FastifyRequest, reply: FastifyReply): boolean {
@@ -43,6 +45,31 @@ export function buildServer() {
     const outcome = await runQuoteSync(triggeredBy);
     if (outcome.status === "FAILED") reply.code(502);
     return outcome;
+  });
+
+  // 2 endpoint dưới đây để TEST thủ công logic nhắc việc (bấm bất kỳ lúc nào, không cần đợi
+  // đúng mốc 08:00/đúng ngày còn 1-3 ngày là hết hạn) — bản thân runWeekPlanReminder/runKpiReminder
+  // vẫn tự kiểm tra mốc ngày bên trong, gọi thủ công KHÔNG bỏ qua điều kiện đó.
+  app.post("/notify-week-plan", async (req, reply) => {
+    if (!checkInternalToken(req, reply)) return;
+    logger.info("Nhận yêu cầu kiểm tra nhắc việc Kế hoạch tuần thủ công");
+    try {
+      return await runWeekPlanReminder();
+    } catch (err) {
+      reply.code(502);
+      return { error: err instanceof Error ? err.message : "Lỗi không xác định" };
+    }
+  });
+
+  app.post("/notify-kpi", async (req, reply) => {
+    if (!checkInternalToken(req, reply)) return;
+    logger.info("Nhận yêu cầu kiểm tra nhắc việc KPI tháng thủ công");
+    try {
+      return await runKpiReminder();
+    } catch (err) {
+      reply.code(502);
+      return { error: err instanceof Error ? err.message : "Lỗi không xác định" };
+    }
   });
 
   return app;

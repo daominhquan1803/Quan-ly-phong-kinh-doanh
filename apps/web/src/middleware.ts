@@ -32,5 +32,7 @@ export default auth((req) => {
 });
 
 export const config = {
-  matcher: ["/((?!api/auth|_next/static|_next/image|favicon.ico|icon.svg|logo|images).*)"],
+  // api/internal/* dùng x-internal-token riêng (gọi từ worker, không có phiên đăng nhập) — loại
+  // trừ khỏi middleware giống api/auth, để route tự kiểm tra token qua requireInternalToken().
+  matcher: ["/((?!api/auth|api/internal|_next/static|_next/image|favicon.ico|icon.svg|logo|images).*)"],
 };

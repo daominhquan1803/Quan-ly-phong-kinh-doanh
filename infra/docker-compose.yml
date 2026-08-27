@@ -83,6 +83,16 @@ services:
       GOOGLE_SHEETS_QUOTE_ID: ${GOOGLE_SHEETS_QUOTE_ID}
       QUOTE_SYNC_CRON: ${QUOTE_SYNC_CRON:-15 6 * * *}
       QUOTE_SYNC_CRON_TIMEZONE: ${QUOTE_SYNC_CRON_TIMEZONE:-Asia/Ho_Chi_Minh}
+      # Thông báo nhắc việc (Kế hoạch tuần sắp hết hạn + KPI tháng chậm tiến độ) — worker gọi
+      # ngược lại vào web để lấy số liệu (chiều ngược với WORKER_INTERNAL_URL ở service web).
+      WEB_INTERNAL_URL: http://web:3000
+      NOTIFY_CRON: ${NOTIFY_CRON:-0 8 * * *}
+      NOTIFY_CRON_TIMEZONE: ${NOTIFY_CRON_TIMEZONE:-Asia/Ho_Chi_Minh}
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Hoàng Gia CRM}
     volumes:
       - worker_debug:/app/debug
     expose:

@@ -95,6 +95,10 @@ model User {
   // được gán mã để nhận đồng bộ đơn của 1 mã AMIS không thuộc nhân viên nào) khỏi thống kê,
   // mà vẫn giữ nguyên việc đồng bộ đơn hàng của mã đó.
   includeInSalesStats Boolean @default(true)
+  // Email THẬT để nhận thông báo nhắc việc (khác với "email" ở trên — email đó chỉ dùng để đăng
+  // nhập, thường là địa chỉ nội bộ @hoanggia.local không nhận được thư thật). Để trống thì nhân
+  // viên chỉ nhận thông báo trong app, không nhận email. Điền tại trang Nhân viên.
+  notifyEmail      String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -122,6 +126,7 @@ model User {
   weekPlanResultEntries  WeekPlanResultEntry[]  @relation("WeekPlanResultEmployee")
   weekPlanResultsCreated WeekPlanResultEntry[]  @relation("WeekPlanResultCreatedBy")
   weekPlanResultBatches  WeekPlanResultImportBatch[]
+  notifications          Notification[]
 
   @@map("users")
 }
@@ -828,4 +833,30 @@ model WeekPlanResultEntry {
 
   @@index([employeeId, weekStart, metric])
   @@map("week_plan_result_entries")
+}
+
+// ---------- Thông báo nhắc việc (Kế hoạch tuần sắp hết hạn, KPI tháng chưa đạt tiến độ...) ----------
+
+enum NotificationType {
+  WEEK_PLAN_REMINDER
+  KPI_REMINDER
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        NotificationType
+  title       String
+  message     String
+  // Đường dẫn trong app để bấm vào xem chi tiết (vd "/week-plan", "/kpi") — tuỳ chọn.
+  link        String?
+  readAt      DateTime?
+  // Có gửi kèm email thật hay không (User.notifyEmail có giá trị lúc gửi) — ghi lại thời điểm gửi
+  // để không gửi trùng nhiều lần cho cùng 1 lượt nhắc (worker kiểm tra trước khi tạo mới).
+  emailSentAt DateTime?
+  createdAt   DateTime         @default(now())
+
+  @@index([userId, readAt])
+  @@map("notifications")
 }

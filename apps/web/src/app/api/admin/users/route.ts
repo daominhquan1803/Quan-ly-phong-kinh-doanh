@@ -20,6 +20,7 @@ export async function GET() {
         amisEmployeeCode: true,
         quoteAssigneeCode: true,
         includeInSalesStats: true,
+        notifyEmail: true,
         createdAt: true,
       },
     });

@@ -13,6 +13,7 @@ interface UserRow {
   amisEmployeeCode: string | null;
   quoteAssigneeCode: string | null;
   includeInSalesStats: boolean;
+  notifyEmail: string | null;
 }
 interface AliasRow {
   aliasName: string;
@@ -146,6 +147,24 @@ export function UsersPanel() {
     setSavingQuoteCode(null);
   }
 
+  const [notifyEmailEdits, setNotifyEmailEdits] = useState<Record<string, string>>({});
+  const [savingNotifyEmail, setSavingNotifyEmail] = useState<string | null>(null);
+
+  async function handleSaveNotifyEmail(userId: string) {
+    const value = notifyEmailEdits[userId];
+    if (value === undefined) return;
+    setSavingNotifyEmail(userId);
+    const ok = await patchUser(userId, { notifyEmail: value || null });
+    if (ok) {
+      setNotifyEmailEdits((prev) => {
+        const next = { ...prev };
+        delete next[userId];
+        return next;
+      });
+    }
+    setSavingNotifyEmail(null);
+  }
+
   async function handleCreateAlias() {
     if (!aliasForm.aliasName.trim() || !aliasForm.employeeId) return;
     await fetch("/api/admin/aliases", {
@@ -210,6 +229,7 @@ export function UsersPanel() {
                 <th className="text-left font-medium px-4 py-2.5">Trạng thái</th>
                 <th className="text-left font-medium px-4 py-2.5">Mã nhân viên AMIS</th>
                 <th className="text-left font-medium px-4 py-2.5">Mã Báo giá</th>
+                <th className="text-left font-medium px-4 py-2.5">Email nhận thông báo</th>
                 <th className="text-left font-medium px-4 py-2.5">Thống kê doanh số</th>
                 <th className="text-left font-medium px-4 py-2.5">Mật khẩu</th>
               </tr>
@@ -280,6 +300,25 @@ export function UsersPanel() {
                     </div>
                   </td>
                   <td className="px-4 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <input
+                        placeholder="vd: tung.nguyen@gmail.com"
+                        defaultValue={u.notifyEmail ?? ""}
+                        onChange={(e) => setNotifyEmailEdits((prev) => ({ ...prev, [u.id]: e.target.value }))}
+                        className="w-44 text-sm bg-card text-ink rounded-md border border-gray-200 py-1 px-2"
+                      />
+                      {notifyEmailEdits[u.id] !== undefined && (
+                        <button
+                          onClick={() => handleSaveNotifyEmail(u.id)}
+                          disabled={savingNotifyEmail === u.id}
+                          className="text-xs font-medium text-ink hover:underline disabled:opacity-40"
+                        >
+                          Lưu
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-2.5">
                     <button
                       onClick={() => handleToggleIncludeInStats(u.id, !u.includeInSalesStats)}
                       disabled={rowBusy === u.id || !u.amisEmployeeCode}
@@ -342,6 +381,9 @@ export function UsersPanel() {
           ít nhất 1 quản trị viên đang hoạt động. Cột &quot;Thống kê doanh số&quot;: bật cho tài khoản nào thì doanh số
           của mã AMIS đó mới cộng vào Kế hoạch kinh doanh/Tổng quan — tắt đi nếu mã AMIS này không phải nhân
           viên kinh doanh thật (đơn hàng vẫn đồng bộ về bình thường, chỉ không tính vào thống kê).
+          Cột &quot;Email nhận thông báo&quot; là email THẬT (Gmail/Outlook...) — khác với email đăng
+          nhập ở cột đầu (thường là địa chỉ nội bộ không nhận được thư) — dùng để gửi nhắc việc khi
+          Kế hoạch tuần/KPI tháng sắp đến hạn. Để trống thì chỉ nhận thông báo trong app.
         </p>
       </div>
 

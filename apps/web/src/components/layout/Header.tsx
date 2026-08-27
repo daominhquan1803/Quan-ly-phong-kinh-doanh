@@ -1,5 +1,6 @@
 import { LogOut } from "lucide-react";
 import { ChangePasswordButton } from "@/components/layout/ChangePasswordButton";
+import { NotificationBell } from "@/components/layout/NotificationBell";
 
 function initials(name?: string): string {
   if (!name) return "?";
@@ -22,6 +23,7 @@ export function Header({ userName, role }: { userName?: string; role?: "ADMIN" |
         </div>
       </div>
       <div className="flex items-center gap-4">
+        <NotificationBell />
         <span className="status-badge status-badge--draft">
           {role === "ADMIN" ? "Quản trị viên" : "Nhân viên kinh doanh"}
         </span>
