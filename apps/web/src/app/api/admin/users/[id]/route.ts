@@ -13,6 +13,7 @@ const updateUserSchema = z.object({
   active: z.boolean().optional(),
   includeInSalesStats: z.boolean().optional(),
   notifyEmail: z.string().trim().email("Email nhận thông báo không hợp lệ").max(255).optional().nullable().or(z.literal("")),
+  phone: z.string().trim().max(30).optional().nullable(),
   password: z.string().min(6, "Mật khẩu tối thiểu 6 ký tự").optional(),
 });
 
@@ -35,6 +36,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       active?: boolean;
       includeInSalesStats?: boolean;
       notifyEmail?: string | null;
+      phone?: string | null;
       passwordHash?: string;
     } = {};
 
@@ -67,6 +69,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (parsed.data.active !== undefined) data.active = parsed.data.active;
     if (parsed.data.includeInSalesStats !== undefined) data.includeInSalesStats = parsed.data.includeInSalesStats;
     if (parsed.data.notifyEmail !== undefined) data.notifyEmail = parsed.data.notifyEmail?.trim() || null;
+    if (parsed.data.phone !== undefined) data.phone = parsed.data.phone?.trim() || null;
     if (parsed.data.password) data.passwordHash = await bcrypt.hash(parsed.data.password, 10);
 
     // Không cho phép thao tác làm hệ thống mất hết quản trị viên đang hoạt động
@@ -100,6 +103,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         quoteAssigneeCode: true,
         includeInSalesStats: true,
         notifyEmail: true,
+        phone: true,
       },
     });
 

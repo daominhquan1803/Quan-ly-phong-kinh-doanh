@@ -14,6 +14,7 @@ interface UserRow {
   quoteAssigneeCode: string | null;
   includeInSalesStats: boolean;
   notifyEmail: string | null;
+  phone: string | null;
 }
 interface AliasRow {
   aliasName: string;
@@ -165,6 +166,24 @@ export function UsersPanel() {
     setSavingNotifyEmail(null);
   }
 
+  const [phoneEdits, setPhoneEdits] = useState<Record<string, string>>({});
+  const [savingPhone, setSavingPhone] = useState<string | null>(null);
+
+  async function handleSavePhone(userId: string) {
+    const value = phoneEdits[userId];
+    if (value === undefined) return;
+    setSavingPhone(userId);
+    const ok = await patchUser(userId, { phone: value || null });
+    if (ok) {
+      setPhoneEdits((prev) => {
+        const next = { ...prev };
+        delete next[userId];
+        return next;
+      });
+    }
+    setSavingPhone(null);
+  }
+
   async function handleCreateAlias() {
     if (!aliasForm.aliasName.trim() || !aliasForm.employeeId) return;
     await fetch("/api/admin/aliases", {
@@ -230,6 +249,7 @@ export function UsersPanel() {
                 <th className="text-left font-medium px-4 py-2.5">Mã nhân viên AMIS</th>
                 <th className="text-left font-medium px-4 py-2.5">Mã Báo giá</th>
                 <th className="text-left font-medium px-4 py-2.5">Email nhận thông báo</th>
+                <th className="text-left font-medium px-4 py-2.5">Số điện thoại</th>
                 <th className="text-left font-medium px-4 py-2.5">Thống kê doanh số</th>
                 <th className="text-left font-medium px-4 py-2.5">Mật khẩu</th>
               </tr>
@@ -319,6 +339,25 @@ export function UsersPanel() {
                     </div>
                   </td>
                   <td className="px-4 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <input
+                        placeholder="vd: 0973786111"
+                        defaultValue={u.phone ?? ""}
+                        onChange={(e) => setPhoneEdits((prev) => ({ ...prev, [u.id]: e.target.value }))}
+                        className="w-32 text-sm bg-card text-ink rounded-md border border-gray-200 py-1 px-2"
+                      />
+                      {phoneEdits[u.id] !== undefined && (
+                        <button
+                          onClick={() => handleSavePhone(u.id)}
+                          disabled={savingPhone === u.id}
+                          className="text-xs font-medium text-ink hover:underline disabled:opacity-40"
+                        >
+                          Lưu
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-2.5">
                     <button
                       onClick={() => handleToggleIncludeInStats(u.id, !u.includeInSalesStats)}
                       disabled={rowBusy === u.id || !u.amisEmployeeCode}
@@ -383,7 +422,8 @@ export function UsersPanel() {
           viên kinh doanh thật (đơn hàng vẫn đồng bộ về bình thường, chỉ không tính vào thống kê).
           Cột &quot;Email nhận thông báo&quot; là email THẬT (Gmail/Outlook...) — khác với email đăng
           nhập ở cột đầu (thường là địa chỉ nội bộ không nhận được thư) — dùng để gửi nhắc việc khi
-          Kế hoạch tuần/KPI tháng sắp đến hạn. Để trống thì chỉ nhận thông báo trong app.
+          Kế hoạch tuần/KPI tháng sắp đến hạn. Để trống thì chỉ nhận thông báo trong app. Cột
+          &quot;Số điện thoại&quot; hiển thị ở mục &quot;Phụ trách đơn hàng&quot; trên Phiếu soạn hàng.
         </p>
       </div>
 

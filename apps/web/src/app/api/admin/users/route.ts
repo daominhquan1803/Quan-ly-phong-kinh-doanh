@@ -21,6 +21,7 @@ export async function GET() {
         quoteAssigneeCode: true,
         includeInSalesStats: true,
         notifyEmail: true,
+        phone: true,
         createdAt: true,
       },
     });

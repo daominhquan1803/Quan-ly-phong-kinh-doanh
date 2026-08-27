@@ -24,7 +24,13 @@ export default auth((req) => {
     return NextResponse.redirect(loginUrl);
   }
 
-  if ((pathname.startsWith("/admin") || pathname.startsWith("/debt") || pathname.startsWith("/quotes")) && !isAdmin) {
+  if (
+    (pathname.startsWith("/admin") ||
+      pathname.startsWith("/debt") ||
+      pathname.startsWith("/quotes") ||
+      pathname.startsWith("/picking-slips")) &&
+    !isAdmin
+  ) {
     return NextResponse.redirect(new URL("/", req.nextUrl));
   }
 

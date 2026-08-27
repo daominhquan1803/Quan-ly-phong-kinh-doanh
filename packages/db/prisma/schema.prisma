@@ -99,6 +99,9 @@ model User {
   // nhập, thường là địa chỉ nội bộ @hoanggia.local không nhận được thư thật). Để trống thì nhân
   // viên chỉ nhận thông báo trong app, không nhận email. Điền tại trang Nhân viên.
   notifyEmail      String?
+  // Số điện thoại hiển thị trên Phiếu soạn hàng (mục "Phụ trách đơn hàng: Tên_SĐT") — tuỳ chọn,
+  // điền tại trang Nhân viên.
+  phone            String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -127,6 +130,8 @@ model User {
   weekPlanResultsCreated WeekPlanResultEntry[]  @relation("WeekPlanResultCreatedBy")
   weekPlanResultBatches  WeekPlanResultImportBatch[]
   notifications          Notification[]
+  pickingSlipsCreated    PickingSlip[] @relation("PickingSlipCreatedBy")
+  pickingSlipsAsEmployee PickingSlip[] @relation("PickingSlipSalesEmployee")
 
   @@map("users")
 }
@@ -859,4 +864,59 @@ model Notification {
 
   @@index([userId, readAt])
   @@map("notifications")
+}
+
+// ---------- Phiếu soạn hàng (kho soạn hàng theo PO còn lại chưa giao) ----------
+// Nguồn dòng hàng lấy từ PoTrackingLine (Tiến độ giao hàng, xem po-delivery-sync.ts) — KHÔNG
+// đụng/trừ remainingQty của dòng đó, Phiếu soạn hàng chỉ là bản HƯỚNG DẪN soạn kho nội bộ, tách
+// biệt hoàn toàn với hệ thống theo dõi "đã giao" (chỉ do Phiếu đi hàng thật quyết định). Vì vậy
+// 1 dòng PO có thể xuất hiện ở nhiều Phiếu soạn hàng khác nhau nếu soạn nhiều đợt — không tự
+// theo dõi trùng lặp (đã xác nhận với anh Quân, giữ đơn giản đúng theo file mẫu).
+model PickingSlip {
+  id              String   @id @default(cuid())
+  slipNumber      String   @unique // tự sinh dạng "PSH-000001"
+  slipDate        DateTime @default(now())
+  customerCode    String?
+  customerName    String
+  deliveryAddress String?
+  contactPhone    String?
+  salesEmployeeId String?
+  salesEmployee   User?    @relation("PickingSlipSalesEmployee", fields: [salesEmployeeId], references: [id])
+  // Snapshot tên+SĐT NVKD TẠI THỜI ĐIỂM tạo phiếu — giữ nguyên trên phiếu cũ dù sau này đổi SĐT.
+  salesEmployeeNameSnapshot  String?
+  salesEmployeePhoneSnapshot String?
+  note            String?
+  createdById     String
+  createdBy       User     @relation("PickingSlipCreatedBy", fields: [createdById], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  items PickingSlipItem[]
+
+  @@index([customerCode])
+  @@map("picking_slips")
+}
+
+model PickingSlipItem {
+  id            String      @id @default(cuid())
+  pickingSlipId String
+  pickingSlip   PickingSlip @relation(fields: [pickingSlipId], references: [id], onDelete: Cascade)
+  lineOrder     Int
+  // Liên kết tới đúng dòng PO gốc để đối chiếu sau này — không ràng buộc cứng (dòng PO có thể bị
+  // xoá/nhập lại), null vẫn giữ được đầy đủ thông tin qua các cột snapshot bên dưới.
+  poTrackingLineId     String?
+  poCode               String
+  itemCode             String?
+  itemName             String
+  customerItemCode     String?
+  unit                 String?
+  // "SL PO" và "SL còn lại chưa giao" TẠI THỜI ĐIỂM tạo phiếu — chỉ để đối chiếu, không tính lại.
+  poQuantitySnapshot      Decimal? @db.Decimal(14, 2)
+  remainingQtySnapshot    Decimal? @db.Decimal(14, 2)
+  poDateSnapshot          DateTime?
+  qtyToPick               Decimal  @db.Decimal(14, 2)
+  deliveryDate            DateTime?
+
+  @@index([pickingSlipId])
+  @@map("picking_slip_items")
 }

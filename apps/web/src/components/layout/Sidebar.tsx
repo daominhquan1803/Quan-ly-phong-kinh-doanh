@@ -15,6 +15,7 @@ import {
   Briefcase,
   Receipt,
   ClipboardList,
+  PackageCheck,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
   { href: "/orders", label: "Đơn hàng", icon: ShoppingCart, adminOnly: false },
   { href: "/shipping-status", label: "Tiến độ giao hàng", icon: Gauge, adminOnly: false },
   { href: "/shipment-slips", label: "Phiếu đi hàng", icon: Truck, adminOnly: false },
+  { href: "/picking-slips", label: "Phiếu soạn hàng", icon: PackageCheck, adminOnly: true },
   { href: "/quotes", label: "Báo giá", icon: Receipt, adminOnly: true },
   { href: "/debt", label: "Công nợ", icon: Wallet, adminOnly: true },
   { href: "/targets", label: "Kế hoạch kinh doanh", icon: Target, adminOnly: false },
