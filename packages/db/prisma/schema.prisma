@@ -520,16 +520,18 @@ model SalesPlanLine {
 // NVKD tự đăng ký, Quản trị viên duyệt mới được ghi nhận vào KPI "Điểm Đi Gặp Khách". Người đi
 // hỗ trợ (BusinessTripSupporter) cũng được tính điểm đi gặp khách cho CHÍNH lượt đi này — chỉ
 // cần người đăng ký chính được duyệt là tính luôn cho cả người hỗ trợ, không cần duyệt riêng
-// từng người (1 lượt đi = 1 buổi gặp khách thật, không phải nhiều buổi).
-
+// từng người. 1 BusinessTripRequest = 1 BUỔI đi (1 ngày, duyệt 1 lần), có thể ghé NHIỀU khách
+// hàng trong cùng buổi đó — từng khách là 1 dòng BusinessTripStop riêng (tên công ty/địa chỉ/
+// giờ dự kiến/nội dung TÁCH RIÊNG cho từng khách, xem model bên dưới). Quy ước tính điểm (đã
+// chốt với anh Quân 27/08): "Số buổi đi công tác" (Kế hoạch tuần) đếm theo BusinessTripRequest
+// (đúng số NGÀY/buổi, ghé mấy khách trong 1 buổi vẫn tính 1) — "Khách mới liên hệ/hẹn gặp",
+// "Khách cũ liên hệ thăm hỏi" (Kế hoạch tuần), và "CSKH/Đi gặp KH" (KPI tháng) đếm theo
+// BusinessTripStop (mỗi khách ghé = 1 điểm, không phụ thuộc số buổi).
 model BusinessTripRequest {
   id           String     @id @default(cuid())
   employeeId   String
   employee     User       @relation("TripEmployee", fields: [employeeId], references: [id])
   visitDate    DateTime // Ngày đi
-  expectedTime String? // Giờ dự kiến gặp (vd "09:30") — chỉ là mốc dự kiến, không phải DateTime đầy đủ
-  companyName  String // Công ty đến gặp
-  content      String // Nội dung buổi gặp
   status       TripStatus @default(PENDING)
   approvedById String?
   approvedBy   User?      @relation("TripApprovedBy", fields: [approvedById], references: [id])
@@ -539,11 +541,30 @@ model BusinessTripRequest {
   updatedAt    DateTime   @updatedAt
 
   supporters BusinessTripSupporter[]
+  stops      BusinessTripStop[]
 
   @@index([employeeId])
   @@index([visitDate])
   @@index([status])
   @@map("business_trip_requests")
+}
+
+// 1 khách hàng ghé trong 1 buổi đi công tác — 1 BusinessTripRequest có thể có nhiều dòng, sắp
+// theo orderIndex (thứ tự ghé dự kiến do NVKD tự sắp, hoặc theo gợi ý "Tối ưu thứ tự" của Google
+// Maps mở qua link — app không tự tính lộ trình, chỉ tạo link mở Google Maps thật với đủ điểm
+// dừng, xem lib/business-trip-maps.ts).
+model BusinessTripStop {
+  id           String              @id @default(cuid())
+  tripId       String
+  trip         BusinessTripRequest @relation(fields: [tripId], references: [id], onDelete: Cascade)
+  orderIndex   Int
+  companyName  String // Công ty đến gặp
+  address      String? // Địa chỉ khách hàng — dùng để tạo link mở Google Maps nhiều điểm dừng
+  expectedTime String? // Giờ dự kiến gặp (vd "09:30") — chỉ là mốc dự kiến, không phải DateTime đầy đủ
+  content      String // Nội dung buổi gặp
+
+  @@index([tripId])
+  @@map("business_trip_stops")
 }
 
 // 1 dòng = 1 người đi hỗ trợ cho 1 lượt đăng ký đi công tác — được chọn thêm bởi người đăng ký

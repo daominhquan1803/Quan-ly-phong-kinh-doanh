@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@hoanggia/db";
-import { requireSession, scopeByOwner, UnauthorizedError } from "@/lib/rbac";
+import { requireSession, UnauthorizedError } from "@/lib/rbac";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
         employee: { select: { id: true, name: true } },
         approvedBy: { select: { id: true, name: true } },
         supporters: { include: { employee: { select: { id: true, name: true } } } },
+        stops: { orderBy: { orderIndex: "asc" } },
       },
       orderBy: { visitDate: "desc" },
       take: 500,
@@ -47,20 +48,28 @@ export async function GET(req: NextRequest) {
   }
 }
 
+const stopSchema = z.object({
+  companyName: z.string().trim().min(1, "Thiếu tên công ty đến gặp"),
+  address: z.string().trim().max(500).optional().nullable(),
+  expectedTime: z.string().trim().max(20).optional().nullable(),
+  content: z.string().trim().min(1, "Thiếu nội dung buổi gặp"),
+});
+
 const createSchema = z.object({
   visitDate: z.string().min(1, "Thiếu ngày đi"),
-  expectedTime: z.string().trim().max(20).optional().nullable(),
-  companyName: z.string().trim().min(1, "Thiếu tên công ty đến gặp"),
-  content: z.string().trim().min(1, "Thiếu nội dung buổi gặp"),
+  // 1 buổi đi công tác có thể ghé NHIỀU khách hàng — mỗi khách 1 dòng riêng (tên/địa chỉ/giờ dự
+  // kiến/nội dung), thứ tự trong mảng = thứ tự ghé dự kiến.
+  stops: z.array(stopSchema).min(1, "Cần ít nhất 1 khách hàng đến gặp").max(20),
   // Đồng nghiệp đi hỗ trợ cùng lượt đi này — cũng được tính KPI "đi gặp khách" khi lượt đi được
   // duyệt, không cần duyệt riêng từng người (xem model BusinessTripSupporter).
   supporterEmployeeIds: z.array(z.string().trim().min(1)).max(20).optional(),
 });
 
 /**
- * NVKD tự đăng ký đi công tác cho chính mình — chờ Quản trị viên duyệt mới được ghi nhận. Có thể
- * chọn thêm đồng nghiệp đi hỗ trợ (supporterEmployeeIds) — người hỗ trợ cũng được tính điểm KPI
- * "đi gặp khách" cho đúng lượt đi này khi lượt đi được duyệt.
+ * NVKD tự đăng ký đi công tác cho chính mình — chờ Quản trị viên duyệt mới được ghi nhận. 1 buổi
+ * đi có thể ghé nhiều khách hàng (stops). Có thể chọn thêm đồng nghiệp đi hỗ trợ
+ * (supporterEmployeeIds) — người hỗ trợ cũng được tính điểm KPI "đi gặp khách" cho đúng các
+ * khách trong lượt đi này khi lượt đi được duyệt.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -87,14 +96,23 @@ export async function POST(req: NextRequest) {
       data: {
         employeeId: session.user.id,
         visitDate: new Date(parsed.data.visitDate),
-        expectedTime: parsed.data.expectedTime?.trim() || null,
-        companyName: parsed.data.companyName.trim(),
-        content: parsed.data.content.trim(),
         supporters: {
           create: validSupporters.map((u) => ({ employeeId: u.id })),
         },
+        stops: {
+          create: parsed.data.stops.map((s, i) => ({
+            orderIndex: i + 1,
+            companyName: s.companyName.trim(),
+            address: s.address?.trim() || null,
+            expectedTime: s.expectedTime?.trim() || null,
+            content: s.content.trim(),
+          })),
+        },
       },
-      include: { supporters: { include: { employee: { select: { id: true, name: true } } } } },
+      include: {
+        supporters: { include: { employee: { select: { id: true, name: true } } } },
+        stops: { orderBy: { orderIndex: "asc" } },
+      },
     });
 
     return NextResponse.json({ trip }, { status: 201 });

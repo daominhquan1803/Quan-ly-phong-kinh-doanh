@@ -282,14 +282,17 @@ async function computeAutoMetrics(
   // ---- EXISTING_VISIT: khách hàng CŨ được đăng ký đi công tác gặp trong tuần (chính + hỗ trợ) ----
   // Cùng định nghĩa "khách cũ" như NEW_CONTACT/NEW_MEETING/NEW_CUSTOMER_SALE, chỉ đảo ngược điều
   // kiện: có đơn hàng trước tuần này (company-wide) mà lần mua gần nhất CÒN TRONG VÒNG 1 năm.
+  // 1 buổi đi công tác (BusinessTripRequest) có thể có NHIỀU khách hàng (BusinessTripStop) — mỗi
+  // khách ghé trong buổi đó là 1 công ty riêng, đếm qua quan hệ stops thay vì field companyName cũ
+  // (đã bỏ khỏi BusinessTripRequest khi tách model, xem schema.prisma).
   const [primaryVisits, supporterVisits] = await Promise.all([
     prisma.businessTripRequest.findMany({
       where: { status: "APPROVED", visitDate: { gte: start, lt: end }, employeeId: { in: employeeIds } },
-      select: { employeeId: true, companyName: true },
+      select: { employeeId: true, stops: { select: { companyName: true } } },
     }),
     prisma.businessTripSupporter.findMany({
       where: { trip: { status: "APPROVED", visitDate: { gte: start, lt: end } }, employeeId: { in: employeeIds } },
-      select: { employeeId: true, trip: { select: { companyName: true } } },
+      select: { employeeId: true, trip: { select: { stops: { select: { companyName: true } } } } },
     }),
   ]);
   const visitCompaniesByEmployee = new Map<string, Set<string>>();
@@ -299,8 +302,8 @@ async function computeAutoMetrics(
     visitCompaniesByEmployee.get(empId)!.add(company);
     allVisitCompanyNames.add(company);
   };
-  for (const v of primaryVisits) addVisitCompany(v.employeeId, v.companyName);
-  for (const v of supporterVisits) addVisitCompany(v.employeeId, v.trip.companyName);
+  for (const v of primaryVisits) for (const s of v.stops) addVisitCompany(v.employeeId, s.companyName);
+  for (const v of supporterVisits) for (const s of v.trip.stops) addVisitCompany(v.employeeId, s.companyName);
   const lastPriorOrderByVisitedCompany = new Map<string, Date>();
   if (allVisitCompanyNames.size > 0) {
     const priorVisitOrders = await prisma.order.groupBy({

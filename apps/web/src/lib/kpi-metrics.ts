@@ -29,7 +29,7 @@ import { getMonthlyWeekPlanScore } from "./week-plan";
  *  1. Doanh số tổng     tối đa = weightRevenue (mặc định 30, +thưởng vượt 110% mỗi 5% +1đ, không trần) — tự động, từ SalesTarget
  *  2. DS ngành Sản xuất tối đa = weightRevenueSX (mặc định 20, +thưởng như trên)             — tự động, từ SalesPlanLine nhóm Sản xuất
  *  3. KH mới            tối đa = weightNewCustomers (mặc định 10) — MIN(weight, tỷ lệ đạt × weight) — nhập tay
- *  4. CSKH/Đi gặp KH    tối đa = weightVisit (mặc định 10) — MIN(weight, tỷ lệ đạt gặp KH × weight) — tự động, từ BusinessTripRequest
+ *  4. CSKH/Đi gặp KH    tối đa = weightVisit (mặc định 10) — MIN(weight, tỷ lệ đạt gặp KH × weight) — tự động, đếm theo SỐ KHÁCH ghé (BusinessTripStop), không theo số buổi
  *  5. Nợ quá hạn        tối đa 10đ — bậc thang theo % (KHÔNG có trọng số riêng)     — nhập tay (chờ nối congno.hienvi.me)
  *  6. Thu hồi nợ        tối đa 10đ — MIN(10, tỷ lệ thu hồi × 10) (KHÔNG có trọng số riêng) — nhập tay
  *  7. Thái độ & kỷ luật tối đa 2đ  — max(2 − số lần vi phạm, 0)                      — nhập tay
@@ -228,31 +228,36 @@ export async function getKpiMonthlyReport(
     prisma.kpiMonthlyEntry.findMany({
       where: { year, month, ...(onlyEmployeeId ? { employeeId: onlyEmployeeId } : {}) },
     }),
-    prisma.businessTripRequest.groupBy({
-      by: ["employeeId"],
+    // "CSKH/Đi gặp KH" tính theo SỐ KHÁCH ghé (BusinessTripStop), không theo số buổi/số dòng
+    // BusinessTripRequest — 1 buổi ghé nhiều khách thì cộng đủ số khách đó, dùng _count.stops
+    // thay vì đếm dòng trip.
+    prisma.businessTripRequest.findMany({
       where: {
         status: "APPROVED",
         visitDate: { gte: start, lt: end },
         ...(onlyEmployeeId ? { employeeId: onlyEmployeeId } : {}),
       },
-      _count: { _all: true },
+      select: { employeeId: true, _count: { select: { stops: true } } },
     }),
     // Người đi HỖ TRỢ cũng được tính điểm "đi gặp khách" cho lượt đi đã duyệt — cộng thêm vào
-    // visitByEmployee bên dưới (không có duyệt riêng, ăn theo trạng thái của trip).
-    prisma.businessTripSupporter.groupBy({
-      by: ["employeeId"],
+    // visitByEmployee bên dưới (không có duyệt riêng, ăn theo trạng thái của trip), tính đủ số
+    // khách (stops) của CHÍNH lượt đi đó, không phải 1 điểm cố định mỗi lượt.
+    prisma.businessTripSupporter.findMany({
       where: {
         trip: { status: "APPROVED", visitDate: { gte: start, lt: end } },
         ...(onlyEmployeeId ? { employeeId: onlyEmployeeId } : {}),
       },
-      _count: { _all: true },
+      select: { employeeId: true, trip: { select: { _count: { select: { stops: true } } } } },
     }),
   ]);
 
   const entryByEmployee = new Map(entries.map((e) => [e.employeeId, e]));
-  const visitByEmployee = new Map(visitCounts.map((v) => [v.employeeId, v._count._all]));
+  const visitByEmployee = new Map<string, number>();
+  for (const v of visitCounts) {
+    visitByEmployee.set(v.employeeId, (visitByEmployee.get(v.employeeId) ?? 0) + v._count.stops);
+  }
   for (const v of supporterVisitCounts) {
-    visitByEmployee.set(v.employeeId, (visitByEmployee.get(v.employeeId) ?? 0) + v._count._all);
+    visitByEmployee.set(v.employeeId, (visitByEmployee.get(v.employeeId) ?? 0) + v.trip._count.stops);
   }
 
   const rows: KpiMonthlyReportRow[] = [];
