@@ -1,8 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
-import { Plus, FileText } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Plus, FileText, Trash2 } from "lucide-react";
 import { formatDateVN } from "@/lib/utils";
 
 interface SlipRow {
@@ -16,6 +17,9 @@ interface SlipRow {
 }
 
 export function PickingSlipList() {
+  const queryClient = useQueryClient();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   const { data, isLoading } = useQuery({
     queryKey: ["picking-slips"],
     queryFn: async () => {
@@ -24,6 +28,19 @@ export function PickingSlipList() {
       return res.json() as Promise<{ slips: SlipRow[] }>;
     },
   });
+
+  async function handleDelete(slip: SlipRow) {
+    if (!confirm(`Xoá phiếu ${slip.slipNumber} (${slip.customerName})? Không thể hoàn tác.`)) return;
+    setDeletingId(slip.id);
+    const res = await fetch(`/api/picking-slips/${slip.id}`, { method: "DELETE" });
+    setDeletingId(null);
+    if (res.ok) {
+      queryClient.invalidateQueries({ queryKey: ["picking-slips"] });
+    } else {
+      const json = await res.json().catch(() => ({}));
+      alert(json.error ?? "Không xoá được phiếu");
+    }
+  }
 
   return (
     <div className="rounded-lg border border-gray-200 bg-card p-5">
@@ -71,13 +88,20 @@ export function PickingSlipList() {
                 <td className="px-3 py-2 font-medium text-ink">{s.customerName}</td>
                 <td className="px-3 py-2 text-muted-foreground">{s.salesEmployeeNameSnapshot ?? "—"}</td>
                 <td className="px-3 py-2 text-center font-mono tabular-nums text-ink">{s._count.items}</td>
-                <td className="px-3 py-2 text-right">
+                <td className="px-3 py-2 text-right whitespace-nowrap">
                   <Link
                     href={`/picking-slips/${s.id}`}
-                    className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-500 hover:underline"
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-500 hover:underline mr-3"
                   >
                     <FileText className="h-3.5 w-3.5" /> Xem
                   </Link>
+                  <button
+                    onClick={() => handleDelete(s)}
+                    disabled={deletingId === s.id}
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-muted2 hover:text-brandRed-600 disabled:opacity-40"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> Xoá
+                  </button>
                 </td>
               </tr>
             ))}

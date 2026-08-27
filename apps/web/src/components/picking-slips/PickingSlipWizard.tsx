@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Search, ArrowLeft, Save } from "lucide-react";
@@ -75,6 +75,7 @@ export function PickingSlipWizard() {
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [qtyEdits, setQtyEdits] = useState<Record<string, string>>({});
   const [deliveryDateEdits, setDeliveryDateEdits] = useState<Record<string, string>>({});
+  const [filters, setFilters] = useState({ poCode: "", itemCode: "", itemName: "", customerItemCode: "" });
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [contactPhone, setContactPhone] = useState("");
   const [salesEmployeeId, setSalesEmployeeId] = useState("");
@@ -175,6 +176,23 @@ export function PickingSlipWizard() {
   }
 
   const lines = linesData?.lines ?? [];
+  const filteredLines = lines.filter((l) => {
+    const f = filters;
+    if (f.poCode && !l.poCode.toLowerCase().includes(f.poCode.toLowerCase())) return false;
+    if (f.itemCode && !(l.itemCode ?? "").toLowerCase().includes(f.itemCode.toLowerCase())) return false;
+    if (f.itemName && !l.itemName.toLowerCase().includes(f.itemName.toLowerCase())) return false;
+    if (f.customerItemCode && !(l.customerItemCode ?? "").toLowerCase().includes(f.customerItemCode.toLowerCase())) return false;
+    return true;
+  });
+
+  // Độ rộng cố định (px) cho 3 cột luôn hiện khi kéo ngang: ô tích chọn, Số PO, Mã hàng — để vừa
+  // nhìn thấy vừa tích chọn được trong lúc điền SL cần soạn/Ngày cần giao ở cột xa bên phải.
+  const STICKY_W = { check: 36, poCode: 130, itemCode: 110 };
+  const stickyStyle = (col: "check" | "poCode" | "itemCode"): CSSProperties => {
+    const left = col === "check" ? 0 : col === "poCode" ? STICKY_W.check : STICKY_W.check + STICKY_W.poCode;
+    const width = STICKY_W[col];
+    return { position: "sticky", left, width, minWidth: width, maxWidth: width };
+  };
 
   if (step === 1) {
     return (
@@ -260,16 +278,58 @@ export function PickingSlipWizard() {
         ) : lines.length === 0 ? (
           <p className="text-sm text-muted-foreground py-4">Khách hàng này hiện không còn PO nào chưa giao.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto border border-gray-200 rounded-md">
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="text-left text-xs text-muted-foreground">
-                  <th className="font-medium px-2 py-1.5"></th>
-                  <th className="font-medium px-2 py-1.5">NVKD</th>
-                  <th className="font-medium px-2 py-1.5">Số PO</th>
-                  <th className="font-medium px-2 py-1.5">Mã hàng</th>
-                  <th className="font-medium px-2 py-1.5">Tên SP</th>
-                  <th className="font-medium px-2 py-1.5">Mã Hàng/Số PO-KH</th>
+                  <th className="font-medium px-2 py-1.5 bg-card z-20" style={stickyStyle("check")}></th>
+                  <th className="font-medium px-2 py-1.5 bg-card z-20" style={stickyStyle("poCode")}>
+                    <div className="flex flex-col gap-1">
+                      <span>Số PO</span>
+                      <input
+                        value={filters.poCode}
+                        onChange={(e) => setFilters((f) => ({ ...f, poCode: e.target.value }))}
+                        placeholder="Tìm..."
+                        className="w-full text-xs font-normal bg-card text-ink rounded border border-gray-200 py-0.5 px-1"
+                      />
+                    </div>
+                  </th>
+                  <th
+                    className="font-medium px-2 py-1.5 bg-card z-20 border-r border-gray-200"
+                    style={stickyStyle("itemCode")}
+                  >
+                    <div className="flex flex-col gap-1">
+                      <span>Mã hàng</span>
+                      <input
+                        value={filters.itemCode}
+                        onChange={(e) => setFilters((f) => ({ ...f, itemCode: e.target.value }))}
+                        placeholder="Tìm..."
+                        className="w-full text-xs font-normal bg-card text-ink rounded border border-gray-200 py-0.5 px-1"
+                      />
+                    </div>
+                  </th>
+                  <th className="font-medium px-2 py-1.5 min-w-[220px]">
+                    <div className="flex flex-col gap-1">
+                      <span>Tên SP</span>
+                      <input
+                        value={filters.itemName}
+                        onChange={(e) => setFilters((f) => ({ ...f, itemName: e.target.value }))}
+                        placeholder="Tìm..."
+                        className="w-full text-xs font-normal bg-card text-ink rounded border border-gray-200 py-0.5 px-1"
+                      />
+                    </div>
+                  </th>
+                  <th className="font-medium px-2 py-1.5 min-w-[160px]">
+                    <div className="flex flex-col gap-1">
+                      <span>Mã Hàng/Số PO-KH</span>
+                      <input
+                        value={filters.customerItemCode}
+                        onChange={(e) => setFilters((f) => ({ ...f, customerItemCode: e.target.value }))}
+                        placeholder="Tìm..."
+                        className="w-full text-xs font-normal bg-card text-ink rounded border border-gray-200 py-0.5 px-1"
+                      />
+                    </div>
+                  </th>
                   <th className="font-medium px-2 py-1.5">ĐVT</th>
                   <th className="font-medium px-2 py-1.5 text-right">SL PO</th>
                   <th className="font-medium px-2 py-1.5 text-right">SL chưa giao</th>
@@ -280,11 +340,11 @@ export function PickingSlipWizard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {lines.map((l) => {
+                {filteredLines.map((l) => {
                   const isChecked = checked.has(l.poTrackingLineId);
                   return (
                     <tr key={l.poTrackingLineId} className={cn(isChecked && "bg-amber-500/5")}>
-                      <td className="px-2 py-1.5">
+                      <td className="px-2 py-1.5 bg-card z-10" style={stickyStyle("check")}>
                         <input
                           type="checkbox"
                           checked={isChecked}
@@ -292,9 +352,15 @@ export function PickingSlipWizard() {
                           className="h-4 w-4"
                         />
                       </td>
-                      <td className="px-2 py-1.5 text-ink2 whitespace-nowrap">{l.salesEmployeeName}</td>
-                      <td className="px-2 py-1.5 text-ink2 whitespace-nowrap">{l.poCode}</td>
-                      <td className="px-2 py-1.5 text-ink whitespace-nowrap">{l.itemCode ?? "—"}</td>
+                      <td className="px-2 py-1.5 text-ink2 whitespace-nowrap bg-card z-10" style={stickyStyle("poCode")}>
+                        {l.poCode}
+                      </td>
+                      <td
+                        className="px-2 py-1.5 text-ink whitespace-nowrap bg-card z-10 border-r border-gray-200"
+                        style={stickyStyle("itemCode")}
+                      >
+                        {l.itemCode ?? "—"}
+                      </td>
                       <td className="px-2 py-1.5 text-ink2 max-w-[240px] truncate" title={l.itemName}>
                         {l.itemName}
                       </td>
@@ -326,6 +392,13 @@ export function PickingSlipWizard() {
                     </tr>
                   );
                 })}
+                {filteredLines.length === 0 && (
+                  <tr>
+                    <td colSpan={12} className="px-2 py-4 text-center text-muted-foreground">
+                      Không có dòng nào khớp bộ lọc.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
