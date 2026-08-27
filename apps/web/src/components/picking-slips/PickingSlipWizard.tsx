@@ -3,7 +3,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { Search, ArrowLeft, Save } from "lucide-react";
+import { Search, ArrowLeft, Save, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn, formatDateVN } from "@/lib/utils";
 
 interface CustomerOption {
@@ -76,6 +76,8 @@ export function PickingSlipWizard() {
   const [qtyEdits, setQtyEdits] = useState<Record<string, string>>({});
   const [deliveryDateEdits, setDeliveryDateEdits] = useState<Record<string, string>>({});
   const [filters, setFilters] = useState({ poCode: "", itemCode: "", itemName: "", customerItemCode: "" });
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
   const [deliveryAddress, setDeliveryAddress] = useState("");
   const [contactPhone, setContactPhone] = useState("");
   const [salesEmployeeId, setSalesEmployeeId] = useState("");
@@ -102,6 +104,12 @@ export function PickingSlipWizard() {
     }
     if (best) setSalesEmployeeId(best);
   }, [linesData, salesEmployeeId]);
+
+  // Về lại trang 1 mỗi khi đổi bộ lọc hoặc đổi khách hàng — tránh đứng ở 1 trang trống sau khi
+  // lọc còn ít dòng hơn.
+  useEffect(() => {
+    setPage(1);
+  }, [filters, selectedCustomer?.customerCode]);
 
   function toggleCheck(id: string, line: AvailableLine) {
     setChecked((prev) => {
@@ -185,6 +193,10 @@ export function PickingSlipWizard() {
     return true;
   });
 
+  const totalPages = Math.max(1, Math.ceil(filteredLines.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pagedLines = filteredLines.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
   // Độ rộng cố định (px) cho 3 cột luôn hiện khi kéo ngang: ô tích chọn, Số PO, Mã hàng — để vừa
   // nhìn thấy vừa tích chọn được trong lúc điền SL cần soạn/Ngày cần giao ở cột xa bên phải.
   const STICKY_W = { check: 36, poCode: 130, itemCode: 110 };
@@ -193,6 +205,12 @@ export function PickingSlipWizard() {
     const width = STICKY_W[col];
     return { position: "sticky", left, width, minWidth: width, maxWidth: width };
   };
+  // Bề rộng CỐ ĐỊNH cho MỌI cột qua <colgroup> + table-layout: fixed — tránh lỗi trình duyệt co
+  // hẹp cột "Tên SP"/"Mã Hàng/Số PO-KH" gần như mất chữ khi kết hợp với các cột sticky bên trái
+  // (đã xảy ra thật khi test — table-layout mặc định "auto" tính sai độ rộng còn lại khi có
+  // cột sticky ở đầu bảng).
+  const COL_WIDTHS = [36, 130, 110, 260, 170, 60, 90, 100, 100, 100, 100, 120];
+  const TABLE_WIDTH = COL_WIDTHS.reduce((s, w) => s + w, 0);
 
   if (step === 1) {
     return (
@@ -279,7 +297,12 @@ export function PickingSlipWizard() {
           <p className="text-sm text-muted-foreground py-4">Khách hàng này hiện không còn PO nào chưa giao.</p>
         ) : (
           <div className="overflow-x-auto border border-gray-200 rounded-md">
-            <table className="min-w-full text-sm">
+            <table className="text-sm" style={{ tableLayout: "fixed", width: TABLE_WIDTH, minWidth: "100%" }}>
+              <colgroup>
+                {COL_WIDTHS.map((w, i) => (
+                  <col key={i} style={{ width: w }} />
+                ))}
+              </colgroup>
               <thead>
                 <tr className="text-left text-xs text-muted-foreground">
                   <th className="font-medium px-2 py-1.5 bg-card z-20" style={stickyStyle("check")}></th>
@@ -340,7 +363,7 @@ export function PickingSlipWizard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {filteredLines.map((l) => {
+                {pagedLines.map((l) => {
                   const isChecked = checked.has(l.poTrackingLineId);
                   return (
                     <tr key={l.poTrackingLineId} className={cn(isChecked && "bg-amber-500/5")}>
@@ -401,6 +424,30 @@ export function PickingSlipWizard() {
                 )}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {filteredLines.length > 0 && (
+          <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
+            <span>
+              Tổng {filteredLines.length} dòng — trang {currentPage}/{totalPages}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+                className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 disabled:opacity-40 hover:bg-gray-50"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" /> Trước
+              </button>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+                className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 disabled:opacity-40 hover:bg-gray-50"
+              >
+                Sau <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
         )}
 
