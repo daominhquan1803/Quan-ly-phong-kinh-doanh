@@ -132,6 +132,7 @@ model User {
   notifications          Notification[]
   pickingSlipsCreated    PickingSlip[] @relation("PickingSlipCreatedBy")
   pickingSlipsAsEmployee PickingSlip[] @relation("PickingSlipSalesEmployee")
+  pushSubscriptions      PushSubscription[]
 
   @@map("users")
 }
@@ -881,10 +882,31 @@ model Notification {
   // Có gửi kèm email thật hay không (User.notifyEmail có giá trị lúc gửi) — ghi lại thời điểm gửi
   // để không gửi trùng nhiều lần cho cùng 1 lượt nhắc (worker kiểm tra trước khi tạo mới).
   emailSentAt DateTime?
+  // Có gửi kèm thông báo đẩy lên điện thoại (Web Push) hay không — chỉ ghi khi gửi thành công tới
+  // ÍT NHẤT 1 thiết bị đã đăng ký (PushSubscription), tương tự emailSentAt ở trên.
+  pushSentAt  DateTime?
   createdAt   DateTime         @default(now())
 
   @@index([userId, readAt])
   @@map("notifications")
+}
+
+// Thiết bị đã đăng ký nhận thông báo đẩy (Web Push, PWA cài trên điện thoại) — 1 người có thể có
+// nhiều thiết bị (điện thoại + máy tính) nên 1-nhiều với User, không phải 1-1. endpoint là URL duy
+// nhất do trình duyệt/OS cấp cho từng lượt đăng ký, dùng làm khoá để không lưu trùng khi 1 thiết
+// bị đăng ký lại nhiều lần.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }
 
 // ---------- Phiếu soạn hàng (kho soạn hàng theo PO còn lại chưa giao) ----------

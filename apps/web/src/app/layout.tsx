@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
 import "@/styles/globals.css";
 import { Providers } from "@/components/Providers";
+import { PwaRegister } from "@/components/PwaRegister";
 
 const plexSans = IBM_Plex_Sans({
   subsets: ["latin", "vietnamese"],
@@ -18,6 +19,16 @@ export const metadata: Metadata = {
   title: "Hoàng Gia CRM — Quản lý phòng kinh doanh",
   description:
     "Hệ thống quản lý đơn hàng, phiếu đi hàng, công nợ và kế hoạch kinh doanh — Công ty CP Giải pháp Đóng gói Hoàng Gia.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Hoàng Gia CRM",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0B2447",
 };
 
 export default function RootLayout({
@@ -28,6 +39,7 @@ export default function RootLayout({
   return (
     <html lang="vi" className={`${plexSans.variable} ${plexMono.variable}`}>
       <body className="font-sans antialiased">
+        <PwaRegister />
         <Providers>{children}</Providers>
       </body>
     </html>

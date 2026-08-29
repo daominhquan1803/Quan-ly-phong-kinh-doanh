@@ -34,6 +34,9 @@ services:
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-sonnet-5}
       INTERNAL_SYNC_TOKEN: ${INTERNAL_SYNC_TOKEN}
       WORKER_INTERNAL_URL: http://worker:4001
+      # Thông báo đẩy (Web Push) — web chỉ cần khoá CÔNG KHAI để trả cho trình duyệt đăng ký,
+      # khoá riêng tư chỉ worker (nơi thực sự gửi push) mới cần.
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
     volumes:
       - web_uploads:/app/apps/web/public/uploads
     expose:
@@ -93,6 +96,9 @@ services:
       SMTP_USER: ${SMTP_USER}
       SMTP_PASSWORD: ${SMTP_PASSWORD}
       SMTP_FROM_NAME: ${SMTP_FROM_NAME:-Hoàng Gia CRM}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:sale5.hoanggiaps@gmail.com}
     volumes:
       - worker_debug:/app/debug
     expose:

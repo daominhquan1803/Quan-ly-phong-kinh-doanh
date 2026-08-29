@@ -1,6 +1,7 @@
 import { prisma } from "@hoanggia/db";
 import { logger } from "../logger";
 import { sendEmail } from "../email";
+import { sendPushToUser } from "../push";
 
 const WEB_INTERNAL_URL = process.env.WEB_INTERNAL_URL || "http://web:3000";
 const INTERNAL_SYNC_TOKEN = process.env.INTERNAL_SYNC_TOKEN;
@@ -124,6 +125,15 @@ export async function runKpiReminder(): Promise<{ checked: number; notified: num
           data: { emailSentAt: new Date() },
         });
       }
+    }
+
+    // Thông báo đẩy lên điện thoại (PWA) — kênh song song với email, không phụ thuộc notifyEmail.
+    const pushSent = await sendPushToUser(row.employeeId, { title, body: message, url: "/kpi" });
+    if (pushSent) {
+      await prisma.notification.updateMany({
+        where: { userId: row.employeeId, type: "KPI_REMINDER", createdAt: { gte: todayStart, lt: todayEnd } },
+        data: { pushSentAt: new Date() },
+      });
     }
 
     notified++;

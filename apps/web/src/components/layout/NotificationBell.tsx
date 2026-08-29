@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell } from "lucide-react";
+import { Bell, BellRing, BellOff } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isPushSupported, getCurrentPushSubscription, subscribeToPush, unsubscribeFromPush } from "@/lib/push-client";
 
 interface NotificationRow {
   id: string;
@@ -26,9 +27,41 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hours / 24)} ngày trước`;
 }
 
+type PushUiState = "checking" | "unsupported" | "subscribed" | "unsubscribed";
+
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
+  const [pushState, setPushState] = useState<PushUiState>("checking");
+  const [pushBusy, setPushBusy] = useState(false);
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!isPushSupported()) {
+      setPushState("unsupported");
+      return;
+    }
+    getCurrentPushSubscription()
+      .then((sub) => setPushState(sub ? "subscribed" : "unsubscribed"))
+      .catch(() => setPushState("unsubscribed"));
+  }, []);
+
+  async function handleTogglePush() {
+    setPushBusy(true);
+    try {
+      if (pushState === "subscribed") {
+        const ok = await unsubscribeFromPush();
+        setPushState(ok ? "unsubscribed" : "subscribed");
+      } else {
+        const ok = await subscribeToPush();
+        setPushState(ok ? "subscribed" : "unsubscribed");
+        if (!ok) {
+          alert('Chưa bật được thông báo đẩy — có thể trình duyệt/điện thoại đã chặn quyền thông báo. Vào phần cài đặt trình duyệt để cấp lại quyền "Thông báo" cho trang này rồi thử lại.');
+        }
+      }
+    } finally {
+      setPushBusy(false);
+    }
+  }
 
   const { data } = useQuery({
     queryKey: ["notifications"],
@@ -79,6 +112,29 @@ export function NotificationBell() {
                 </button>
               )}
             </div>
+            {pushState !== "unsupported" && (
+              <div className="flex items-center justify-between gap-2 px-4 py-2 border-b border-gray-100 bg-gray-50">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  {pushState === "subscribed" ? (
+                    <BellRing className="h-3.5 w-3.5 text-success-600 shrink-0" />
+                  ) : (
+                    <BellOff className="h-3.5 w-3.5 shrink-0" />
+                  )}
+                  <span>
+                    {pushState === "subscribed"
+                      ? "Đã bật thông báo đẩy trên thiết bị này"
+                      : "Chưa bật thông báo đẩy trên thiết bị này"}
+                  </span>
+                </div>
+                <button
+                  onClick={handleTogglePush}
+                  disabled={pushBusy || pushState === "checking"}
+                  className="shrink-0 text-xs font-medium text-amber-500 hover:underline disabled:opacity-50"
+                >
+                  {pushState === "subscribed" ? "Tắt" : "Bật"}
+                </button>
+              </div>
+            )}
             <div className="max-h-96 overflow-y-auto divide-y divide-gray-100">
               {!data || data.notifications.length === 0 ? (
                 <p className="px-4 py-6 text-center text-sm text-muted-foreground">Chưa có thông báo nào.</p>

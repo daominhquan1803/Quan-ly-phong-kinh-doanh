@@ -14,12 +14,14 @@
     "node-cron": "^3.0.3",
     "nodemailer": "^6.9.15",
     "playwright": "^1.47.2",
+    "web-push": "^3.6.7",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/node": "^20.16.5",
     "@types/node-cron": "^3.0.11",
     "@types/nodemailer": "^6.4.16",
+    "@types/web-push": "^3.6.4",
     "tsx": "^4.19.1",
     "typescript": "^5.6.2"
   }

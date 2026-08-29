@@ -1,6 +1,7 @@
 import { prisma } from "@hoanggia/db";
 import { logger } from "../logger";
 import { sendEmail } from "../email";
+import { sendPushToUser } from "../push";
 
 const WEB_INTERNAL_URL = process.env.WEB_INTERNAL_URL || "http://web:3000";
 const INTERNAL_SYNC_TOKEN = process.env.INTERNAL_SYNC_TOKEN;
@@ -121,6 +122,15 @@ export async function runWeekPlanReminder(): Promise<{ checked: number; notified
           data: { emailSentAt: new Date() },
         });
       }
+    }
+
+    // Thông báo đẩy lên điện thoại (PWA) — kênh song song với email, không phụ thuộc notifyEmail.
+    const pushSent = await sendPushToUser(row.employeeId, { title, body: message, url: "/week-plan" });
+    if (pushSent) {
+      await prisma.notification.updateMany({
+        where: { userId: row.employeeId, type: "WEEK_PLAN_REMINDER", createdAt: { gte: todayStart, lt: todayEnd } },
+        data: { pushSentAt: new Date() },
+      });
     }
 
     notified++;

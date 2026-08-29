@@ -40,5 +40,11 @@ export default auth((req) => {
 export const config = {
   // api/internal/* dùng x-internal-token riêng (gọi từ worker, không có phiên đăng nhập) — loại
   // trừ khỏi middleware giống api/auth, để route tự kiểm tra token qua requireInternalToken().
-  matcher: ["/((?!api/auth|api/internal|_next/static|_next/image|favicon.ico|icon.svg|logo|images).*)"],
+  // manifest.json/sw.js/icons/* PHẢI luôn truy cập công khai không cần đăng nhập — trình duyệt/hệ
+  // điều hành tự tải các file này để đánh giá "có cài được PWA không" và để chạy service worker
+  // nền (nhận push) mà không đi qua phiên đăng nhập nào cả; chặn chúng bằng middleware khiến
+  // Chrome nhận về trang HTML redirect thay vì JSON/JS thật, làm app không cài lên máy được.
+  matcher: [
+    "/((?!api/auth|api/internal|_next/static|_next/image|favicon.ico|icon.svg|logo|images|manifest.json|sw.js|icons).*)",
+  ],
 };
