@@ -18,7 +18,7 @@ import {
   PackageCheck,
 } from "lucide-react";
 
-const NAV_ITEMS = [
+export const NAV_ITEMS = [
   { href: "/", label: "Tổng quan", icon: LayoutDashboard, adminOnly: false },
   { href: "/week-plan", label: "Kế hoạch làm việc tuần", icon: ClipboardList, adminOnly: false },
   { href: "/orders", label: "Đơn hàng", icon: ShoppingCart, adminOnly: false },

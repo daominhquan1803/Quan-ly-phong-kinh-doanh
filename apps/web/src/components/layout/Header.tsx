@@ -1,6 +1,7 @@
 import { LogOut } from "lucide-react";
 import { ChangePasswordButton } from "@/components/layout/ChangePasswordButton";
 import { NotificationBell } from "@/components/layout/NotificationBell";
+import { MobileNav } from "@/components/layout/MobileNav";
 
 function initials(name?: string): string {
   if (!name) return "?";
@@ -12,19 +13,20 @@ function initials(name?: string): string {
 
 export function Header({ userName, role }: { userName?: string; role?: "ADMIN" | "SALES" }) {
   return (
-    <header className="flex items-center justify-between border-b border-gray-200 bg-card px-6 py-3">
-      <div className="flex items-center gap-3">
+    <header className="flex items-center justify-between gap-2 border-b border-gray-200 bg-card px-3 py-3 sm:px-6">
+      <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+        <MobileNav role={role} />
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy-900 text-sm font-semibold text-white">
           {initials(userName)}
         </div>
-        <div>
-          <p className="text-sm text-muted-foreground">Xin chào,</p>
-          <p className="font-semibold text-ink">{userName ?? "—"}</p>
+        <div className="min-w-0">
+          <p className="hidden text-sm text-muted-foreground sm:block">Xin chào,</p>
+          <p className="truncate font-semibold text-ink">{userName ?? "—"}</p>
         </div>
       </div>
-      <div className="flex items-center gap-4">
+      <div className="flex shrink-0 items-center gap-2 sm:gap-4">
         <NotificationBell />
-        <span className="status-badge status-badge--draft">
+        <span className="status-badge status-badge--draft hidden sm:inline-flex">
           {role === "ADMIN" ? "Quản trị viên" : "Nhân viên kinh doanh"}
         </span>
         <ChangePasswordButton />
@@ -32,9 +34,10 @@ export function Header({ userName, role }: { userName?: string; role?: "ADMIN" |
           <button
             type="submit"
             className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-brandRed-600"
+            aria-label="Đăng xuất"
           >
             <LogOut className="h-4 w-4" />
-            Đăng xuất
+            <span className="hidden sm:inline">Đăng xuất</span>
           </button>
         </form>
       </div>

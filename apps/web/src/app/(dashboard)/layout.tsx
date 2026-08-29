@@ -14,7 +14,7 @@ export default async function DashboardLayout({
       <Sidebar role={session?.user?.role} />
       <div className="flex flex-1 flex-col min-w-0">
         <Header userName={session?.user?.name ?? undefined} role={session?.user?.role} />
-        <main className="flex-1 p-6 overflow-x-auto">{children}</main>
+        <main className="flex-1 p-3 overflow-x-auto sm:p-6">{children}</main>
       </div>
     </div>
   );

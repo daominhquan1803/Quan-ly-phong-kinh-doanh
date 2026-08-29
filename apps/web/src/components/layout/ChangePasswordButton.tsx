@@ -54,14 +54,15 @@ export function ChangePasswordButton() {
       <button
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-ink"
+        aria-label="Đổi mật khẩu"
       >
         <KeyRound className="h-4 w-4" />
-        Đổi mật khẩu
+        <span className="hidden sm:inline">Đổi mật khẩu</span>
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={resetAndClose} />
-          <div className="absolute right-0 top-full mt-2 w-72 rounded-lg border border-gray-200 bg-card p-4 shadow-lg z-20 space-y-3">
+          <div className="absolute right-0 top-full mt-2 w-64 sm:w-72 rounded-lg border border-gray-200 bg-card p-4 shadow-lg z-20 space-y-3">
             {error && <p className="text-xs text-brandRed-600">{error}</p>}
             {success && <p className="text-xs text-success-600">Đổi mật khẩu thành công</p>}
             <input
