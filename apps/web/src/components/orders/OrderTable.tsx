@@ -9,6 +9,7 @@ import { normalizeVN } from "@/lib/text-normalize";
 import { ORDER_STATUS_LABEL } from "@/lib/order-status";
 import { EmployeeFilterSelect } from "@/components/shared/EmployeeFilterSelect";
 import { FilterInput, SortableTh, toggleSort, type SortState } from "@/components/shared/SortableFilterableTable";
+import { CustomerRiskPanel } from "@/components/orders/CustomerRiskPanel";
 import { Upload, RefreshCw, CheckCircle2, XCircle, X, FilePlus2 } from "lucide-react";
 
 interface SyncLog {
@@ -136,6 +137,10 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <div className="space-y-4">
+      {/* Cảnh báo khách có nguy cơ mất — đặt trên cùng vì đây là việc cần hành động, khác với
+          bảng đơn hàng bên dưới chỉ để tra cứu. Tự ẩn khi không có cảnh báo nào. */}
+      <CustomerRiskPanel employeeId={isAdmin ? employeeId : ""} />
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 flex-wrap">
           <select
