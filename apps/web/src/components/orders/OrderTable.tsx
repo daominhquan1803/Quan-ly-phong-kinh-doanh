@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { OrderStatusBadge } from "./StatusBadge";
@@ -10,7 +10,7 @@ import { ORDER_STATUS_LABEL } from "@/lib/order-status";
 import { EmployeeFilterSelect } from "@/components/shared/EmployeeFilterSelect";
 import { FilterInput, SortableTh, toggleSort, type SortState } from "@/components/shared/SortableFilterableTable";
 import { CustomerRiskPanel } from "@/components/orders/CustomerRiskPanel";
-import { Upload, RefreshCw, CheckCircle2, XCircle, X, FilePlus2 } from "lucide-react";
+import { Upload, RefreshCw, CheckCircle2, XCircle, X, FilePlus2, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface SyncLog {
   status: "RUNNING" | "SUCCESS" | "FAILED";
@@ -51,10 +51,17 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
   const [filterOrderCode, setFilterOrderCode] = useState("");
   const [filterCustomer, setFilterCustomer] = useState("");
   const [filterEmployeeName, setFilterEmployeeName] = useState("");
-  const [sort, setSort] = useState<SortState<SortField>>({ field: null, dir: "asc" });
+  // Mặc định xếp đơn MỚI NHẤT lên đầu. Cố tình sắp ở client thay vì để nguyên thứ tự server trả
+  // về: PostgreSQL khi ORDER BY orderDate DESC sẽ đưa đơn KHÔNG có ngày đặt lên trước tiên
+  // (NULLS FIRST là mặc định của Postgres cho DESC), khiến dòng đầu bảng là đơn thiếu ngày chứ
+  // không phải đơn gần nhất — xem cách xử lý null trong hàm sắp xếp bên dưới.
+  const [sort, setSort] = useState<SortState<SortField>>({ field: "orderDate", dir: "desc" });
+  const [page, setPage] = useState(1);
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const queryClient = useQueryClient();
+
+  const PAGE_SIZE = 10;
 
   const { data, isLoading } = useQuery({
     queryKey: ["orders", status, overdueOnly, employeeId],
@@ -116,14 +123,37 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
     if (sort.field) {
       const field = sort.field;
       const dir = sort.dir === "asc" ? 1 : -1;
+      const valueOf = (o: OrderRow): number | null => {
+        if (field === "totalValue") return Number(o.totalValue);
+        const raw = o[field];
+        return raw ? new Date(raw as string).getTime() : null;
+      };
       list = [...list].sort((a, b) => {
-        const av = field === "totalValue" ? Number(a.totalValue) : a[field] ? new Date(a[field] as string).getTime() : -Infinity;
-        const bv = field === "totalValue" ? Number(b.totalValue) : b[field] ? new Date(b[field] as string).getTime() : -Infinity;
+        const av = valueOf(a);
+        const bv = valueOf(b);
+        // Đơn thiếu ngày LUÔN xuống cuối, không phụ thuộc chiều sắp xếp — nếu để chúng tham gia
+        // so sánh như giá trị nhỏ nhất thì khi sắp giảm dần chúng nhảy lên đầu bảng, che mất đơn
+        // mới nhất (đúng lỗi PostgreSQL cũng mắc: ORDER BY ... DESC mặc định cho NULL lên trước).
+        if (av === null && bv === null) return 0;
+        if (av === null) return 1;
+        if (bv === null) return -1;
         return (av - bv) * dir;
       });
     }
     return list;
   }, [data, filterOrderCode, filterCustomer, filterEmployeeName, sort]);
+
+  // Số trang tính lại theo danh sách ĐÃ lọc/sắp xếp. currentPage được kẹp lại thay vì lưu thẳng
+  // vào state, để khi lọc làm danh sách ngắn đi thì không bị đứng ở 1 trang trống.
+  const totalPages = Math.max(1, Math.ceil(visibleOrders.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pagedOrders = visibleOrders.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  // Mọi thao tác đổi tập dữ liệu (lọc, sắp xếp, đổi nhân viên/trạng thái) đều đưa về trang 1 —
+  // giữ nguyên trang cũ dễ khiến người dùng tưởng "không có kết quả" khi đang ở trang cuối.
+  useEffect(() => {
+    setPage(1);
+  }, [status, overdueOnly, employeeId, filterOrderCode, filterCustomer, filterEmployeeName, sort]);
 
   function handleSort(field: SortField) {
     setSort((prev) => toggleSort(prev, field));
@@ -270,7 +300,7 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
                 </td>
               </tr>
             )}
-            {visibleOrders.map((o) => (
+            {pagedOrders.map((o) => (
               <tr key={o.id} className="hover:bg-gray-50">
                 <td className="px-4 py-2.5 font-medium text-ink">
                   <Link href={`/orders/${o.id}`}>{o.orderCode}</Link>
@@ -288,10 +318,31 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
           </tbody>
         </table>
       </div>
-      {hasActiveFilter && !isLoading && (
-        <p className="text-xs text-muted-foreground">
-          Đang hiển thị {visibleOrders.length} / {data?.orders.length ?? 0} đơn theo bộ lọc hiện tại.
-        </p>
+      {!isLoading && visibleOrders.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span>
+            Tổng {visibleOrders.length} đơn
+            {hasActiveFilter && ` (lọc từ ${data?.orders.length ?? 0} đơn)`} — trang {currentPage}/{totalPages}
+          </span>
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+                className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 hover:bg-gray-50 disabled:opacity-40"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" /> Trước
+              </button>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+                className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 hover:bg-gray-50 disabled:opacity-40"
+              >
+                Sau <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
