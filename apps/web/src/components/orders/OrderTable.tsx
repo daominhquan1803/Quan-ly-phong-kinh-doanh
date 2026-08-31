@@ -9,7 +9,7 @@ import { normalizeVN } from "@/lib/text-normalize";
 import { ORDER_STATUS_LABEL } from "@/lib/order-status";
 import { EmployeeFilterSelect } from "@/components/shared/EmployeeFilterSelect";
 import { FilterInput, SortableTh, toggleSort, type SortState } from "@/components/shared/SortableFilterableTable";
-import { Upload, RefreshCw, CheckCircle2, XCircle, X } from "lucide-react";
+import { Upload, RefreshCw, CheckCircle2, XCircle, X, FilePlus2 } from "lucide-react";
 
 interface SyncLog {
   status: "RUNNING" | "SUCCESS" | "FAILED";
@@ -156,25 +156,36 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
           </label>
           {isAdmin && <EmployeeFilterSelect value={employeeId} onChange={setEmployeeId} />}
         </div>
-        {isAdmin && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleSyncAmis}
-              disabled={syncing}
-              className="flex items-center gap-1.5 rounded-md bg-amber-500 px-3 py-2 text-sm font-semibold text-amber-foreground hover:bg-amber-400 disabled:opacity-60"
-            >
-              <RefreshCw className={cn("h-4 w-4", syncing && "animate-spin")} />
-              {syncing ? "Đang đồng bộ..." : "Đồng bộ AMIS"}
-            </button>
-            <Link
-              href="/orders/import"
-              className="flex items-center gap-1.5 rounded-md bg-brandRed-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brandRed-700"
-            >
-              <Upload className="h-4 w-4" />
-              Nhập Excel từ AMIS
-            </Link>
-          </div>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          {isAdmin && (
+            <>
+              <button
+                onClick={handleSyncAmis}
+                disabled={syncing}
+                className="flex items-center gap-1.5 rounded-md bg-amber-500 px-3 py-2 text-sm font-semibold text-amber-foreground hover:bg-amber-400 disabled:opacity-60"
+              >
+                <RefreshCw className={cn("h-4 w-4", syncing && "animate-spin")} />
+                {syncing ? "Đang đồng bộ..." : "Đồng bộ AMIS"}
+              </button>
+              <Link
+                href="/orders/import"
+                className="flex items-center gap-1.5 rounded-md bg-brandRed-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brandRed-700"
+              >
+                <Upload className="h-4 w-4" />
+                Nhập Excel từ AMIS
+              </Link>
+            </>
+          )}
+          {/* Thêm đơn thủ công (upload 1 file "Đơn đặt hàng") — cả NVKD lẫn Quản trị viên đều
+              dùng được, khác với 2 nút trên (chỉ Quản trị viên, dùng cho nhập/đồng bộ hàng loạt). */}
+          <Link
+            href="/orders/manual"
+            className="flex items-center gap-1.5 rounded-md border border-brandRed-600 px-3 py-2 text-sm font-semibold text-brandRed-600 hover:bg-brandRed-50"
+          >
+            <FilePlus2 className="h-4 w-4" />
+            Thêm đơn thủ công
+          </Link>
+        </div>
       </div>
 
       {syncError && <div className="rounded-md bg-brandRed-50 text-brandRed-600 text-sm px-4 py-2.5">{syncError}</div>}
