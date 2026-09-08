@@ -354,3 +354,103 @@ export async function getProductGroupTargetVsActual(
     };
   });
 }
+
+export interface RevenueTrendMonth {
+  year: number;
+  month: number;
+  label: string;
+}
+export interface RevenueTrendRow {
+  employeeId: string;
+  employeeName: string;
+  // Doanh số đã giao THỰC TẾ từng tháng — cùng thứ tự với RevenueTrend.months (Tháng 1 -> tháng
+  // đang xem).
+  values: number[];
+  // Luỹ kế cả khoảng (thường là từ đầu năm tới tháng đang xem).
+  ytdActual: number;
+  ytdTarget: number;
+  ytdCompletionPct: number | null;
+}
+export interface RevenueTrend {
+  months: RevenueTrendMonth[];
+  rows: RevenueTrendRow[];
+  totals: number[]; // tổng công ty theo từng tháng, cùng thứ tự months
+  ytdTotalActual: number;
+  ytdTotalTarget: number;
+  ytdTotalCompletionPct: number | null;
+}
+
+/**
+ * Bảng "Doanh số đi hàng từ đầu năm" — doanh số đã giao THỰC TẾ (cùng nguồn PoDeliveryEvent đã
+ * dùng ở getEmployeeTargetVsActual.actualRevenue) trải từ Tháng 1 tới `uptoMonth` của `year`,
+ * theo từng nhân viên, kèm luỹ kế cả khoảng so với tổng chỉ tiêu luỹ kế cùng khoảng đó — để anh
+ * Quân nhìn được cả nhịp độ từng tháng lẫn tiến độ chung cả năm tới thời điểm hiện tại.
+ */
+export async function getRevenueTrendByEmployee(
+  year: number,
+  uptoMonth: number,
+  onlyEmployeeId?: string
+): Promise<RevenueTrend> {
+  const clampedUptoMonth = Math.min(12, Math.max(1, uptoMonth));
+  const months = Array.from({ length: clampedUptoMonth }, (_, i) => ({ year, month: i + 1 }));
+
+  const start = monthRange(year, 1).start;
+  const end = monthRange(year, clampedUptoMonth).end;
+
+  const employees = await prisma.user.findMany({
+    where: {
+      active: true,
+      amisEmployeeCode: { not: null },
+      includeInSalesStats: true,
+      ...(onlyEmployeeId ? { id: onlyEmployeeId } : {}),
+    },
+    select: { id: true, name: true },
+  });
+
+  const [events, targets] = await Promise.all([
+    prisma.poDeliveryEvent.findMany({
+      where: { eventDate: { gte: start, lt: end }, salesEmployeeId: { not: null } },
+      select: { salesEmployeeId: true, eventDate: true, value: true },
+    }),
+    prisma.salesTarget.findMany({
+      where: { year, month: { lte: clampedUptoMonth } },
+    }),
+  ]);
+
+  const bucket = new Map<string, number>(); // key = `${employeeId}::${year}-${month}`
+  for (const e of events) {
+    const key = `${e.salesEmployeeId}::${e.eventDate.getFullYear()}-${e.eventDate.getMonth() + 1}`;
+    bucket.set(key, (bucket.get(key) ?? 0) + Number(e.value));
+  }
+  const targetMap = new Map<string, number>();
+  for (const t of targets) {
+    targetMap.set(t.employeeId, (targetMap.get(t.employeeId) ?? 0) + Number(t.targetRevenue));
+  }
+
+  const monthMetas: RevenueTrendMonth[] = months.map((m) => ({ ...m, label: `Tháng ${m.month}` }));
+  const rows: RevenueTrendRow[] = employees.map((e) => {
+    const values = months.map((m) => bucket.get(`${e.id}::${m.year}-${m.month}`) ?? 0);
+    const ytdActual = values.reduce((s, v) => s + v, 0);
+    const ytdTarget = targetMap.get(e.id) ?? 0;
+    return {
+      employeeId: e.id,
+      employeeName: e.name,
+      values,
+      ytdActual,
+      ytdTarget,
+      ytdCompletionPct: ytdTarget > 0 ? Math.round((ytdActual / ytdTarget) * 100) : null,
+    };
+  });
+  const totals = months.map((_, idx) => rows.reduce((s, r) => s + r.values[idx], 0));
+  const ytdTotalActual = rows.reduce((s, r) => s + r.ytdActual, 0);
+  const ytdTotalTarget = rows.reduce((s, r) => s + r.ytdTarget, 0);
+
+  return {
+    months: monthMetas,
+    rows,
+    totals,
+    ytdTotalActual,
+    ytdTotalTarget,
+    ytdTotalCompletionPct: ytdTotalTarget > 0 ? Math.round((ytdTotalActual / ytdTotalTarget) * 100) : null,
+  };
+}
