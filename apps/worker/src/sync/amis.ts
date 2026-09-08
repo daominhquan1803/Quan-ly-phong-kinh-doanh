@@ -159,7 +159,7 @@ async function syncOrderItems(orderId: string, mappings: AmisProductMapping[] | 
 async function upsertOrderFromAmis(o: AmisSaleOrder, managedCodes: Set<string>): Promise<boolean> {
   const existing = await prisma.order.findFirst({
     where: { OR: [{ amisOrderId: o.id }, { orderCode: o.sale_order_no }] },
-    select: { id: true, deliveryVerifiedManually: true, deliveredValue: true },
+    select: { id: true, source: true, deliveryVerifiedManually: true, deliveredValue: true },
   });
 
   // Đơn đã được đối chiếu/sửa thủ công (vd theo Sổ chi tiết bán hàng kế toán, khi phát hiện
@@ -168,7 +168,16 @@ async function upsertOrderFromAmis(o: AmisSaleOrder, managedCodes: Set<string>):
   if (existing?.deliveryVerifiedManually) return false;
 
   if (isExcludedRevenueStatus(o.revenue_status) || isBeforeOrderDateCutoff(o.sale_order_date)) {
-    if (existing) await prisma.order.delete({ where: { id: existing.id } }); // cascade xoá luôn OrderItem
+    // CHỈ xoá nếu bản ghi đang có ĐÃ TỪNG đến từ chính AMIS (source khác MANUAL) — nghĩa là
+    // trước đây hợp lệ, nay AMIS báo loại trừ (đổi trạng thái/ngày) nên đúng là nên xoá theo.
+    // Nếu bản ghi trùng "Số PO" (orderCode) này là đơn NHẬP THỦ CÔNG (tính năng "Thêm đơn thủ
+    // công" — khách gửi PO nhưng CHƯA kịp lên AMIS), thì việc AMIS đang thấy nó ở trạng thái
+    // "Bản nháp"/trước mốc cutoff chỉ có nghĩa là AMIS CHƯA GHI NHẬN xong, KHÔNG có nghĩa đơn
+    // đó không có thật — xoá trong trường hợp này từng làm mất đúng những đơn NVKD tự thêm tay,
+    // trong khi thực tế đơn đó vẫn đang chờ AMIS xử lý. Bỏ qua, giữ nguyên bản ghi thủ công.
+    if (existing && existing.source !== "MANUAL") {
+      await prisma.order.delete({ where: { id: existing.id } }); // cascade xoá luôn OrderItem
+    }
     return false;
   }
 
