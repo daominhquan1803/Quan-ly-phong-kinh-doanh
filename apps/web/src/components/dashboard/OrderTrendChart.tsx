@@ -86,7 +86,7 @@ export function OrderTrendChart({ isAdmin }: { isAdmin: boolean }) {
         </div>
       </div>
       <p className="text-xs text-muted2 mb-4">
-        Giá trị PO đặt hàng luỹ kế theo ngày trong tháng (theo ngày đặt PO) — đường tháng hiện tại dừng đúng ở hôm nay.
+        Giá trị PO đặt hàng theo TỪNG NGÀY trong tháng (không cộng dồn, theo ngày đặt PO) — đường tháng hiện tại dừng đúng ở hôm nay.
       </p>
       {isLoading && <p className="text-sm text-muted-foreground py-16 text-center">Đang tải...</p>}
       {!isLoading && data && (
@@ -110,7 +110,7 @@ export function OrderTrendChart({ isAdmin }: { isAdmin: boolean }) {
             {months.map((m, idx) => (
               <Line
                 key={m.label}
-                type="monotone"
+                type="linear"
                 dataKey={m.label}
                 stroke={colorForMonth(m, idx)}
                 strokeWidth={m.isCurrent ? 3 : 1.75}

@@ -11,12 +11,13 @@ function daysInMonth(year: number, month: number): number {
 }
 
 /**
- * Biểu đồ "Tình hình lên đơn hàng trong tháng" ở Tổng quan — giá trị PO đặt hàng LUỸ KẾ theo
- * ngày trong tháng (cùng số đo "Giá trị PO đặt hàng" đã dùng ở Kế hoạch kinh doanh — theo ngày
- * đặt PO, PoTrackingLine.poDate), so sánh tháng hiện tại với tối đa 3 tháng trước đó trên cùng
- * 1 trục ngày (ngày 1..N) để thấy nhịp độ lên đơn nhanh/chậm hơn tháng trước ở đúng cùng thời
- * điểm trong tháng. Tháng hiện tại CHỈ luỹ kế tới hôm nay (không suy đoán phần chưa tới), các
- * tháng trước luỹ kế trọn tháng.
+ * Biểu đồ "Tình hình lên đơn hàng trong tháng" ở Tổng quan — giá trị PO đặt hàng THEO TỪNG NGÀY
+ * (không cộng dồn — cùng số đo "Giá trị PO đặt hàng" đã dùng ở Kế hoạch kinh doanh, theo ngày đặt
+ * PO, PoTrackingLine.poDate), so sánh tháng hiện tại với tối đa 3 tháng trước đó trên cùng 1 trục
+ * ngày (ngày 1..N) để thấy đúng nhịp độ lên đơn từng ngày nhanh/chậm hơn tháng trước ở cùng thời
+ * điểm trong tháng — thay vì chỉ thấy xu hướng tăng luỹ kế vốn dễ che mất các ngày đột biến/im
+ * ắng. Các ngày trong tháng chưa tới (tháng hiện tại) để null (không suy đoán), ngày đã qua mà
+ * không có PO nào thì giá trị = 0 (không phải null, để đường biểu đồ không bị đứt đoạn).
  */
 export async function GET(req: NextRequest) {
   try {
@@ -70,7 +71,6 @@ export async function GET(req: NextRequest) {
     const maxDays = Math.max(...months.map((m) => daysInMonth(m.year, m.month)));
 
     const days: Record<string, number | null>[] = [];
-    const runningTotals = months.map(() => 0);
     for (let day = 1; day <= maxDays; day++) {
       const row: Record<string, number | null> = { day };
       months.forEach((m, idx) => {
@@ -81,8 +81,7 @@ export async function GET(req: NextRequest) {
           row[monthLabels[idx]] = null; // hết tháng, hoặc tháng hiện tại chưa tới ngày đó
         } else {
           const key = `${m.year}-${m.month}-${day}`;
-          runningTotals[idx] += dailyMap.get(key) ?? 0;
-          row[monthLabels[idx]] = runningTotals[idx];
+          row[monthLabels[idx]] = dailyMap.get(key) ?? 0; // giá trị RIÊNG của ngày đó, không cộng dồn
         }
       });
       days.push(row);
