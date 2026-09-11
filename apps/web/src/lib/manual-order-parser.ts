@@ -82,7 +82,11 @@ function extractBlock(rows: unknown[][], label: string): string | null {
  * vài dòng khách hàng/thông tin phụ so với mẫu.
  */
 export function parseManualOrderExcel(buffer: Buffer): ParsedManualOrder {
-  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
+  // Không dùng cellDates:true — xem giải thích chi tiết ở readSheet() trong excel-parser.ts
+  // (thư viện xlsx có thể tự quy đổi ô ngày dạng số bị lệch vài chục giây so với đúng nửa đêm).
+  // File mẫu này luôn ghi ngày dạng chữ trong 1 ô nhãn ("Ngày đặt hàng: dd/mm/yyyy") nên chưa
+  // từng gặp lỗi này, nhưng bỏ cờ này đi để nhất quán và an toàn nếu sau này có file khác.
+  const workbook = XLSX.read(buffer, { type: "buffer" });
   const sheetName = pickOrderSheet(workbook);
   const ws = workbook.Sheets[sheetName];
   const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, raw: true, defval: "" });

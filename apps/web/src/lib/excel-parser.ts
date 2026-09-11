@@ -32,9 +32,17 @@ export function listSheetNames(buffer: Buffer): string[] {
   return workbook.SheetNames;
 }
 
-/** Đọc 1 sheet cụ thể — mặc định sheet đầu tiên nếu không chỉ định (giữ tương thích cũ). */
+/** Đọc 1 sheet cụ thể — mặc định sheet đầu tiên nếu không chỉ định (giữ tương thích cũ).
+ * CỐ TÌNH không dùng cellDates:true — với 1 số file thực tế, thư viện xlsx tự quy đổi ô ngày
+ * dạng SỐ (Excel serial date) sang đối tượng Date bị lệch vài chục giây so với đúng nửa đêm
+ * (lỗi dấu phẩy động khi tự quy đổi, đã xác nhận qua dữ liệu thật: serial 46273 phải ra đúng
+ * 00:00:00 ngày 08/09/2026, nhưng cellDates lại cho ra 23:59:30 ngày 07/09 — lùi hẳn 1 ngày khi
+ * đọc theo giờ Việt Nam). Để mặc định (không cellDates), ô ngày dạng số giữ nguyên là number,
+ * nhường lại cho parseExcelDate() tự quy đổi bằng XLSX.SSF.parse_date_code() — hàm này cho kết
+ * quả đúng chính xác từng giây, đã kiểm chứng lại bằng dữ liệu thật. Ô ngày dạng chữ (text) không
+ * bị ảnh hưởng bởi cờ này, vẫn luôn được đọc đúng như trước. */
 export function readSheet(buffer: Buffer, sheetName?: string) {
-  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
+  const workbook = XLSX.read(buffer, { type: "buffer" });
   const targetName = sheetName && workbook.SheetNames.includes(sheetName) ? sheetName : workbook.SheetNames[0];
   const sheet = workbook.Sheets[targetName];
   const rows: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: "" });
