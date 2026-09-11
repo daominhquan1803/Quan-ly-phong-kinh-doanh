@@ -4,7 +4,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Search, ArrowLeft, Save, ChevronLeft, ChevronRight } from "lucide-react";
-import { cn, formatDateVN } from "@/lib/utils";
+import { cn, formatDateVN, toDateInputValueVN } from "@/lib/utils";
 
 interface CustomerOption {
   customerCode: string;
@@ -29,10 +29,6 @@ interface Employee {
   name: string;
 }
 
-function toISODateInput(iso: string | null): string {
-  if (!iso) return "";
-  return iso.slice(0, 10);
-}
 
 const DEFAULT_NOTE =
   "- Khi soạn hàng lưu ý đúng mã, đúng nội dung tem nhãn.\n- Đóng gói theo quy cách của khách hàng.\n- Chuẩn bị đầy đủ giấy tờ đi kèm.";
@@ -122,7 +118,7 @@ export function PickingSlipWizard() {
           setQtyEdits((p) => ({ ...p, [id]: String(line.remainingQty ?? 0) }));
         }
         if (deliveryDateEdits[id] === undefined) {
-          setDeliveryDateEdits((p) => ({ ...p, [id]: toISODateInput(line.requestedDeliveryDate) }));
+          setDeliveryDateEdits((p) => ({ ...p, [id]: toDateInputValueVN(line.requestedDeliveryDate) }));
         }
       }
       return next;

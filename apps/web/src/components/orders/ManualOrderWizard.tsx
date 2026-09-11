@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { Upload, Trash2, Plus, AlertTriangle } from "lucide-react";
-import { formatCurrencyVND } from "@/lib/utils";
+import { formatCurrencyVND, toDateInputValueVN } from "@/lib/utils";
 
 interface ParsedItem {
   itemCode: string | null;
@@ -43,12 +43,6 @@ const EXTRA_LABELS: Record<string, string> = {
   paymentTerms: "Điều kiện thanh toán",
   shippingCost: "Chi phí vận chuyển",
 };
-
-/** Yyyy-mm-dd cho <input type="date"> — API trả về ISO string đầy đủ. */
-function toDateInputValue(iso: string | null): string {
-  if (!iso) return "";
-  return iso.slice(0, 10);
-}
 
 export function ManualOrderWizard({ isAdmin }: { isAdmin: boolean }) {
   const router = useRouter();
@@ -100,8 +94,8 @@ export function ManualOrderWizard({ isAdmin }: { isAdmin: boolean }) {
       const parsed: ParsedOrder = json.parsed;
       setOrderCode(parsed.orderCode);
       setCustomerName(parsed.customerName);
-      setOrderDate(toDateInputValue(parsed.orderDate));
-      setExpectedDeliveryDate(toDateInputValue(parsed.expectedDeliveryDate));
+      setOrderDate(toDateInputValueVN(parsed.orderDate));
+      setExpectedDeliveryDate(toDateInputValueVN(parsed.expectedDeliveryDate));
       setItems(parsed.items);
       setExtra(parsed.extra ?? {});
       setDuplicateOrderId(json.duplicateOrderId ?? null);
