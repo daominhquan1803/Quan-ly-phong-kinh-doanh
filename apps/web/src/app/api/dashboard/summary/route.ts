@@ -3,6 +3,7 @@ import { prisma, getPoAggregates } from "@hoanggia/db";
 import { requireSession, scopeByOwner, UnauthorizedError } from "@/lib/rbac";
 import { getEmployeeTargetVsActual, getProductGroupTargetVsActual } from "@/lib/dashboard-metrics";
 import { daysUntilDeadline } from "@/lib/order-status";
+import { remainingAmount, overdueDays } from "@/lib/debt-status";
 
 const TOP_OVERDUE_COUNT = 10;
 
@@ -71,34 +72,28 @@ export async function GET() {
 
     // Công nợ là số liệu tổng của cả phòng (không gắn được theo từng nhân viên) — chỉ
     // ADMIN mới thấy, đúng yêu cầu "chỉ Quản trị viên xem được thông tin tổng của cả phòng".
+    // Trang Công nợ đã bỏ đồng bộ tự động hienvi.me, chuyển sang quản lý trực tiếp trong hệ
+    // thống (xem apps/web/src/lib/debt-status.ts) — số liệu ở đây tính trực tiếp từ DebtInvoice
+    // hiện có thay vì đọc snapshot đồng bộ theo ngày như trước, nên KHÔNG còn xu hướng
+    // tăng/giảm so với "lần đồng bộ trước" (không có lịch sử snapshot định kỳ để so sánh nữa).
     const isAdmin = session.user.role === "ADMIN";
     let debtTotal: number | null = null;
     let debtOverdue: number | null = null;
-    let debtSnapshotDate: Date | null = null;
-    let debtTrendPct: number | null = null;
+    let debtUpdatedAt: Date | null = null;
     if (isAdmin) {
-      const latestDebt = await prisma.debtSnapshot.findFirst({ orderBy: { snapshotDate: "desc" } });
-      if (latestDebt) {
-        const rows = await prisma.debtSnapshot.findMany({ where: { snapshotDate: latestDebt.snapshotDate } });
-        debtTotal = rows.reduce((s, r) => s + Number(r.totalDebt), 0);
-        debtOverdue = rows.reduce((s, r) => s + Number(r.overdueDebt), 0);
-        debtSnapshotDate = latestDebt.snapshotDate;
-
-        // So với lần đồng bộ công nợ liền trước (nếu có) — số liệu thật từ SyncLog, không suy đoán.
-        const prevSnapshot = await prisma.debtSnapshot.findFirst({
-          where: { snapshotDate: { lt: latestDebt.snapshotDate } },
-          orderBy: { snapshotDate: "desc" },
-        });
-        if (prevSnapshot) {
-          const prevRows = await prisma.debtSnapshot.findMany({ where: { snapshotDate: prevSnapshot.snapshotDate } });
-          const prevOverdue = prevRows.reduce((s, r) => s + Number(r.overdueDebt), 0);
-          debtTrendPct =
-            prevOverdue > 0 ? Math.round(((debtOverdue - prevOverdue) / prevOverdue) * 100) : debtOverdue > 0 ? 100 : 0;
-        }
-      } else {
-        debtTotal = 0;
-        debtOverdue = 0;
+      const invoices = await prisma.debtInvoice.findMany({
+        select: { originalAmount: true, paidAmount: true, dueDate: true },
+      });
+      debtTotal = 0;
+      debtOverdue = 0;
+      for (const inv of invoices) {
+        const remaining = remainingAmount(Number(inv.originalAmount), Number(inv.paidAmount));
+        debtTotal += remaining;
+        const days = overdueDays(inv.dueDate);
+        if (days !== null && days > 0) debtOverdue += remaining;
       }
+      const lastBatch = await prisma.debtImportBatch.findFirst({ orderBy: { createdAt: "desc" } });
+      debtUpdatedAt = lastBatch?.createdAt ?? null;
     }
 
     return NextResponse.json({
@@ -123,8 +118,7 @@ export async function GET() {
       })),
       debtTotal,
       debtOverdue,
-      debtSnapshotDate,
-      debtTrendPct,
+      debtUpdatedAt,
     });
   } catch (err) {
     if (err instanceof UnauthorizedError) return NextResponse.json({ error: err.message }, { status: 401 });

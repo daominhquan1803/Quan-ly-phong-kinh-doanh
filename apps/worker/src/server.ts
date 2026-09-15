@@ -1,5 +1,4 @@
 import Fastify, { FastifyReply, FastifyRequest } from "fastify";
-import { runDebtSync } from "./scraper/hienvi";
 import { runAmisOrderSync } from "./sync/amis";
 import { runQuoteSync } from "./sync/quotes";
 import { runWeekPlanReminder } from "./notifications/weekPlanReminder";
@@ -19,15 +18,6 @@ export function buildServer() {
   const app = Fastify({ logger: false });
 
   app.get("/health", async () => ({ ok: true }));
-
-  app.post("/sync", async (req, reply) => {
-    if (!checkInternalToken(req, reply)) return;
-    const triggeredBy = (req.body as { triggeredBy?: string } | undefined)?.triggeredBy ?? "MANUAL";
-    logger.info(`Nhận yêu cầu đồng bộ công nợ thủ công từ: ${triggeredBy}`);
-    const outcome = await runDebtSync(triggeredBy);
-    if (outcome.status === "FAILED") reply.code(502);
-    return outcome;
-  });
 
   app.post("/sync-amis", async (req, reply) => {
     if (!checkInternalToken(req, reply)) return;

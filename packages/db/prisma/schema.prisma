@@ -133,6 +133,8 @@ model User {
   pickingSlipsCreated    PickingSlip[] @relation("PickingSlipCreatedBy")
   pickingSlipsAsEmployee PickingSlip[] @relation("PickingSlipSalesEmployee")
   pushSubscriptions      PushSubscription[]
+  debtInvoices           DebtInvoice[]      @relation("DebtInvoiceSalesEmployee")
+  debtImportBatches      DebtImportBatch[]  @relation("DebtImportBatchCreatedBy")
 
   @@map("users")
 }
@@ -369,24 +371,114 @@ model ShipmentSlipItem {
   @@map("shipment_slip_items")
 }
 
-// ---------- Công nợ (đồng bộ từ congno.hienvi.me) ----------
+// ---------- Công nợ ----------
+// Quản lý công nợ nội bộ, KHÔNG còn đồng bộ tự động từ congno.hienvi.me — dữ liệu gốc lấy từ
+// file "Công nợ.xlsx" (nợ cũ + nợ đang dở anh Quân cung cấp), sau đó cập nhật qua 2 luồng
+// import thủ công của admin:
+// - Cuối tháng: file hoá đơn mới phát sinh (xuất từ AMIS, "Bảng kê hoá đơn đã sử dụng") -> tạo
+//   thêm DebtInvoice mới (source=NEW_INVOICE).
+// - Hàng ngày/tuần: file "Tiền về" (sao kê ngân hàng) -> mỗi dòng tạo 1 DebtPayment, tự động
+//   khớp vào (các) DebtInvoice qua DebtPaymentAllocation, ưu tiên: khớp theo số hoá đơn nhắc
+//   tới trong mô tả giao dịch > khớp đúng số tiền còn lại của 1 hoá đơn > không rõ thì trừ dần
+//   từ hoá đơn xa nhất (invoiceDate cũ nhất) chưa trả hết của khách đó.
+// paidAmount cộng dồn từ các allocation đã khớp; remainingAmount = originalAmount - paidAmount,
+// KHÔNG lưu cột riêng — tính tại chỗ khi đọc để không bao giờ lệch giữa 2 giá trị.
 
-model DebtSnapshot {
-  id              String   @id @default(cuid())
-  snapshotDate    DateTime
-  customerName    String
-  customerCode    String?
+model DebtInvoice {
+  id            String    @id @default(cuid())
+  customerCode  String
+  customerName  String
+  invoiceNumber String?
+  invoiceDate   DateTime?
+  // Cột trong file gốc "Công nợ.xlsx" ("Hạn thanh toán") — hoá đơn mới nhập cuối tháng từ AMIS
+  // không có cột này (file AMIS không xuất hạn thanh toán), để trống cho tới khi NVKD tự điền.
+  dueDate       DateTime?
+  originalAmount Decimal  @db.Decimal(18, 2)
+  paidAmount     Decimal  @default(0) @db.Decimal(18, 2)
+
   salesEmployeeId String?
-  totalDebt       Decimal  @default(0) @db.Decimal(18, 2)
-  overdueDebt     Decimal  @default(0) @db.Decimal(18, 2)
-  agingBuckets    Json
-  source          String   @default("HIENVI")
-  rawData         Json?
-  createdAt       DateTime @default(now())
+  salesEmployee   User?   @relation("DebtInvoiceSalesEmployee", fields: [salesEmployeeId], references: [id])
 
-  @@index([snapshotDate])
-  @@index([customerName])
-  @@map("debt_snapshots")
+  // NVKD tự điền sau khi liên hệ khách -> dùng tính "Kế hoạch thu" theo tuần dương lịch
+  // (Thứ 2 - Chủ nhật), bucket theo tuần tính tại chỗ từ ngày này, không lưu riêng field tuần.
+  expectedPaymentDate DateTime?
+
+  source String @default("BASELINE") // BASELINE (từ file Công nợ gốc) | NEW_INVOICE (hoá đơn phát sinh, import cuối tháng)
+  note   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  allocations DebtPaymentAllocation[]
+
+  @@unique([customerCode, invoiceNumber])
+  @@index([customerCode])
+  @@index([salesEmployeeId])
+  @@index([dueDate])
+  @@map("debt_invoices")
+}
+
+model DebtPayment {
+  id             String    @id @default(cuid())
+  paymentDate    DateTime?
+  // Mã/tên khách trong file "Tiền về" đã bỏ tiền tố (vd "C.OT-VN" -> "OT-VN") để khớp với
+  // DebtInvoice.customerCode — xem apps/web/src/lib/debt-payments-parser.ts.
+  customerCode   String?
+  customerName   String?
+  rawDescription String?
+  amount         Decimal   @db.Decimal(18, 2)
+  note           String?
+  // MATCHED: đã khớp hết số tiền vào hoá đơn. PARTIAL: khớp được 1 phần (vd số tiền lớn hơn
+  // tổng nợ còn lại của khách). UNMATCHED: không tìm được khách hàng nào khớp, cần admin xử lý tay.
+  matchStatus String @default("UNMATCHED")
+
+  importBatchId String?
+  importBatch   DebtImportBatch? @relation(fields: [importBatchId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  allocations DebtPaymentAllocation[]
+
+  @@index([customerCode])
+  @@index([importBatchId])
+  @@map("debt_payments")
+}
+
+model DebtPaymentAllocation {
+  id        String @id @default(cuid())
+  paymentId String
+  payment   DebtPayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  invoiceId String
+  invoice   DebtInvoice @relation(fields: [invoiceId], references: [id])
+  amount    Decimal @db.Decimal(18, 2)
+  // INVOICE_NUMBER: khớp qua số hoá đơn nhắc trong mô tả. EXACT_AMOUNT: số tiền trùng đúng 1
+  // hoá đơn còn nợ của khách. FIFO: không rõ thông tin, trừ dần từ hoá đơn cũ nhất.
+  matchMethod String
+
+  createdAt DateTime @default(now())
+
+  @@index([paymentId])
+  @@index([invoiceId])
+  @@map("debt_payment_allocations")
+}
+
+model DebtImportBatch {
+  id           String   @id @default(cuid())
+  // BASELINE | NEW_INVOICES | PAYMENTS — dùng chung 1 bảng log cho cả 3 luồng import Công nợ.
+  type         String
+  fileName     String
+  totalRows    Int
+  createdCount Int
+  updatedCount Int
+  errorCount   Int
+  errorReport  Json?
+  createdById  String
+  createdBy    User     @relation("DebtImportBatchCreatedBy", fields: [createdById], references: [id])
+  createdAt    DateTime @default(now())
+
+  payments DebtPayment[]
+
+  @@map("debt_import_batches")
 }
 
 model SyncLog {

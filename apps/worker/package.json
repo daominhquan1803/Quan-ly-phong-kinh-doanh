@@ -13,7 +13,6 @@
     "fastify": "^4.28.1",
     "node-cron": "^3.0.3",
     "nodemailer": "^6.9.15",
-    "playwright": "^1.47.2",
     "web-push": "^3.6.7",
     "xlsx": "^0.18.5"
   },

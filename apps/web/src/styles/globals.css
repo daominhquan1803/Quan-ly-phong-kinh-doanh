@@ -35,6 +35,11 @@
   .status-badge--draft {
     @apply bg-gray-200 text-gray-500;
   }
+  /* Nợ xấu (quá hạn > 180 ngày, xem apps/web/src/lib/debt-status.ts) — cố tình đậm màu hơn hẳn
+     status-badge--overdue để nổi bật rõ ràng hơn nợ quá hạn thường trên bảng Công nợ. */
+  .status-badge--bad-debt {
+    @apply bg-brandRed-600 text-white;
+  }
 
   .kpi-card {
     @apply rounded-lg bg-card shadow-card border-t-4 p-5;

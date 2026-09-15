@@ -58,8 +58,7 @@ interface SummaryResponse {
   // null cho nhân viên kinh doanh — công nợ là số liệu tổng cả phòng, chỉ ADMIN xem được.
   debtTotal: number | null;
   debtOverdue: number | null;
-  debtSnapshotDate: string | null;
-  debtTrendPct: number | null;
+  debtUpdatedAt: string | null;
 }
 
 /** Dòng nhỏ hiện xu hướng tăng/giảm so với tháng trước dưới mỗi số KPI. */
@@ -201,7 +200,6 @@ export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
             <p className="text-2xl font-bold text-brandRed-600 font-mono tabular-nums mt-1">
               {isLoading ? "—" : formatCurrencyVND(data?.debtOverdue ?? 0)}
             </p>
-            <TrendLine delta={data?.debtTrendPct ?? null} unit="%" invert />
           </div>
         )}
       </div>
@@ -369,7 +367,7 @@ export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
               </div>
             </div>
             <p className="text-xs text-muted-foreground mb-3">
-              Cập nhật lần cuối: {data?.debtSnapshotDate ? formatDateVN(data.debtSnapshotDate) : "chưa có dữ liệu"}
+              Cập nhật lần cuối: {data?.debtUpdatedAt ? formatDateVN(data.debtUpdatedAt) : "chưa có dữ liệu"}
             </p>
             <Link href="/debt" className="text-sm text-ink hover:underline">
               Xem chi tiết công nợ →
