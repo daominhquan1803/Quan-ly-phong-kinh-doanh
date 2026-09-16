@@ -304,15 +304,33 @@ async function computeAutoMetrics(
   };
   for (const v of primaryVisits) for (const s of v.stops) addVisitCompany(v.employeeId, s.companyName);
   for (const v of supporterVisits) for (const s of v.trip.stops) addVisitCompany(v.employeeId, s.companyName);
+  // So khớp CHÍNH XÁC customerName sẽ bỏ sót gần hết trong thực tế: NVKD ghi tên tắt/thân mật lúc
+  // đăng ký đi công tác (vd "Pmj"), trong khi Order.customerName đồng bộ từ AMIS luôn là tên pháp
+  // nhân đầy đủ (vd "CÔNG TY CỔ PHẦN PMJ GREENTECH") — đã xác nhận qua dữ liệu thật (anh Quân báo
+  // buổi đi của Tùng gặp "Pmj" không được tính khách cũ dù công ty này có đơn hàng gần đây). Đổi
+  // sang so khớp theo CHỨA chuỗi con đã chuẩn hoá (bỏ dấu/hoa-thường) — tên khách ghé PHẢI là 1
+  // đoạn nằm trong tên đầy đủ của khách hàng trong Order, đúng chiều thực tế quan sát được.
+  // ponytail: heuristic substring 1 chiều, có thể khớp nhầm nếu tên khách viết quá ngắn/chung
+  // chung (vd "Việt", "Vina") trùng nhiều công ty khác nhau — nếu phát sinh sai lệch rõ, nâng cấp
+  // lên so khớp có trọng số/độ dài tối thiểu chặt hơn thay vì quay lại exact-match (đã biết là sai).
   const lastPriorOrderByVisitedCompany = new Map<string, Date>();
   if (allVisitCompanyNames.size > 0) {
-    const priorVisitOrders = await prisma.order.groupBy({
+    const priorOrderNames = await prisma.order.groupBy({
       by: ["customerName"],
-      where: { customerName: { in: Array.from(allVisitCompanyNames) }, orderDate: { lt: start } },
+      where: { orderDate: { lt: start } },
       _max: { orderDate: true },
     });
-    for (const p of priorVisitOrders) {
-      if (p._max.orderDate) lastPriorOrderByVisitedCompany.set(p.customerName, p._max.orderDate);
+    const normalizedPriorOrders = priorOrderNames
+      .filter((p): p is typeof p & { _max: { orderDate: Date } } => p._max.orderDate !== null)
+      .map((p) => ({ norm: normalizeVN(p.customerName), date: p._max.orderDate }));
+    for (const company of allVisitCompanyNames) {
+      const normCompany = normalizeVN(company);
+      if (normCompany.length < 3) continue;
+      let best: Date | null = null;
+      for (const o of normalizedPriorOrders) {
+        if (o.norm.includes(normCompany) && (!best || o.date > best)) best = o.date;
+      }
+      if (best) lastPriorOrderByVisitedCompany.set(company, best);
     }
   }
   for (const [employeeId, companySet] of visitCompaniesByEmployee) {
