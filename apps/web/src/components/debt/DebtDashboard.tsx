@@ -344,6 +344,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
             <tr>
               <th className="text-left font-medium px-4 py-2.5">Khách hàng</th>
               <th className="text-left font-medium px-4 py-2.5">Số hoá đơn</th>
+              <th className="text-left font-medium px-4 py-2.5">Ngày chứng từ</th>
               <th className="text-left font-medium px-4 py-2.5">NVKD</th>
               <SortableTh field="dueDate" sort={sort} onSort={handleSort}>
                 Hạn thanh toán
@@ -358,20 +359,20 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
               <th className="px-4 py-2 font-normal">
                 <FilterInput value={filterCustomer} onChange={setFilterCustomer} placeholder="Tìm khách hàng..." />
               </th>
-              <th colSpan={6} />
+              <th colSpan={7} />
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {isLoading && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-muted-foreground">
+                <td colSpan={8} className="px-4 py-6 text-center text-muted-foreground">
                   Đang tải...
                 </td>
               </tr>
             )}
             {!isLoading && visibleRows.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-muted-foreground">
+                <td colSpan={8} className="px-4 py-6 text-center text-muted-foreground">
                   Không còn công nợ nào khớp bộ lọc.
                 </td>
               </tr>
@@ -380,6 +381,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
               <tr key={r.id} className="hover:bg-gray-50">
                 <td className="px-4 py-2.5">{r.customerName}</td>
                 <td className="px-4 py-2.5">{r.invoiceNumber ?? "—"}</td>
+                <td className="px-4 py-2.5">{formatDateVN(r.invoiceDate)}</td>
                 <td className="px-4 py-2.5">{r.salesEmployee?.name ?? "—"}</td>
                 <td className="px-4 py-2.5">{formatDateVN(r.dueDate)}</td>
                 <td
