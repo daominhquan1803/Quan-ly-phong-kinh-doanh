@@ -20,6 +20,10 @@ export async function GET(req: NextRequest) {
     const month = Number(searchParams.get("month")) || now.getMonth() + 1; // 1-12
 
     const where: Prisma.DebtInvoiceWhereInput = { ...scopeByOwner(session, "salesEmployeeId") };
+    // ADMIN xem được số liệu riêng 1 nhân viên (bộ lọc "Xem theo" trên trang Công nợ) — SALES đã bị
+    // scopeByOwner giới hạn chỉ của mình nên bỏ qua tham số này nếu không phải ADMIN.
+    const employeeId = searchParams.get("employeeId");
+    if (employeeId && session.user.role === "ADMIN") where.salesEmployeeId = employeeId;
 
     const invoices = await prisma.debtInvoice.findMany({
       where,

@@ -93,9 +93,11 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
   });
 
   const { data: summary } = useQuery({
-    queryKey: ["debt-summary"],
+    queryKey: ["debt-summary", employeeId],
     queryFn: async () => {
-      const res = await fetch("/api/debt/summary");
+      const params = new URLSearchParams();
+      if (employeeId) params.set("employeeId", employeeId);
+      const res = await fetch(`/api/debt/summary?${params.toString()}`);
       if (!res.ok) throw new Error("Không tải được tổng kết công nợ");
       return res.json() as Promise<SummaryResponse>;
     },
@@ -231,8 +233,15 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
       {toast && <ImportResultToast message={toast} onClose={() => setToast(null)} />}
       {uploadError && <div className="rounded-md bg-brandRed-50 text-brandRed-600 text-sm px-4 py-2.5">{uploadError}</div>}
 
+      {isAdmin && (
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">Xem theo:</span>
+          <EmployeeFilterSelect value={employeeId} onChange={setEmployeeId} />
+        </div>
+      )}
+
       {summary && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="kpi-card kpi-card--navy">
             <p className="text-sm text-muted-foreground">Tổng công nợ</p>
             <p className="text-2xl font-bold text-ink mt-1">{formatCurrencyVND(summary.totalDebt)}</p>
@@ -241,6 +250,10 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
             <p className="text-sm text-muted-foreground">Quá hạn</p>
             <p className="text-2xl font-bold text-brandRed-600 mt-1">{formatCurrencyVND(summary.overdueDebt)}</p>
             <p className="text-xs text-muted-foreground mt-0.5">{pct(summary.overdueRate)} tổng công nợ</p>
+          </div>
+          <div className="kpi-card kpi-card--red">
+            <p className="text-sm text-muted-foreground">Tỉ lệ nợ quá hạn</p>
+            <p className="text-2xl font-bold text-brandRed-600 mt-1">{pct(summary.overdueRate)}</p>
           </div>
           <div className="kpi-card kpi-card--red">
             <p className="text-sm text-muted-foreground">Nợ xấu (quá hạn &gt;180 ngày)</p>
@@ -375,7 +388,6 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
             </option>
           ))}
         </select>
-        {isAdmin && <EmployeeFilterSelect value={employeeId} onChange={setEmployeeId} />}
       </div>
 
       <div className="rounded-lg border border-gray-200 bg-card overflow-x-auto">
