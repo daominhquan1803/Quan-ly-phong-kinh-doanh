@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { readSheet, parseExcelDate, parseNumber } from "./excel-parser";
 import { normalizeCustomerCode } from "./debt-customer-match";
 import { normalizeVN } from "@hoanggia/db";
@@ -15,6 +16,19 @@ export interface ParsedPaymentRow {
   // chuẩn hoá về dạng 8 chữ số (đệm 0 phía trước) để so khớp với DebtInvoice.invoiceNumber. Dùng
   // làm ưu tiên khớp #1 khi ghi nhận thanh toán, xem apps/web/src/app/api/debt/import/payments.
   candidateInvoiceNumbers: string[];
+  // Khoá chống trùng khi up lại đúng file (hoặc file có dòng lặp) — hash nội dung dòng, xem
+  // DebtPayment.sourceHash trong schema.prisma để biết lý do và đánh đổi của cách làm này.
+  sourceHash: string;
+}
+
+function computeSourceHash(fields: { paymentDate: Date | null; customerCode: string | null; amount: number; rawDescription: string | null }): string {
+  const key = [
+    fields.paymentDate ? fields.paymentDate.toISOString() : "",
+    fields.customerCode ?? "",
+    fields.amount,
+    fields.rawDescription ?? "",
+  ].join("|");
+  return createHash("sha256").update(key).digest("hex");
 }
 
 /** Cột trong file "Tiền về" không có dòng tiêu đề — vị trí cột cố định theo mẫu thật: Ngày, Mã
@@ -59,16 +73,19 @@ export function parseDebtPaymentsExcel(buffer: Buffer): { rows: ParsedPaymentRow
       return;
     }
 
+    const paymentDate = parseExcelDate(row[COL.date]);
+    const customerCode = customerCodeRaw ? normalizeCustomerCode(customerCodeRaw) : null;
     result.rows.push({
       rowNumber,
-      paymentDate: parseExcelDate(row[COL.date]),
+      paymentDate,
       customerCodeRaw,
-      customerCode: customerCodeRaw ? normalizeCustomerCode(customerCodeRaw) : null,
+      customerCode,
       customerName: String(row[COL.customerName] ?? "").trim() || null,
       rawDescription: description,
       amount,
       note: String(row[COL.note] ?? "").trim() || null,
       candidateInvoiceNumbers: extractInvoiceNumbersFromDescription(description),
+      sourceHash: computeSourceHash({ paymentDate, customerCode, amount, rawDescription: description }),
     });
   });
 

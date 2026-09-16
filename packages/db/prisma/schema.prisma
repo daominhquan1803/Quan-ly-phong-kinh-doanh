@@ -439,6 +439,13 @@ model DebtPayment {
 
   allocations DebtPaymentAllocation[]
 
+  // Khoá chống trùng khi admin lỡ up lại đúng file "Tiền về" (hoặc file có dòng trùng) — hash nội
+  // dung dòng (ngày + mã KH + số tiền + mô tả giao dịch), xem apps/web/src/lib/debt-payments-parser.ts.
+  // Không có mã giao dịch ngân hàng riêng trong file nguồn nên đây là cách duy nhất phát hiện
+  // trùng lặp; 2 giao dịch THẬT khác nhau nhưng trùng y hệt ngày/số tiền/mô tả (hiếm) sẽ bị coi là
+  // trùng và bỏ qua — đánh đổi chấp nhận được để tránh lỗi cộng trùng tiền nghiêm trọng hơn nhiều.
+  sourceHash String @unique
+
   @@index([customerCode])
   @@index([importBatchId])
   @@map("debt_payments")

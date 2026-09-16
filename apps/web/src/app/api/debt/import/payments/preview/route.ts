@@ -42,6 +42,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Báo trước cho admin biết dòng nào TRÙNG với giao dịch đã ghi nhận từ lần nhập trước (vd lỡ
+    // up lại đúng file) — xem DebtPayment.sourceHash.
+    const existingHashes = new Set(
+      (
+        await prisma.debtPayment.findMany({
+          where: { sourceHash: { in: rows.map((r) => r.sourceHash) } },
+          select: { sourceHash: true },
+        })
+      ).map((p) => p.sourceHash)
+    );
+
     const preview = rows.map((row) => {
       const candidateInvoices = row.customerCode ? invoicesByCode.get(row.customerCode) ?? [] : [];
       const plan = planPaymentAllocation(
@@ -58,6 +69,7 @@ export async function POST(req: NextRequest) {
         matchStatus: plan.matchStatus,
         allocations: plan.allocations,
         unallocatedAmount: plan.unallocatedAmount,
+        isDuplicate: existingHashes.has(row.sourceHash),
       };
     });
 
@@ -65,6 +77,7 @@ export async function POST(req: NextRequest) {
       matched: preview.filter((p) => p.matchStatus === "MATCHED").length,
       partial: preview.filter((p) => p.matchStatus === "PARTIAL").length,
       unmatched: preview.filter((p) => p.matchStatus === "UNMATCHED").length,
+      duplicate: preview.filter((p) => p.isDuplicate).length,
     };
 
     return NextResponse.json({ totalRows: rows.length, errorCount: errors.length, errors, rows: preview, summary });

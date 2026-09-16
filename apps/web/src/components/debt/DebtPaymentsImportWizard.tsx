@@ -14,19 +14,21 @@ interface PreviewRow {
   amount: number;
   matchStatus: "MATCHED" | "PARTIAL" | "UNMATCHED";
   unallocatedAmount: number;
+  isDuplicate: boolean;
 }
 interface PreviewResponse {
   totalRows: number;
   errorCount: number;
   errors: { rowNumber: number; message: string }[];
   rows: PreviewRow[];
-  summary: { matched: number; partial: number; unmatched: number };
+  summary: { matched: number; partial: number; unmatched: number; duplicate: number };
 }
 interface CommitResponse {
   totalRows: number;
   matchedCount: number;
   partialCount: number;
   unmatchedCount: number;
+  duplicateSkippedCount: number;
   errorCount: number;
 }
 
@@ -81,6 +83,7 @@ export function DebtPaymentsImportWizard({ onClose }: { onClose: () => void }) {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["debt-invoices"] }),
         queryClient.invalidateQueries({ queryKey: ["debt-summary"] }),
+        queryClient.invalidateQueries({ queryKey: ["debt-unmatched-payments"] }),
       ]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Có lỗi xảy ra");
@@ -120,7 +123,7 @@ export function DebtPaymentsImportWizard({ onClose }: { onClose: () => void }) {
 
         {preview && !result && (
           <div className="space-y-3">
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-4 gap-3">
               <div className="kpi-card kpi-card--navy !p-3">
                 <p className="text-xs text-muted-foreground">Đã khớp</p>
                 <p className="text-lg font-bold text-success-600">{preview.summary.matched}</p>
@@ -133,7 +136,18 @@ export function DebtPaymentsImportWizard({ onClose }: { onClose: () => void }) {
                 <p className="text-xs text-muted-foreground">Chưa khớp</p>
                 <p className="text-lg font-bold text-brandRed-600">{preview.summary.unmatched}</p>
               </div>
+              <div className="kpi-card kpi-card--red !p-3">
+                <p className="text-xs text-muted-foreground">Trùng lặp</p>
+                <p className="text-lg font-bold text-brandRed-600">{preview.summary.duplicate}</p>
+              </div>
             </div>
+            {preview.summary.duplicate > 0 && (
+              <p className="flex items-center gap-1.5 text-sm text-warning-500">
+                <AlertTriangle className="h-4 w-4" />
+                {preview.summary.duplicate} dòng đã được ghi nhận trước đó (trùng ngày + khách hàng + số tiền + mô tả) — sẽ tự
+                động bỏ qua khi bấm Ghi nhận, không cộng trùng.
+              </p>
+            )}
             <div className="rounded-lg border border-gray-200 overflow-x-auto max-h-96">
               <table className="min-w-full text-xs">
                 <thead className="bg-gray-50 text-muted-foreground sticky top-0">
@@ -146,14 +160,20 @@ export function DebtPaymentsImportWizard({ onClose }: { onClose: () => void }) {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {preview.rows.map((r) => (
-                    <tr key={r.rowNumber}>
+                    <tr key={r.rowNumber} className={r.isDuplicate ? "opacity-50" : undefined}>
                       <td className="px-3 py-1.5">{formatDateVN(r.paymentDate)}</td>
                       <td className="px-3 py-1.5">{r.customerName ?? r.customerCodeRaw ?? "—"}</td>
                       <td className="px-3 py-1.5 text-right">{formatCurrencyVND(r.amount)}</td>
                       <td className="px-3 py-1.5">
-                        <span className="inline-flex items-center gap-1">
-                          {MATCH_ICON[r.matchStatus]} {MATCH_LABEL[r.matchStatus]}
-                        </span>
+                        {r.isDuplicate ? (
+                          <span className="inline-flex items-center gap-1 text-brandRed-600">
+                            <AlertTriangle className="h-3.5 w-3.5" /> Trùng lặp — bỏ qua
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1">
+                            {MATCH_ICON[r.matchStatus]} {MATCH_LABEL[r.matchStatus]}
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -186,7 +206,7 @@ export function DebtPaymentsImportWizard({ onClose }: { onClose: () => void }) {
 
         {result && (
           <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-4 gap-3">
               <div className="kpi-card kpi-card--navy !p-3">
                 <p className="text-xs text-muted-foreground">Đã khớp</p>
                 <p className="text-lg font-bold text-success-600">{result.matchedCount}</p>
@@ -199,9 +219,14 @@ export function DebtPaymentsImportWizard({ onClose }: { onClose: () => void }) {
                 <p className="text-xs text-muted-foreground">Chưa khớp</p>
                 <p className="text-lg font-bold text-brandRed-600">{result.unmatchedCount}</p>
               </div>
+              <div className="kpi-card kpi-card--red !p-3">
+                <p className="text-xs text-muted-foreground">Trùng lặp (bỏ qua)</p>
+                <p className="text-lg font-bold text-brandRed-600">{result.duplicateSkippedCount}</p>
+              </div>
             </div>
             <div className="flex items-center gap-2 rounded-md bg-success-600/10 text-success-600 text-sm px-4 py-2.5">
-              <CheckCircle2 className="h-4 w-4" /> Đã ghi nhận {result.totalRows} giao dịch vào Công nợ.
+              <CheckCircle2 className="h-4 w-4" /> Đã ghi nhận {result.totalRows - result.duplicateSkippedCount} giao dịch
+              mới vào Công nợ{result.duplicateSkippedCount > 0 && ` (bỏ qua ${result.duplicateSkippedCount} dòng trùng lặp)`}.
             </div>
             <button onClick={onClose} className="rounded-md border border-gray-200 px-4 py-2 text-sm font-medium text-ink2 hover:bg-gray-50">
               Đóng

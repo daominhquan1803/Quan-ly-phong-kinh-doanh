@@ -68,12 +68,14 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Kế hoạch thu theo tuần dương lịch (Thứ 2 - Chủ nhật) trong tháng được chọn — mỗi hoá đơn có
-    // NVKD điền expectedPaymentDate được tính vào ĐÚNG tuần đó với TOÀN BỘ originalAmount (số đã
-    // "cam kết" thu tuần này), cộng dồn paidAmount hiện có làm phần "đã thu" — nên hoá đơn đã trả
-    // xong vẫn tính đủ vào kế hoạch (đạt 100%) thay vì biến mất khỏi kế hoạch như cách tính cũ
-    // (chỉ cộng phần còn nợ). Tối đa 5 tuần chồng lên 1 tháng (cùng số cột "Tuần 1-5" như file
-    // Công nợ gốc anh Quân gửi).
+    // Kế hoạch thu theo tuần dương lịch (Thứ 2 - Chủ nhật) trong tháng được chọn — "Kế hoạch" =
+    // TOÀN BỘ originalAmount của các hoá đơn có NVKD điền expectedPaymentDate rơi vào đúng tuần
+    // đó (mục tiêu cam kết thu tuần này). "Đã thu" PHẢI lấy đúng NGÀY TIỀN VỀ THẬT (payment.
+    // paymentDate của giao dịch Tiền về đã khớp vào hoá đơn đó) — TUYỆT ĐỐI không được lấy theo
+    // tuần dự kiến của hoá đơn, nếu không tuần tương lai (chưa tới) vẫn hiện "đã thu" > 0 (lỗi
+    // thật anh Quân phát hiện: khách trả trước hạn dự kiến ở 1 tuần sau, tiền lại bị tính vào
+    // đúng tuần dự kiến đó dù tuần đó chưa xảy ra). Tối đa 5 tuần chồng lên 1 tháng (cùng số cột
+    // "Tuần 1-5" như file Công nợ gốc anh Quân gửi).
     const monthStart = new Date(year, month - 1, 1);
     const monthEnd = new Date(year, month, 0);
     const weeks: { weekIndex: number; start: Date; end: Date; planned: number; collected: number }[] = [];
@@ -88,9 +90,20 @@ export async function GET(req: NextRequest) {
       if (!inv.expectedPaymentDate) continue;
       const d = new Date(inv.expectedPaymentDate);
       const bucket = weeks.find((w) => d >= w.start && d <= w.end);
-      if (!bucket) continue;
-      bucket.planned += Number(inv.originalAmount);
-      bucket.collected += Number(inv.paidAmount);
+      if (bucket) bucket.planned += Number(inv.originalAmount);
+    }
+    // Chỉ tính các khoản Tiền về đã khớp được vào đúng hoá đơn nằm trong phạm vi đang xem (cùng
+    // `where` với danh sách hoá đơn ở trên) — khoản "Chưa khớp" (không rõ hoá đơn/nhân viên nào)
+    // không tính vào đây vì không biết thuộc kế hoạch của ai.
+    const allocations = await prisma.debtPaymentAllocation.findMany({
+      where: { invoice: where },
+      select: { amount: true, payment: { select: { paymentDate: true } } },
+    });
+    for (const alloc of allocations) {
+      const d = alloc.payment.paymentDate;
+      if (!d) continue;
+      const bucket = weeks.find((w) => d >= w.start && d <= w.end);
+      if (bucket) bucket.collected += Number(alloc.amount);
     }
     const monthlyPlanned = weeks.reduce((s, w) => s + w.planned, 0);
     const monthlyCollected = weeks.reduce((s, w) => s + w.collected, 0);

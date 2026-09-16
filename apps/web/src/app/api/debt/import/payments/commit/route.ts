@@ -57,11 +57,29 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // Chặn ghi trùng khi up lại đúng file (hoặc file có dòng lặp) — so theo sourceHash (nội dung
+    // dòng: ngày + mã KH + số tiền + mô tả), xem debt-payments-parser.ts và DebtPayment.sourceHash.
+    const existingHashes = new Set(
+      (
+        await prisma.debtPayment.findMany({
+          where: { sourceHash: { in: rows.map((r) => r.sourceHash) } },
+          select: { sourceHash: true },
+        })
+      ).map((p) => p.sourceHash)
+    );
+
     let matchedCount = 0;
     let partialCount = 0;
     let unmatchedCount = 0;
+    let duplicateSkippedCount = 0;
 
     for (const row of rows) {
+      if (existingHashes.has(row.sourceHash)) {
+        duplicateSkippedCount++;
+        continue;
+      }
+      existingHashes.add(row.sourceHash); // phòng file có dòng lặp y hệt ngay trong chính nó
+
       const candidateInvoices = row.customerCode ? invoicesByCode.get(row.customerCode) ?? [] : [];
       const plan = planPaymentAllocation(
         { amount: row.amount, candidateInvoiceNumbers: row.candidateInvoiceNumbers },
@@ -79,6 +97,7 @@ export async function POST(req: NextRequest) {
             note: row.note,
             matchStatus: plan.matchStatus,
             importBatchId: batch.id,
+            sourceHash: row.sourceHash,
           },
         });
         for (const alloc of plan.allocations) {
@@ -105,7 +124,7 @@ export async function POST(req: NextRequest) {
 
     await prisma.debtImportBatch.update({
       where: { id: batch.id },
-      data: { createdCount: rows.length, updatedCount: matchedCount + partialCount },
+      data: { createdCount: rows.length - duplicateSkippedCount, updatedCount: matchedCount + partialCount },
     });
 
     return NextResponse.json({
@@ -116,6 +135,7 @@ export async function POST(req: NextRequest) {
       matchedCount,
       partialCount,
       unmatchedCount,
+      duplicateSkippedCount,
     });
   } catch (err) {
     if (err instanceof UnauthorizedError) return NextResponse.json({ error: err.message }, { status: 401 });

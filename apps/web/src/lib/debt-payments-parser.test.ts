@@ -41,6 +41,25 @@ describe("parseDebtPaymentsExcel", () => {
   });
 });
 
+describe("sourceHash chống trùng", () => {
+  const rows: (string | number)[][] = [
+    ["2026-09-04", "E.JNC FILTER", "CÔNG TY TNHH JNC FILTER VIỆT NAM", "theo hóa đơn 00002337", 1944000, "", ""],
+    ["2026-09-04", "C.NCL", "Công ty CP Thương mại NCL", "Đặt cọc", 6264000, "", ""],
+  ];
+
+  it("cùng nội dung dòng (up lại đúng file) -> sourceHash giống hệt nhau", () => {
+    const first = parseDebtPaymentsExcel(makeBuffer(rows)).rows;
+    const second = parseDebtPaymentsExcel(makeBuffer(rows)).rows;
+    expect(first[0].sourceHash).toBe(second[0].sourceHash);
+    expect(first[1].sourceHash).toBe(second[1].sourceHash);
+  });
+
+  it("2 dòng khác nội dung -> sourceHash khác nhau", () => {
+    const parsed = parseDebtPaymentsExcel(makeBuffer(rows)).rows;
+    expect(parsed[0].sourceHash).not.toBe(parsed[1].sourceHash);
+  });
+});
+
 describe("extractInvoiceNumbersFromDescription", () => {
   it("tìm 1 số hoá đơn sau cụm 'hóa đơn'", () => {
     expect(extractInvoiceNumbersFromDescription("Thu tiền theo hóa đơn 00002337")).toEqual(["00002337"]);

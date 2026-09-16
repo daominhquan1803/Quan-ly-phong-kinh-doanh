@@ -7,6 +7,7 @@ import { normalizeVN } from "@/lib/text-normalize";
 import { computeDebtStatus, remainingAmount, DEBT_STATUS_LABEL, DebtStatus } from "@/lib/debt-status";
 import { DebtStatusBadge } from "./DebtStatusBadge";
 import { DebtPaymentsImportWizard } from "./DebtPaymentsImportWizard";
+import { DebtUnmatchedPaymentsPanel } from "./DebtUnmatchedPaymentsPanel";
 import { EmployeeFilterSelect } from "@/components/shared/EmployeeFilterSelect";
 import { FilterInput, SortableTh, toggleSort, type SortState } from "@/components/shared/SortableFilterableTable";
 import { UploadCloud, ChevronLeft, ChevronRight, X, CheckCircle2 } from "lucide-react";
@@ -243,6 +244,8 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
           </div>
         </div>
       )}
+
+      {isAdmin && <DebtUnmatchedPaymentsPanel />}
 
       {isAdmin && summary?.perEmployee && summary.perEmployee.length > 0 && (
         <div className="rounded-lg border border-gray-200 bg-card overflow-x-auto">
