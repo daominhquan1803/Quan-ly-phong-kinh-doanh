@@ -390,6 +390,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                 Hạn thanh toán
               </SortableTh>
               <th className="text-right font-medium px-4 py-2.5">Số ngày quá hạn</th>
+              <th className="text-right font-medium px-4 py-2.5">Số tiền hoá đơn</th>
               <SortableTh field="remaining" sort={sort} onSort={handleSort} align="right">
                 Còn phải thu
               </SortableTh>
@@ -400,20 +401,20 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
               <th className="px-4 py-2 font-normal">
                 <FilterInput value={filterCustomer} onChange={setFilterCustomer} placeholder="Tìm khách hàng..." />
               </th>
-              <th colSpan={8} />
+              <th colSpan={9} />
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {isLoading && (
               <tr>
-                <td colSpan={9} className="px-4 py-6 text-center text-muted-foreground">
+                <td colSpan={10} className="px-4 py-6 text-center text-muted-foreground">
                   Đang tải...
                 </td>
               </tr>
             )}
             {!isLoading && visibleRows.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-6 text-center text-muted-foreground">
+                <td colSpan={10} className="px-4 py-6 text-center text-muted-foreground">
                   Không còn công nợ nào khớp bộ lọc.
                 </td>
               </tr>
@@ -456,6 +457,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                 <td className={cn("px-4 py-2.5 text-right", r.daysOverdue !== null && r.daysOverdue > 0 && "text-brandRed-600 font-medium")}>
                   {r.daysOverdue === null ? "—" : r.daysOverdue}
                 </td>
+                <td className="px-4 py-2.5 text-right">{formatCurrencyVND(Number(r.originalAmount))}</td>
                 <td
                   className={cn(
                     "px-4 py-2.5 text-right font-medium",
