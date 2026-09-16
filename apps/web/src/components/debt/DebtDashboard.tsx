@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn, formatCurrencyVND, formatDateVN, toDateInputValueVN } from "@/lib/utils";
 import { normalizeVN } from "@/lib/text-normalize";
-import { computeDebtStatus, remainingAmount, DEBT_STATUS_LABEL, DebtStatus } from "@/lib/debt-status";
+import { computeDebtStatus, remainingAmount, overdueDays, DEBT_STATUS_LABEL, DebtStatus } from "@/lib/debt-status";
 import { DebtStatusBadge } from "./DebtStatusBadge";
 import { DebtPaymentsImportWizard } from "./DebtPaymentsImportWizard";
 import { DebtUnmatchedPaymentsPanel } from "./DebtUnmatchedPaymentsPanel";
@@ -142,7 +142,8 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
       const paid = Number(inv.paidAmount);
       const remaining = remainingAmount(original, paid);
       const debtStatus = computeDebtStatus({ dueDate: inv.dueDate, originalAmount: original, paidAmount: paid });
-      return { ...inv, remaining, debtStatus };
+      const daysOverdue = debtStatus === "PAID" ? null : overdueDays(inv.dueDate);
+      return { ...inv, remaining, debtStatus, daysOverdue };
     });
   }, [data]);
 
@@ -349,6 +350,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
               <SortableTh field="dueDate" sort={sort} onSort={handleSort}>
                 Hạn thanh toán
               </SortableTh>
+              <th className="text-right font-medium px-4 py-2.5">Số ngày quá hạn</th>
               <SortableTh field="remaining" sort={sort} onSort={handleSort} align="right">
                 Còn phải thu
               </SortableTh>
@@ -359,20 +361,20 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
               <th className="px-4 py-2 font-normal">
                 <FilterInput value={filterCustomer} onChange={setFilterCustomer} placeholder="Tìm khách hàng..." />
               </th>
-              <th colSpan={7} />
+              <th colSpan={8} />
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {isLoading && (
               <tr>
-                <td colSpan={8} className="px-4 py-6 text-center text-muted-foreground">
+                <td colSpan={9} className="px-4 py-6 text-center text-muted-foreground">
                   Đang tải...
                 </td>
               </tr>
             )}
             {!isLoading && visibleRows.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-6 text-center text-muted-foreground">
+                <td colSpan={9} className="px-4 py-6 text-center text-muted-foreground">
                   Không còn công nợ nào khớp bộ lọc.
                 </td>
               </tr>
@@ -384,6 +386,9 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                 <td className="px-4 py-2.5">{formatDateVN(r.invoiceDate)}</td>
                 <td className="px-4 py-2.5">{r.salesEmployee?.name ?? "—"}</td>
                 <td className="px-4 py-2.5">{formatDateVN(r.dueDate)}</td>
+                <td className={cn("px-4 py-2.5 text-right", r.daysOverdue !== null && r.daysOverdue > 0 && "text-brandRed-600 font-medium")}>
+                  {r.daysOverdue === null ? "—" : r.daysOverdue}
+                </td>
                 <td
                   className={cn(
                     "px-4 py-2.5 text-right font-medium",
