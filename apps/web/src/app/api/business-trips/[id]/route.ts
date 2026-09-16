@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@hoanggia/db";
 import { requireSession, ForbiddenError, UnauthorizedError } from "@/lib/rbac";
 import { z } from "zod";
-import { stopSchema } from "../route";
+import { stopSchema } from "@/lib/business-trip-schema";
 
 export const dynamic = "force-dynamic";
 

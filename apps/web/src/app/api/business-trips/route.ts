@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@hoanggia/db";
 import { requireSession, UnauthorizedError } from "@/lib/rbac";
 import { z } from "zod";
+import { stopSchema } from "@/lib/business-trip-schema";
 
 export const dynamic = "force-dynamic";
 
@@ -47,13 +48,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Không tải được danh sách đăng ký đi công tác" }, { status: 500 });
   }
 }
-
-export const stopSchema = z.object({
-  companyName: z.string().trim().min(1, "Thiếu tên công ty đến gặp"),
-  address: z.string().trim().max(500).optional().nullable(),
-  expectedTime: z.string().trim().max(20).optional().nullable(),
-  content: z.string().trim().min(1, "Thiếu nội dung buổi gặp"),
-});
 
 const createSchema = z.object({
   visitDate: z.string().min(1, "Thiếu ngày đi"),
