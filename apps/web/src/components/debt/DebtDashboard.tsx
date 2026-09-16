@@ -21,6 +21,7 @@ interface InvoiceRow {
   originalAmount: string;
   paidAmount: string;
   expectedPaymentDate: string | null;
+  lastPaymentDate: string | null;
   salesEmployee: { id: string; name: string } | null;
 }
 interface SummaryResponse {
@@ -144,7 +145,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
   }, [data]);
 
   const visibleRows = useMemo(() => {
-    let list = rowsWithStatus.filter((r) => r.remaining > 0);
+    let list = rowsWithStatus;
     if (status) list = list.filter((r) => r.debtStatus === status);
     if (filterCustomer.trim()) {
       const q = normalizeVN(filterCustomer);
@@ -155,6 +156,11 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
       const valueOf = (r: (typeof list)[number]): number | null =>
         sort.field === "remaining" ? r.remaining : r.dueDate ? new Date(r.dueDate).getTime() : null;
       list = [...list].sort((a, b) => {
+        // Hoá đơn đã thanh toán luôn xuống cuối bảng, không phụ thuộc cột/chiều sắp xếp — để
+        // không che mất các hoá đơn còn nợ thật sự cần chú ý (đúng cách xử lý null-date ở
+        // OrderTable, áp dụng tương tự cho "đã xong việc").
+        if (a.debtStatus === "PAID" && b.debtStatus !== "PAID") return 1;
+        if (b.debtStatus === "PAID" && a.debtStatus !== "PAID") return -1;
         const av = valueOf(a);
         const bv = valueOf(b);
         if (av === null && bv === null) return 0;
@@ -327,7 +333,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                 Còn phải thu
               </SortableTh>
               <th className="text-left font-medium px-4 py-2.5">Trạng thái</th>
-              <th className="text-left font-medium px-4 py-2.5">Ngày dự kiến thanh toán</th>
+              <th className="text-left font-medium px-4 py-2.5">Ngày thanh toán / dự kiến</th>
             </tr>
             <tr className="bg-card border-t border-gray-100">
               <th className="px-4 py-2 font-normal">
@@ -357,19 +363,28 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                 <td className="px-4 py-2.5">{r.invoiceNumber ?? "—"}</td>
                 <td className="px-4 py-2.5">{r.salesEmployee?.name ?? "—"}</td>
                 <td className="px-4 py-2.5">{formatDateVN(r.dueDate)}</td>
-                <td className={cn("px-4 py-2.5 text-right font-medium", r.debtStatus !== "CURRENT" && "text-brandRed-600")}>
+                <td
+                  className={cn(
+                    "px-4 py-2.5 text-right font-medium",
+                    r.debtStatus !== "CURRENT" && r.debtStatus !== "PAID" && "text-brandRed-600"
+                  )}
+                >
                   {formatCurrencyVND(r.remaining)}
                 </td>
                 <td className="px-4 py-2.5">
                   <DebtStatusBadge status={r.debtStatus} />
                 </td>
                 <td className="px-4 py-2.5">
-                  <input
-                    type="date"
-                    defaultValue={toDateInputValueVN(r.expectedPaymentDate)}
-                    onBlur={(e) => handleExpectedDateChange(r.id, e.target.value)}
-                    className="input !py-1 !text-xs w-36"
-                  />
+                  {r.debtStatus === "PAID" ? (
+                    <span className="text-xs text-success-600">{formatDateVN(r.lastPaymentDate)}</span>
+                  ) : (
+                    <input
+                      type="date"
+                      defaultValue={toDateInputValueVN(r.expectedPaymentDate)}
+                      onBlur={(e) => handleExpectedDateChange(r.id, e.target.value)}
+                      className="input !py-1 !text-xs w-36"
+                    />
+                  )}
                 </td>
               </tr>
             ))}
@@ -379,7 +394,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
       {!isLoading && visibleRows.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
           <span>
-            Tổng {visibleRows.length} hoá đơn còn nợ — trang {currentPage}/{totalPages}
+            Tổng {visibleRows.length} hoá đơn — trang {currentPage}/{totalPages}
           </span>
           {totalPages > 1 && (
             <div className="flex items-center gap-1">

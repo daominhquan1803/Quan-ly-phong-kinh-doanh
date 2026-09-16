@@ -7,6 +7,7 @@ const STATUS_CLASS: Record<DebtStatus, string> = {
   DUE_SOON: "status-badge--producing",
   CURRENT: "status-badge--delivered",
   NO_DUE_DATE: "status-badge--draft",
+  PAID: "status-badge--delivered",
 };
 
 export function DebtStatusBadge({ status }: { status: DebtStatus }) {

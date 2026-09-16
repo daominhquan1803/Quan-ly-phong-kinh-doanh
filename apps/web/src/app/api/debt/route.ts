@@ -25,7 +25,12 @@ export async function GET(req: NextRequest) {
 
     const invoices = await prisma.debtInvoice.findMany({
       where,
-      include: { salesEmployee: { select: { id: true, name: true } } },
+      include: {
+        salesEmployee: { select: { id: true, name: true } },
+        // Chỉ cần ngày thanh toán gần nhất để hiển thị hoá đơn đã trả hết — không trả cả danh
+        // sách allocation cho client.
+        allocations: { select: { payment: { select: { paymentDate: true } } } },
+      },
       orderBy: [{ dueDate: "asc" }, { invoiceDate: "asc" }],
       // Bảng Công nợ lọc/sắp xếp ở client (trạng thái, nhân viên, tìm kiếm) nên trả toàn bộ danh
       // sách khớp phạm vi/tìm kiếm server, chặn ở mức cao để tránh phình dữ liệu bất thường
@@ -33,7 +38,13 @@ export async function GET(req: NextRequest) {
       take: 5000,
     });
 
-    return NextResponse.json({ invoices });
+    const result = invoices.map(({ allocations, ...invoice }) => {
+      const paymentDates = allocations.map((a) => a.payment.paymentDate).filter((d): d is Date => d !== null);
+      const lastPaymentDate = paymentDates.length > 0 ? new Date(Math.max(...paymentDates.map((d) => d.getTime()))) : null;
+      return { ...invoice, lastPaymentDate };
+    });
+
+    return NextResponse.json({ invoices: result });
   } catch (err) {
     if (err instanceof UnauthorizedError) return NextResponse.json({ error: err.message }, { status: 401 });
     console.error("debt GET error", err);

@@ -3,6 +3,7 @@ import { prisma, resolveEmployeeIdByName } from "@hoanggia/db";
 import { parseDebtBaselineExcel } from "@/lib/debt-baseline-parser";
 import { normalizeCustomerCode } from "@/lib/debt-customer-match";
 import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
+import { monthWeekMonday } from "@/lib/debt-status";
 
 export const dynamic = "force-dynamic";
 
@@ -43,9 +44,21 @@ export async function POST(req: NextRequest) {
     let createdCount = 0;
     let updatedCount = 0;
 
+    // "Kế hoạch thu Tuần 1-5" trong file gốc là kế hoạch của ĐÚNG THÁNG ĐANG NHẬP FILE (anh Quân
+    // xác nhận) — quy đổi sang expectedPaymentDate = Thứ 2 của tuần đó trong tháng hiện tại, để
+    // lần đầu vào trang Công nợ đã có sẵn kế hoạch tháng này thay vì phải chờ NVKD tự điền lại.
+    // Từ tháng sau, NVKD tự điền qua UI — vì vậy chỉ set khi hoá đơn CHƯA có expectedPaymentDate
+    // (tránh ghi đè ngày NVKD đã tự sửa nếu admin lỡ nhập lại file này).
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+
     for (const row of rows) {
       const salesEmployeeId = await resolveEmployee(row.salesEmployeeNameRaw);
       const customerName = nameByCode.get(row.customerCode) ?? row.customerCodeRaw;
+      const stillOwed = row.paidAmount < row.originalAmount;
+      const weekPlanDate =
+        row.weekPlanIndex && stillOwed ? monthWeekMonday(currentYear, currentMonth, row.weekPlanIndex) : null;
       const data = {
         customerCode: row.customerCode,
         customerName,
@@ -64,12 +77,15 @@ export async function POST(req: NextRequest) {
           where: { customerCode_invoiceNumber: { customerCode: row.customerCode, invoiceNumber: row.invoiceNumber } },
         });
         if (existing) {
-          await prisma.debtInvoice.update({ where: { id: existing.id }, data });
+          await prisma.debtInvoice.update({
+            where: { id: existing.id },
+            data: existing.expectedPaymentDate === null && weekPlanDate ? { ...data, expectedPaymentDate: weekPlanDate } : data,
+          });
           updatedCount++;
           continue;
         }
       }
-      await prisma.debtInvoice.create({ data });
+      await prisma.debtInvoice.create({ data: { ...data, expectedPaymentDate: weekPlanDate } });
       createdCount++;
     }
 

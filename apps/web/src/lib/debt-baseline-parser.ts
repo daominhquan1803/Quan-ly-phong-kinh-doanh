@@ -11,9 +11,10 @@ export interface ParsedBaselineDebtRow {
   originalAmount: number;
   paidAmount: number;
   salesEmployeeNameRaw: string | null;
-  // "Kế hoạch thu Tuần N" cũ trong file gốc — giữ lại làm ghi chú tham khảo, KHÔNG suy ra ngày
-  // dự kiến thanh toán cụ thể (không đủ căn cứ xác định đúng tuần của tháng nào), NVKD sẽ tự
-  // điền ngày dự kiến thanh toán mới qua giao diện theo đúng yêu cầu của anh Quân.
+  // "Kế hoạch thu Tuần N" cũ trong file gốc — anh Quân xác nhận đây là kế hoạch thu THÁNG NHẬP
+  // FILE (không phải tháng nào khác), dùng để tự điền expectedPaymentDate = Thứ 2 của tuần N
+  // tháng hiện tại (xem monthWeekMonday) cho tháng này; TỪ THÁNG SAU trở đi NVKD tự điền qua UI.
+  weekPlanIndex: number | null;
   oldWeekPlanNote: string | null;
 }
 
@@ -74,11 +75,15 @@ export function parseDebtBaselineExcel(buffer: Buffer): { rows: ParsedBaselineDe
     }
 
     const weekNotes: string[] = [];
+    let weekPlanIndex: number | null = null;
     idx.weeks.forEach((weekIdx, wi) => {
       if (weekIdx === -1) return;
       const v = row[weekIdx];
       const n = typeof v === "number" ? v : parseNumber(v);
-      if (n) weekNotes.push(`Tuần ${wi + 1}: ${n.toLocaleString("vi-VN")}đ`);
+      if (n) {
+        weekNotes.push(`Tuần ${wi + 1}: ${n.toLocaleString("vi-VN")}đ`);
+        if (weekPlanIndex === null) weekPlanIndex = wi + 1;
+      }
     });
 
     result.rows.push({
@@ -91,7 +96,8 @@ export function parseDebtBaselineExcel(buffer: Buffer): { rows: ParsedBaselineDe
       originalAmount,
       paidAmount: idx.paidAmount >= 0 ? parseNumber(row[idx.paidAmount]) : 0,
       salesEmployeeNameRaw: idx.salesEmployeeName >= 0 ? String(row[idx.salesEmployeeName] ?? "").trim() || null : null,
-      oldWeekPlanNote: weekNotes.length > 0 ? `Kế hoạch thu cũ — ${weekNotes.join(", ")}` : null,
+      weekPlanIndex,
+      oldWeekPlanNote: weekNotes.length > 0 ? `Kế hoạch thu — ${weekNotes.join(", ")}` : null,
     });
   });
 

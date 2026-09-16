@@ -4,7 +4,7 @@
  * "Sắp đến hạn" = còn ≤ 7 ngày tới hạn — CHƯA hỏi lại anh Quân, tạm chọn 7 ngày cho hợp lý, có
  * thể chỉnh nếu cần khác.
  */
-export type DebtStatus = "BAD_DEBT" | "OVERDUE" | "DUE_SOON" | "CURRENT" | "NO_DUE_DATE";
+export type DebtStatus = "BAD_DEBT" | "OVERDUE" | "DUE_SOON" | "CURRENT" | "NO_DUE_DATE" | "PAID";
 
 export const DEBT_BAD_DEBT_DAYS = 180;
 const DUE_SOON_DAYS = 7;
@@ -15,6 +15,7 @@ export const DEBT_STATUS_LABEL: Record<DebtStatus, string> = {
   DUE_SOON: "Sắp đến hạn",
   CURRENT: "Còn hạn",
   NO_DUE_DATE: "Chưa có hạn",
+  PAID: "Đã thanh toán",
 };
 
 /** remainingAmount = originalAmount - paidAmount — luôn tính tại chỗ, không lưu cột riêng. */
@@ -36,7 +37,7 @@ export function computeDebtStatus(invoice: {
   originalAmount: number;
   paidAmount: number;
 }): DebtStatus {
-  if (remainingAmount(invoice.originalAmount, invoice.paidAmount) <= 0) return "CURRENT";
+  if (remainingAmount(invoice.originalAmount, invoice.paidAmount) <= 0) return "PAID";
   const days = overdueDays(invoice.dueDate);
   if (days === null) return "NO_DUE_DATE";
   if (days > DEBT_BAD_DEBT_DAYS) return "BAD_DEBT";
@@ -52,5 +53,16 @@ export function mondayOfWeek(d: Date): Date {
   const monday = new Date(d);
   monday.setHours(0, 0, 0, 0);
   monday.setDate(monday.getDate() + diff);
+  return monday;
+}
+
+/** Thứ 2 của "Tuần N" trong 1 tháng cụ thể — tuần 1 luôn là tuần dương lịch chứa ngày 1 đầu
+ * tháng, tuần 2-5 nối tiếp mỗi 7 ngày (giống hệt cách chia tuần ở /api/debt/summary). Dùng để quy
+ * đổi "Kế hoạch thu Tuần 1-5" trong file Công nợ gốc thành 1 ngày dự kiến thanh toán cụ thể. */
+export function monthWeekMonday(year: number, month: number, weekIndex: number): Date {
+  const monthStart = new Date(year, month - 1, 1);
+  const week1Monday = mondayOfWeek(monthStart);
+  const monday = new Date(week1Monday);
+  monday.setDate(monday.getDate() + (weekIndex - 1) * 7);
   return monday;
 }
