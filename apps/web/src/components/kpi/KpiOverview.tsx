@@ -260,8 +260,9 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
         lên, cứ mỗi 5% vượt thêm được cộng 1đ thưởng, không giới hạn trần. Trọng số 4 mục Doanh số/DS
         SX/KH mới/CSKH do Quản trị viên tự phân bổ riêng từng người (tổng luôn = 70). Điểm &quot;Đi gặp
         KH&quot; tự tính theo số lượt đăng ký đi công tác đã được duyệt trong tháng. Điểm tuần tự cộng từ
-        Kế hoạch làm việc tuần. Công nợ quá hạn &amp; Tỷ lệ thu hồi nợ tự tính từ trang Công nợ. Các
-        ô còn lại do Quản trị viên nhập.
+        Kế hoạch làm việc tuần. Thực tế KH mới tự đếm từ đơn hàng (đơn đầu tiên của khách với PKD1,
+        hoặc quay lại sau &gt;=365 ngày im lặng). Công nợ quá hạn &amp; Tỷ lệ thu hồi nợ tự tính từ
+        trang Công nợ. Các ô còn lại do Quản trị viên nhập.
       </p>
 
       {isAdmin && (
@@ -299,7 +300,6 @@ function KpiEditForm({
     weightNewCustomers: row.weightNewCustomers,
     weightVisit: row.weightVisit,
     targetNewCustomers: row.targetNewCustomers ?? "",
-    actualNewCustomers: row.actualNewCustomers ?? "",
     visitTarget: row.visitTarget,
     violationCount: row.violationCount,
   });
@@ -343,7 +343,6 @@ function KpiEditForm({
           weightNewCustomers: Number(form.weightNewCustomers) || 0,
           weightVisit: Number(form.weightVisit) || 0,
           targetNewCustomers: form.targetNewCustomers === "" ? null : Number(form.targetNewCustomers),
-          actualNewCustomers: form.actualNewCustomers === "" ? null : Number(form.actualNewCustomers),
           visitTarget: Number(form.visitTarget) || 8,
           violationCount: form.violationCount === "" ? 0 : Number(form.violationCount),
         }),
@@ -376,12 +375,12 @@ function KpiEditForm({
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {field("targetNewCustomers", "Chỉ tiêu KH mới")}
-        {field("actualNewCustomers", "Thực tế KH mới")}
         {field("visitTarget", "Chỉ tiêu lượt đi gặp KH/tháng")}
         {field("violationCount", "Vi phạm nội quy (lần)")}
       </div>
       <p className="text-xs text-muted-foreground">
-        Công nợ quá hạn &amp; Tỷ lệ thu hồi nợ đã tự động lấy từ trang Công nợ, không sửa được ở đây.
+        Thực tế KH mới tự đếm từ đơn hàng. Công nợ quá hạn &amp; Tỷ lệ thu hồi nợ tự động lấy từ
+        trang Công nợ. Không sửa được các mục này ở đây.
       </p>
       {error && <p className="text-xs text-brandRed-600">{error}</p>}
       <div className="flex items-center gap-2">

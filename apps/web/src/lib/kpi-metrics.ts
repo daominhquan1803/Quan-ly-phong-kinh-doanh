@@ -29,7 +29,7 @@ import { computeDebtStatus, remainingAmount } from "./debt-status";
  * Tổng 100 điểm, 8 đầu điểm:
  *  1. Doanh số tổng     tối đa = weightRevenue (mặc định 30, +thưởng vượt 110% mỗi 5% +1đ, không trần) — tự động, từ SalesTarget
  *  2. DS ngành Sản xuất tối đa = weightRevenueSX (mặc định 20, +thưởng như trên)             — tự động, từ SalesPlanLine nhóm Sản xuất
- *  3. KH mới            tối đa = weightNewCustomers (mặc định 10) — MIN(weight, tỷ lệ đạt × weight) — nhập tay
+ *  3. KH mới            tối đa = weightNewCustomers (mặc định 10) — MIN(weight, tỷ lệ đạt × weight) — chỉ tiêu nhập tay, THỰC TẾ tự động đếm từ Order (xem getNewCustomerCounts)
  *  4. CSKH/Đi gặp KH    tối đa = weightVisit (mặc định 10) — MIN(weight, tỷ lệ đạt gặp KH × weight) — tự động, đếm theo SỐ KHÁCH ghé (BusinessTripStop), không theo số buổi
  *  5. Nợ quá hạn        tối đa 10đ — bậc thang theo % (KHÔNG có trọng số riêng)     — tự động, từ module Công nợ (tổng nợ quá hạn / tổng công nợ của nhân viên)
  *  6. Thu hồi nợ        tối đa 10đ — MIN(10, tỷ lệ thu hồi × 10) (KHÔNG có trọng số riêng) — tự động, từ module Công nợ (tổng đã thu / tổng nguyên giá hoá đơn của nhân viên)
@@ -249,6 +249,70 @@ async function getEmployeeDebtRates(employeeId: string): Promise<{ debtOverduePc
   };
 }
 
+const NEW_CUSTOMER_GAP_MS = 365 * 24 * 60 * 60 * 1000;
+
+/**
+ * Số "khách hàng mới" trong tháng, cho từng nhân viên PKD1 — theo đúng định nghĩa anh Quân xác
+ * nhận: khách được tính là MỚI cho 1 nhân viên nếu đơn ĐẦU TIÊN trong tháng của khách đó với nhân
+ * viên này là (a) đơn PKD1 (1 trong các nhân viên PKD1 đang theo dõi) ĐẦU TIÊN TỪ TRƯỚC ĐẾN NAY
+ * của khách, hoặc (b) cách đơn PKD1 gần nhất trước đó của khách hơn 365 ngày (quay lại mua sau khi
+ * im lặng ≥ 1 năm). Khách được CHUYỂN GIAO giữa 2 nhân viên PKD1 (đơn PKD1 gần nhất < 365 ngày, dù
+ * của nhân viên PKD1 khác) KHÔNG tính là mới cho người nhận. Khách trước đó chỉ mua của nhân viên
+ * NGOÀI phạm vi PKD1 đang theo dõi (phòng khác/đã nghỉ) — lịch sử đó không tính, nên nếu nay 1
+ * nhân viên PKD1 lên đơn thì vẫn tính là mới.
+ *
+ * Gom khách theo customerName (không phải customerCode) — cùng khoá định danh khách hàng chung
+ * toàn hệ thống đang dùng ở lib/customer-risk-query.ts (customerCode không phải đơn nào cũng có).
+ */
+async function getNewCustomerCounts(
+  year: number,
+  month: number,
+  pkd1EmployeeIds: string[]
+): Promise<Map<string, number>> {
+  const { start, end } = monthRange(year, month);
+  const pkd1Set = new Set(pkd1EmployeeIds);
+
+  const orders = await prisma.order.findMany({
+    where: { orderDate: { not: null }, status: { not: "CANCELLED" }, salesEmployeeId: { in: pkd1EmployeeIds } },
+    select: { customerName: true, orderDate: true, salesEmployeeId: true },
+    orderBy: { orderDate: "asc" },
+  });
+
+  // Toàn bộ ngày đặt hàng PKD1 của từng khách (đã lọc đúng danh sách nhân viên PKD1 ở query trên).
+  const pkd1OrderDatesByCustomer = new Map<string, Date[]>();
+  // Đơn PKD1 sớm nhất trong tháng M đang xét, theo từng (nhân viên, khách).
+  const firstOrderInMonth = new Map<string, Map<string, Date>>();
+
+  for (const o of orders) {
+    if (!o.orderDate || !o.salesEmployeeId || !pkd1Set.has(o.salesEmployeeId)) continue;
+    const dates = pkd1OrderDatesByCustomer.get(o.customerName) ?? [];
+    dates.push(o.orderDate);
+    pkd1OrderDatesByCustomer.set(o.customerName, dates);
+
+    if (o.orderDate < start || o.orderDate >= end) continue;
+    const byCustomer = firstOrderInMonth.get(o.salesEmployeeId) ?? new Map<string, Date>();
+    const existing = byCustomer.get(o.customerName);
+    if (!existing || o.orderDate < existing) byCustomer.set(o.customerName, o.orderDate);
+    firstOrderInMonth.set(o.salesEmployeeId, byCustomer);
+  }
+
+  const counts = new Map<string, number>();
+  for (const [employeeId, byCustomer] of firstOrderInMonth) {
+    let count = 0;
+    for (const [customerName, orderDate] of byCustomer) {
+      const priorDates = pkd1OrderDatesByCustomer.get(customerName) ?? [];
+      let lastPriorDate: Date | null = null;
+      for (const d of priorDates) {
+        if (d < orderDate && (!lastPriorDate || d > lastPriorDate)) lastPriorDate = d;
+      }
+      if (!lastPriorDate || orderDate.getTime() - lastPriorDate.getTime() > NEW_CUSTOMER_GAP_MS) count++;
+    }
+    counts.set(employeeId, count);
+  }
+
+  return counts;
+}
+
 export async function getKpiMonthlyReport(
   year: number,
   month: number,
@@ -256,7 +320,15 @@ export async function getKpiMonthlyReport(
 ): Promise<KpiMonthlyReportRow[]> {
   const { start, end } = monthRange(year, month);
 
-  const [revenueRows, entries, visitCounts, supporterVisitCounts] = await Promise.all([
+  // Roster PKD1 ĐẦY ĐỦ (không lọc theo onlyEmployeeId) — "khách hàng mới" cần biết TOÀN BỘ lịch sử
+  // đặt hàng PKD1 của khách để xét đúng, kể cả khi đang xem báo cáo lọc riêng 1 người.
+  const pkd1Employees = await prisma.user.findMany({
+    where: { active: true, amisEmployeeCode: { not: null } },
+    select: { id: true },
+  });
+  const pkd1EmployeeIds = pkd1Employees.map((u) => u.id);
+
+  const [revenueRows, entries, visitCounts, supporterVisitCounts, newCustomerCounts] = await Promise.all([
     getEmployeeTargetVsActual(year, month, onlyEmployeeId),
     prisma.kpiMonthlyEntry.findMany({
       where: { year, month, ...(onlyEmployeeId ? { employeeId: onlyEmployeeId } : {}) },
@@ -282,6 +354,7 @@ export async function getKpiMonthlyReport(
       },
       select: { employeeId: true, trip: { select: { _count: { select: { stops: true } } } } },
     }),
+    getNewCustomerCounts(year, month, pkd1EmployeeIds),
   ]);
 
   const entryByEmployee = new Map(entries.map((e) => [e.employeeId, e]));
@@ -315,7 +388,7 @@ export async function getKpiMonthlyReport(
       actualRevenueSX: sx?.actualRevenue ?? 0,
       weightRevenueSX: entry?.weightRevenueSX ?? 20,
       targetNewCustomers: entry?.targetNewCustomers ?? null,
-      actualNewCustomers: entry?.actualNewCustomers ?? null,
+      actualNewCustomers: newCustomerCounts.get(r.employeeId) ?? 0,
       weightNewCustomers: entry?.weightNewCustomers ?? 10,
       debtOverduePct: debtRates.debtOverduePct,
       debtCollectionRatePct: debtRates.debtCollectionRatePct,

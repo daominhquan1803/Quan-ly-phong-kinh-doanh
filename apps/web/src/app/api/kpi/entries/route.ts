@@ -14,7 +14,6 @@ const upsertSchema = z.object({
   weightNewCustomers: z.number().int().min(0).max(70).optional(),
   weightVisit: z.number().int().min(0).max(70).optional(),
   targetNewCustomers: z.number().int().nullable().optional(),
-  actualNewCustomers: z.number().int().nullable().optional(),
   visitTarget: z.number().int().positive().optional(),
   violationCount: z.number().int().nullable().optional(),
 });
