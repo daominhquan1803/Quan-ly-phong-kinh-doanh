@@ -1,6 +1,7 @@
 import { prisma } from "@hoanggia/db";
 import { monthRange, getEmployeeTargetVsActual, getProductGroupTargetVsActual } from "./dashboard-metrics";
 import { getMonthlyWeekPlanScore } from "./week-plan";
+import { computeDebtStatus, remainingAmount } from "./debt-status";
 
 /**
  * Công thức tính điểm KPI hàng tháng — dựa theo file mẫu KPI_KD_HoanggiaPS.xlsx / KPI_PKD1_
@@ -30,8 +31,8 @@ import { getMonthlyWeekPlanScore } from "./week-plan";
  *  2. DS ngành Sản xuất tối đa = weightRevenueSX (mặc định 20, +thưởng như trên)             — tự động, từ SalesPlanLine nhóm Sản xuất
  *  3. KH mới            tối đa = weightNewCustomers (mặc định 10) — MIN(weight, tỷ lệ đạt × weight) — nhập tay
  *  4. CSKH/Đi gặp KH    tối đa = weightVisit (mặc định 10) — MIN(weight, tỷ lệ đạt gặp KH × weight) — tự động, đếm theo SỐ KHÁCH ghé (BusinessTripStop), không theo số buổi
- *  5. Nợ quá hạn        tối đa 10đ — bậc thang theo % (KHÔNG có trọng số riêng)     — nhập tay (chờ nối congno.hienvi.me)
- *  6. Thu hồi nợ        tối đa 10đ — MIN(10, tỷ lệ thu hồi × 10) (KHÔNG có trọng số riêng) — nhập tay
+ *  5. Nợ quá hạn        tối đa 10đ — bậc thang theo % (KHÔNG có trọng số riêng)     — tự động, từ module Công nợ (tổng nợ quá hạn / tổng công nợ của nhân viên)
+ *  6. Thu hồi nợ        tối đa 10đ — MIN(10, tỷ lệ thu hồi × 10) (KHÔNG có trọng số riêng) — tự động, từ module Công nợ (tổng đã thu / tổng nguyên giá hoá đơn của nhân viên)
  *  7. Thái độ & kỷ luật tối đa 2đ  — max(2 − số lần vi phạm, 0)                      — nhập tay
  *  8. Điểm tuần         tối đa 8đ  — tổng 4 "Điểm tuần" (0/1/2) của Kế hoạch làm việc tuần trong tháng — tự động
  *
@@ -216,6 +217,38 @@ export interface KpiMonthlyReportRow extends KpiScoreResult {
   hasManualEntry: boolean;
 }
 
+/** Tỉ lệ nợ quá hạn/tổng công nợ và tỉ lệ thu hồi công nợ của 1 nhân viên — lấy TRỰC TIẾP từ dữ
+ * liệu Công nợ hiện có (module Công nợ, xem apps/web/src/app/api/debt/summary/route.ts — cùng
+ * công thức, tính riêng cho 1 NVKD), không còn nhập tay ở KPI nữa. Snapshot tại thời điểm xem báo
+ * cáo (công nợ không có "tháng" riêng như doanh số — hoá đơn tồn qua nhiều tháng), giống cách
+ * trang Công nợ đang hiển thị theo từng nhân viên. */
+async function getEmployeeDebtRates(employeeId: string): Promise<{ debtOverduePct: number | null; debtCollectionRatePct: number | null }> {
+  const invoices = await prisma.debtInvoice.findMany({
+    where: { salesEmployeeId: employeeId },
+    select: { originalAmount: true, paidAmount: true, dueDate: true },
+  });
+
+  let totalOriginal = 0;
+  let totalPaid = 0;
+  let totalDebt = 0;
+  let overdueDebt = 0;
+  for (const inv of invoices) {
+    const original = Number(inv.originalAmount);
+    const paid = Number(inv.paidAmount);
+    const remaining = remainingAmount(original, paid);
+    totalOriginal += original;
+    totalPaid += paid;
+    totalDebt += remaining;
+    const status = computeDebtStatus({ dueDate: inv.dueDate, originalAmount: original, paidAmount: paid });
+    if (status === "OVERDUE" || status === "BAD_DEBT") overdueDebt += remaining;
+  }
+
+  return {
+    debtOverduePct: totalDebt > 0 ? round1((overdueDebt / totalDebt) * 100) : null,
+    debtCollectionRatePct: totalOriginal > 0 ? round1((totalPaid / totalOriginal) * 100) : null,
+  };
+}
+
 export async function getKpiMonthlyReport(
   year: number,
   month: number,
@@ -267,9 +300,10 @@ export async function getKpiMonthlyReport(
 
     // DS ngành Sản xuất cần chỉ tiêu/thực tế riêng nhóm Sản xuất của riêng người này — luôn gọi
     // có lọc đúng 1 nhân viên để không bị cộng dồn nhầm khi báo cáo nhiều người.
-    const [groups, weekScore] = await Promise.all([
+    const [groups, weekScore, debtRates] = await Promise.all([
       getProductGroupTargetVsActual(year, month, r.employeeId),
       getMonthlyWeekPlanScore(r.employeeId, year, month),
+      getEmployeeDebtRates(r.employeeId),
     ]);
     const sx = groups.find((g) => g.group === "Sản xuất");
 
@@ -283,8 +317,8 @@ export async function getKpiMonthlyReport(
       targetNewCustomers: entry?.targetNewCustomers ?? null,
       actualNewCustomers: entry?.actualNewCustomers ?? null,
       weightNewCustomers: entry?.weightNewCustomers ?? 10,
-      debtOverduePct: entry?.debtOverduePct != null ? Number(entry.debtOverduePct) : null,
-      debtCollectionRatePct: entry?.debtCollectionRatePct != null ? Number(entry.debtCollectionRatePct) : null,
+      debtOverduePct: debtRates.debtOverduePct,
+      debtCollectionRatePct: debtRates.debtCollectionRatePct,
       visitTarget: entry?.visitTarget ?? 8,
       approvedVisitCount: visitByEmployee.get(r.employeeId) ?? 0,
       weightVisit: entry?.weightVisit ?? 10,

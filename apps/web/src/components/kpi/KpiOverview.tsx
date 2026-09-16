@@ -260,7 +260,8 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
         lên, cứ mỗi 5% vượt thêm được cộng 1đ thưởng, không giới hạn trần. Trọng số 4 mục Doanh số/DS
         SX/KH mới/CSKH do Quản trị viên tự phân bổ riêng từng người (tổng luôn = 70). Điểm &quot;Đi gặp
         KH&quot; tự tính theo số lượt đăng ký đi công tác đã được duyệt trong tháng. Điểm tuần tự cộng từ
-        Kế hoạch làm việc tuần. Các ô còn lại do Quản trị viên nhập.
+        Kế hoạch làm việc tuần. Công nợ quá hạn &amp; Tỷ lệ thu hồi nợ tự tính từ trang Công nợ. Các
+        ô còn lại do Quản trị viên nhập.
       </p>
 
       {isAdmin && (
@@ -299,8 +300,6 @@ function KpiEditForm({
     weightVisit: row.weightVisit,
     targetNewCustomers: row.targetNewCustomers ?? "",
     actualNewCustomers: row.actualNewCustomers ?? "",
-    debtOverduePct: row.debtOverduePct ?? "",
-    debtCollectionRatePct: row.debtCollectionRatePct ?? "",
     visitTarget: row.visitTarget,
     violationCount: row.violationCount,
   });
@@ -345,8 +344,6 @@ function KpiEditForm({
           weightVisit: Number(form.weightVisit) || 0,
           targetNewCustomers: form.targetNewCustomers === "" ? null : Number(form.targetNewCustomers),
           actualNewCustomers: form.actualNewCustomers === "" ? null : Number(form.actualNewCustomers),
-          debtOverduePct: form.debtOverduePct === "" ? null : Number(form.debtOverduePct),
-          debtCollectionRatePct: form.debtCollectionRatePct === "" ? null : Number(form.debtCollectionRatePct),
           visitTarget: Number(form.visitTarget) || 8,
           violationCount: form.violationCount === "" ? 0 : Number(form.violationCount),
         }),
@@ -380,11 +377,12 @@ function KpiEditForm({
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {field("targetNewCustomers", "Chỉ tiêu KH mới")}
         {field("actualNewCustomers", "Thực tế KH mới")}
-        {field("debtOverduePct", "Công nợ quá hạn (%)", { step: "0.1" })}
-        {field("debtCollectionRatePct", "Tỷ lệ thu hồi nợ (%)", { step: "0.1" })}
         {field("visitTarget", "Chỉ tiêu lượt đi gặp KH/tháng")}
         {field("violationCount", "Vi phạm nội quy (lần)")}
       </div>
+      <p className="text-xs text-muted-foreground">
+        Công nợ quá hạn &amp; Tỷ lệ thu hồi nợ đã tự động lấy từ trang Công nợ, không sửa được ở đây.
+      </p>
       {error && <p className="text-xs text-brandRed-600">{error}</p>}
       <div className="flex items-center gap-2">
         <button

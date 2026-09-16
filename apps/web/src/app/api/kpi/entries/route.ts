@@ -15,14 +15,13 @@ const upsertSchema = z.object({
   weightVisit: z.number().int().min(0).max(70).optional(),
   targetNewCustomers: z.number().int().nullable().optional(),
   actualNewCustomers: z.number().int().nullable().optional(),
-  debtOverduePct: z.number().nullable().optional(),
-  debtCollectionRatePct: z.number().nullable().optional(),
   visitTarget: z.number().int().positive().optional(),
   violationCount: z.number().int().nullable().optional(),
 });
 
 /** Quản trị viên nhập/sửa các chỉ tiêu KPI không tính tự động được (trọng số 4 mục linh hoạt,
- * KH mới, Công nợ tạm thời, chỉ tiêu số lượt đi gặp KH, số lần vi phạm) cho 1 nhân viên/1 tháng.
+ * KH mới, chỉ tiêu số lượt đi gặp KH, số lần vi phạm) cho 1 nhân viên/1 tháng — Công nợ (quá
+ * hạn/thu hồi) đã tự động lấy từ module Công nợ, không còn nhập ở đây (xem getKpiMonthlyReport).
  * Trọng số Doanh số/DS SX/KH mới/CSKH (weightRevenue+weightRevenueSX+weightNewCustomers+
  * weightVisit) LUÔN phải cộng lại = 70 — validate mềm: chỉ cảnh báo khi ĐỦ cả 4 trường trong 1
  * lần lưu, không chặn lưu từng phần (vd chỉ sửa 1 trường không kèm 3 trường kia). */
