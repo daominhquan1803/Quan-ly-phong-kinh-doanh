@@ -3,10 +3,10 @@
 import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { cn, formatDateVN } from "@/lib/utils";
+import { cn, formatDateVN, toDateInputValueVN } from "@/lib/utils";
 import { EmployeeFilterSelect } from "@/components/shared/EmployeeFilterSelect";
 import { buildGoogleMapsMultiStopUrl } from "@/lib/business-trip-maps";
-import { Check, X, Trash2, Plus, MapPin, ArrowUp, ArrowDown } from "lucide-react";
+import { Check, X, Trash2, Plus, MapPin, ArrowUp, ArrowDown, Pencil } from "lucide-react";
 
 interface StopRow {
   id: string;
@@ -42,6 +42,7 @@ export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
   const { data: session } = useSession();
   const [employeeId, setEmployeeId] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [editingTrip, setEditingTrip] = useState<TripRow | null>(null);
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -83,7 +84,10 @@ export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
           <span />
         )}
         <button
-          onClick={() => setShowForm((v) => !v)}
+          onClick={() => {
+            setEditingTrip(null);
+            setShowForm((v) => !v);
+          }}
           className="rounded-md bg-brandRed-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brandRed-700"
         >
           {showForm ? "Đóng" : "+ Đăng ký đi công tác"}
@@ -92,6 +96,14 @@ export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
 
       {showForm && (
         <TripForm currentUserId={session?.user?.id} onCreated={() => { setShowForm(false); invalidate(); }} />
+      )}
+      {editingTrip && (
+        <TripForm
+          currentUserId={session?.user?.id}
+          editingTrip={editingTrip}
+          onCreated={() => { setEditingTrip(null); invalidate(); }}
+          onCancelEdit={() => setEditingTrip(null)}
+        />
       )}
 
       <div className="rounded-lg border border-gray-200 bg-card overflow-x-auto">
@@ -181,14 +193,26 @@ export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
                         </button>
                       </span>
                     )}
-                    {t.status === "PENDING" && !isAdmin && (
-                      <button
-                        onClick={() => handleAction(t.id, "cancel")}
-                        className="text-muted2 hover:text-brandRed-600"
-                        title="Huỷ đăng ký"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                    {t.status === "PENDING" && t.employee.id === session?.user?.id && (
+                      <span className="inline-flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            setShowForm(false);
+                            setEditingTrip(t);
+                          }}
+                          className="text-muted2 hover:text-ink"
+                          title="Sửa đăng ký (gõ nhầm)"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => handleAction(t.id, "cancel")}
+                          className="text-muted2 hover:text-brandRed-600"
+                          title="Huỷ đăng ký"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </span>
                     )}
                   </td>
                 </tr>
@@ -217,10 +241,33 @@ function emptyStop(): StopDraft {
   return { companyName: "", address: "", expectedTime: "", content: "" };
 }
 
-function TripForm({ onCreated, currentUserId }: { onCreated: () => void; currentUserId?: string }) {
-  const [visitDate, setVisitDate] = useState("");
-  const [stops, setStops] = useState<StopDraft[]>([emptyStop()]);
-  const [supporterIds, setSupporterIds] = useState<string[]>([]);
+function TripForm({
+  onCreated,
+  currentUserId,
+  editingTrip,
+  onCancelEdit,
+}: {
+  onCreated: () => void;
+  currentUserId?: string;
+  // Có giá trị -> form ở chế độ SỬA đăng ký hiện có (NVKD tự sửa lỗi gõ nhầm khi còn Chờ duyệt),
+  // không có -> chế độ tạo mới như cũ.
+  editingTrip?: TripRow;
+  onCancelEdit?: () => void;
+}) {
+  const [visitDate, setVisitDate] = useState(editingTrip ? toDateInputValueVN(editingTrip.visitDate) : "");
+  const [stops, setStops] = useState<StopDraft[]>(
+    editingTrip
+      ? editingTrip.stops.map((s) => ({
+          companyName: s.companyName,
+          address: s.address ?? "",
+          expectedTime: s.expectedTime ?? "",
+          content: s.content,
+        }))
+      : [emptyStop()]
+  );
+  const [supporterIds, setSupporterIds] = useState<string[]>(
+    editingTrip ? editingTrip.supporters.map((s) => s.employee.id) : []
+  );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -263,30 +310,35 @@ function TripForm({ onCreated, currentUserId }: { onCreated: () => void; current
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch("/api/business-trips", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          visitDate,
-          stops: validStops.map((s) => ({
-            companyName: s.companyName,
-            address: s.address || null,
-            expectedTime: s.expectedTime || null,
-            content: s.content,
-          })),
-          supporterEmployeeIds: supporterIds,
-        }),
-      });
+      const stopsPayload = validStops.map((s) => ({
+        companyName: s.companyName,
+        address: s.address || null,
+        expectedTime: s.expectedTime || null,
+        content: s.content,
+      }));
+      const res = editingTrip
+        ? await fetch(`/api/business-trips/${editingTrip.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "update", visitDate, stops: stopsPayload, supporterEmployeeIds: supporterIds }),
+          })
+        : await fetch("/api/business-trips", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ visitDate, stops: stopsPayload, supporterEmployeeIds: supporterIds }),
+          });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "Đăng ký thất bại");
+        throw new Error(body.error || (editingTrip ? "Lưu thay đổi thất bại" : "Đăng ký thất bại"));
       }
-      setVisitDate("");
-      setStops([emptyStop()]);
-      setSupporterIds([]);
+      if (!editingTrip) {
+        setVisitDate("");
+        setStops([emptyStop()]);
+        setSupporterIds([]);
+      }
       onCreated();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Đăng ký thất bại");
+      setError(e instanceof Error ? e.message : "Có lỗi xảy ra");
     } finally {
       setSaving(false);
     }
@@ -294,6 +346,7 @@ function TripForm({ onCreated, currentUserId }: { onCreated: () => void; current
 
   return (
     <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-4">
+      {editingTrip && <p className="text-sm font-medium text-ink">Sửa đăng ký ngày {formatDateVN(editingTrip.visitDate)}</p>}
       <label className="flex flex-col gap-1 text-xs text-muted-foreground max-w-xs">
         Ngày đi
         <input type="date" value={visitDate} onChange={(e) => setVisitDate(e.target.value)} className="input" />
@@ -389,13 +442,24 @@ function TripForm({ onCreated, currentUserId }: { onCreated: () => void; current
         </div>
       </div>
       {error && <p className="text-xs text-brandRed-600">{error}</p>}
-      <button
-        onClick={handleSubmit}
-        disabled={saving || !visitDate || validStops.length === 0}
-        className="rounded-md bg-amber-500 px-3 py-2 text-sm font-semibold text-amber-foreground hover:bg-amber-400 disabled:opacity-40 w-fit"
-      >
-        {saving ? "Đang gửi..." : "Gửi đăng ký"}
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handleSubmit}
+          disabled={saving || !visitDate || validStops.length === 0}
+          className="rounded-md bg-amber-500 px-3 py-2 text-sm font-semibold text-amber-foreground hover:bg-amber-400 disabled:opacity-40 w-fit"
+        >
+          {saving ? "Đang lưu..." : editingTrip ? "Lưu thay đổi" : "Gửi đăng ký"}
+        </button>
+        {editingTrip && (
+          <button
+            type="button"
+            onClick={onCancelEdit}
+            className="rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-ink2 hover:bg-gray-50"
+          >
+            Huỷ sửa
+          </button>
+        )}
+      </div>
     </div>
   );
 }

@@ -2,12 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@hoanggia/db";
 import { requireSession, ForbiddenError, UnauthorizedError } from "@/lib/rbac";
 import { z } from "zod";
+import { stopSchema } from "../route";
 
 export const dynamic = "force-dynamic";
 
 const patchSchema = z.object({
-  action: z.enum(["approve", "reject", "cancel"]),
+  action: z.enum(["approve", "reject", "cancel", "update"]),
   rejectReason: z.string().trim().max(500).optional(),
+  // Chỉ dùng cho action "update" — sửa lại đăng ký khi NVKD gõ nhầm, cùng hình dạng dữ liệu với
+  // lúc tạo mới (xem createSchema ở ../route.ts).
+  visitDate: z.string().min(1).optional(),
+  stops: z.array(stopSchema).min(1, "Cần ít nhất 1 khách hàng đến gặp").max(20).optional(),
+  supporterEmployeeIds: z.array(z.string().trim().min(1)).max(20).optional(),
 });
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
@@ -36,6 +42,56 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         where: { id: params.id },
         data: { status: "REJECTED", rejectReason: "Đã huỷ bởi người đăng ký" },
       });
+      return NextResponse.json({ trip: updated });
+    }
+
+    if (action === "update") {
+      // Chủ đăng ký tự sửa khi gõ nhầm — chỉ cho sửa lúc còn chờ duyệt, giống điều kiện "cancel"
+      // (đã duyệt/từ chối thì không tự sửa được nữa, tránh đổi nội dung sau khi Quản trị viên đã
+      // xem xét).
+      if (trip.employeeId !== session.user.id) {
+        return NextResponse.json({ error: "Chỉ chủ đăng ký mới được sửa" }, { status: 403 });
+      }
+      if (trip.status !== "PENDING") {
+        return NextResponse.json({ error: "Chỉ sửa được đăng ký đang chờ duyệt" }, { status: 400 });
+      }
+      if (!parsed.data.visitDate || !parsed.data.stops || parsed.data.stops.length === 0) {
+        return NextResponse.json({ error: "Thiếu dữ liệu sửa" }, { status: 400 });
+      }
+
+      const supporterIds = Array.from(new Set(parsed.data.supporterEmployeeIds ?? [])).filter(
+        (id) => id !== session.user.id
+      );
+      const validSupporters =
+        supporterIds.length > 0
+          ? await prisma.user.findMany({ where: { id: { in: supporterIds }, active: true }, select: { id: true } })
+          : [];
+
+      const updated = await prisma.$transaction(async (tx) => {
+        await tx.businessTripStop.deleteMany({ where: { tripId: params.id } });
+        await tx.businessTripSupporter.deleteMany({ where: { tripId: params.id } });
+        return tx.businessTripRequest.update({
+          where: { id: params.id },
+          data: {
+            visitDate: new Date(parsed.data.visitDate!),
+            stops: {
+              create: parsed.data.stops!.map((s, i) => ({
+                orderIndex: i + 1,
+                companyName: s.companyName.trim(),
+                address: s.address?.trim() || null,
+                expectedTime: s.expectedTime?.trim() || null,
+                content: s.content.trim(),
+              })),
+            },
+            supporters: { create: validSupporters.map((u) => ({ employeeId: u.id })) },
+          },
+          include: {
+            supporters: { include: { employee: { select: { id: true, name: true } } } },
+            stops: { orderBy: { orderIndex: "asc" } },
+          },
+        });
+      });
+
       return NextResponse.json({ trip: updated });
     }
 

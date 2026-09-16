@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-const stopSchema = z.object({
+export const stopSchema = z.object({
   companyName: z.string().trim().min(1, "Thiếu tên công ty đến gặp"),
   address: z.string().trim().max(500).optional().nullable(),
   expectedTime: z.string().trim().max(20).optional().nullable(),
