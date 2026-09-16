@@ -68,27 +68,32 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Kế hoạch thu theo tuần dương lịch (Thứ 2 - Chủ nhật) trong tháng được chọn — cộng remaining
-    // của các hoá đơn có NVKD điền expectedPaymentDate rơi vào đúng tuần đó. Tối đa 5 tuần chồng
-    // lên 1 tháng (cùng số cột "Tuần 1-5" như file Công nợ gốc anh Quân gửi).
+    // Kế hoạch thu theo tuần dương lịch (Thứ 2 - Chủ nhật) trong tháng được chọn — mỗi hoá đơn có
+    // NVKD điền expectedPaymentDate được tính vào ĐÚNG tuần đó với TOÀN BỘ originalAmount (số đã
+    // "cam kết" thu tuần này), cộng dồn paidAmount hiện có làm phần "đã thu" — nên hoá đơn đã trả
+    // xong vẫn tính đủ vào kế hoạch (đạt 100%) thay vì biến mất khỏi kế hoạch như cách tính cũ
+    // (chỉ cộng phần còn nợ). Tối đa 5 tuần chồng lên 1 tháng (cùng số cột "Tuần 1-5" như file
+    // Công nợ gốc anh Quân gửi).
     const monthStart = new Date(year, month - 1, 1);
     const monthEnd = new Date(year, month, 0);
-    const weeks: { weekIndex: number; start: Date; end: Date; amount: number }[] = [];
+    const weeks: { weekIndex: number; start: Date; end: Date; planned: number; collected: number }[] = [];
     let cursor = mondayOfWeek(monthStart);
     let weekIndex = 1;
     while (cursor <= monthEnd && weekIndex <= 5) {
-      weeks.push({ weekIndex, start: cursor, end: addDays(cursor, 6), amount: 0 });
+      weeks.push({ weekIndex, start: cursor, end: addDays(cursor, 6), planned: 0, collected: 0 });
       cursor = addDays(cursor, 7);
       weekIndex++;
     }
     for (const inv of invoices) {
       if (!inv.expectedPaymentDate) continue;
-      const remaining = remainingAmount(Number(inv.originalAmount), Number(inv.paidAmount));
-      if (remaining <= 0) continue;
       const d = new Date(inv.expectedPaymentDate);
       const bucket = weeks.find((w) => d >= w.start && d <= w.end);
-      if (bucket) bucket.amount += remaining;
+      if (!bucket) continue;
+      bucket.planned += Number(inv.originalAmount);
+      bucket.collected += Number(inv.paidAmount);
     }
+    const monthlyPlanned = weeks.reduce((s, w) => s + w.planned, 0);
+    const monthlyCollected = weeks.reduce((s, w) => s + w.collected, 0);
 
     return NextResponse.json({
       totalOriginal,
@@ -100,7 +105,19 @@ export async function GET(req: NextRequest) {
       badDebtRate: totalDebt > 0 ? badDebt / totalDebt : 0,
       recoveryRate: totalOriginal > 0 ? totalPaid / totalOriginal : 0,
       perEmployee: session.user.role === "ADMIN" ? Array.from(perEmployee.values()) : null,
-      weeklyPlan: weeks.map((w) => ({ weekIndex: w.weekIndex, start: w.start, end: w.end, amount: w.amount })),
+      weeklyPlan: weeks.map((w) => ({
+        weekIndex: w.weekIndex,
+        start: w.start,
+        end: w.end,
+        planned: w.planned,
+        collected: w.collected,
+        rate: w.planned > 0 ? w.collected / w.planned : null,
+      })),
+      monthlyPlan: {
+        planned: monthlyPlanned,
+        collected: monthlyCollected,
+        rate: monthlyPlanned > 0 ? monthlyCollected / monthlyPlanned : null,
+      },
     });
   } catch (err) {
     if (err instanceof UnauthorizedError) return NextResponse.json({ error: err.message }, { status: 401 });

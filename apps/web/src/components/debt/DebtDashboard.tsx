@@ -34,7 +34,8 @@ interface SummaryResponse {
   badDebtRate: number;
   recoveryRate: number;
   perEmployee: { employeeId: string; employeeName: string; totalDebt: number; overdueDebt: number; badDebt: number }[] | null;
-  weeklyPlan: { weekIndex: number; start: string; end: string; amount: number }[];
+  weeklyPlan: { weekIndex: number; start: string; end: string; planned: number; collected: number; rate: number | null }[];
+  monthlyPlan: { planned: number; collected: number; rate: number | null };
 }
 
 type SortField = "dueDate" | "remaining";
@@ -214,14 +215,29 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
 
       {summary && summary.weeklyPlan.length > 0 && (
         <div className="rounded-lg border border-gray-200 bg-card p-4">
-          <p className="font-medium text-ink text-sm mb-3">Kế hoạch thu hồi công nợ tuần này (theo ngày dự kiến thanh toán NVKD điền)</p>
+          <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+            <p className="font-medium text-ink text-sm">Kế hoạch thu hồi công nợ tháng này (theo ngày dự kiến thanh toán NVKD điền)</p>
+            <p className="text-xs text-muted-foreground">
+              Cả tháng: {formatCurrencyVND(summary.monthlyPlan.collected)} / {formatCurrencyVND(summary.monthlyPlan.planned)}
+              {summary.monthlyPlan.rate !== null && (
+                <span className="ml-1 font-semibold text-ink">({pct(summary.monthlyPlan.rate)} đạt kế hoạch)</span>
+              )}
+            </p>
+          </div>
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             {summary.weeklyPlan.map((w) => (
               <div key={w.weekIndex} className="rounded-md bg-gray-50 p-3">
                 <p className="text-xs text-muted-foreground">
                   Tuần {w.weekIndex} ({formatDateVN(w.start)}–{formatDateVN(w.end)})
                 </p>
-                <p className="text-sm font-semibold text-ink mt-1">{formatCurrencyVND(w.amount)}</p>
+                <p className="text-sm font-semibold text-ink mt-1">
+                  {formatCurrencyVND(w.collected)} / {formatCurrencyVND(w.planned)}
+                </p>
+                {w.rate !== null && (
+                  <p className={cn("text-xs mt-0.5 font-medium", w.rate >= 1 ? "text-success-600" : "text-warning-500")}>
+                    {pct(w.rate)} đạt kế hoạch
+                  </p>
+                )}
               </div>
             ))}
           </div>
