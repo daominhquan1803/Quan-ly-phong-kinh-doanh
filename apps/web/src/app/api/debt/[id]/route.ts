@@ -21,6 +21,7 @@ const updateSchema = z.object({
   expectedPaymentDate: z.string().nullable(),
   dueDate: z.string().nullable().optional(),
   note: z.string().nullable().optional(),
+  salesEmployeeId: z.string().nullable().optional(),
 });
 
 /** NVKD tự điền ngày dự kiến thanh toán cho hoá đơn của chính mình -> dùng tính Kế hoạch thu.
@@ -39,7 +40,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const parsed = updateSchema.safeParse(body);
     if (!parsed.success) return NextResponse.json({ error: "Dữ liệu không hợp lệ" }, { status: 400 });
 
-    const data: { expectedPaymentDate: Date | null; dueDate?: Date | null; note?: string | null } = {
+    const data: {
+      expectedPaymentDate: Date | null;
+      dueDate?: Date | null;
+      note?: string | null;
+      salesEmployeeId?: string | null;
+    } = {
       expectedPaymentDate: parsed.data.expectedPaymentDate ? parseDateOnlyLocal(parsed.data.expectedPaymentDate) : null,
     };
     if (isAdmin && parsed.data.dueDate !== undefined) {
@@ -47,6 +53,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
     if (isAdmin && parsed.data.note !== undefined) {
       data.note = parsed.data.note ?? null;
+    }
+    if (isAdmin && parsed.data.salesEmployeeId !== undefined) {
+      data.salesEmployeeId = parsed.data.salesEmployeeId || null;
     }
 
     const updated = await prisma.debtInvoice.update({ where: { id: params.id }, data });

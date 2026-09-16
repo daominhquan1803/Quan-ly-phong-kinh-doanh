@@ -25,6 +25,13 @@ interface InvoiceRow {
   lastPaymentDate: string | null;
   salesEmployee: { id: string; name: string } | null;
 }
+interface EmployeeOption {
+  id: string;
+  name: string;
+  role: "ADMIN" | "SALES";
+  active: boolean;
+  amisEmployeeCode: string | null;
+}
 interface SummaryResponse {
   totalOriginal: number;
   totalPaid: number;
@@ -94,6 +101,19 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
     },
   });
 
+  // Cùng queryKey với EmployeeFilterSelect (dùng chung cache react-query) — cần danh sách nhân
+  // viên đầy đủ ở đây để dựng dropdown "gán lại NVKD" cho từng dòng hoá đơn.
+  const { data: usersData } = useQuery({
+    queryKey: ["admin-users-filter"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/users");
+      if (!res.ok) throw new Error("Không tải được danh sách nhân viên");
+      return res.json() as Promise<{ users: EmployeeOption[] }>;
+    },
+    enabled: isAdmin,
+  });
+  const assignableEmployees = (usersData?.users ?? []).filter((u) => u.active && u.amisEmployeeCode);
+
   async function handleImport(kind: "baseline" | "new-invoices", file: File) {
     const setUploading = kind === "baseline" ? setUploadingBaseline : setUploadingNewInvoices;
     setUploading(true);
@@ -133,6 +153,25 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
       ]);
     } catch {
       setUploadError("Không lưu được ngày dự kiến thanh toán");
+    }
+  }
+
+  // expectedPaymentDate luôn phải gửi kèm (schema PATCH bắt buộc) — giữ nguyên giá trị hiện tại
+  // của hoá đơn khi admin chỉ đang sửa hạn thanh toán hoặc gán lại NVKD, tránh vô tình xoá mất.
+  async function handleAdminInvoiceEdit(row: InvoiceRow, patch: { dueDate?: string | null; salesEmployeeId?: string | null }) {
+    try {
+      const res = await fetch(`/api/debt/${row.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expectedPaymentDate: toDateInputValueVN(row.expectedPaymentDate) || null, ...patch }),
+      });
+      if (!res.ok) throw new Error();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["debt-invoices"] }),
+        queryClient.invalidateQueries({ queryKey: ["debt-summary"] }),
+      ]);
+    } catch {
+      setUploadError("Không lưu được thay đổi hoá đơn");
     }
   }
 
@@ -384,8 +423,36 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                 <td className="px-4 py-2.5">{r.customerName}</td>
                 <td className="px-4 py-2.5">{r.invoiceNumber ?? "—"}</td>
                 <td className="px-4 py-2.5">{formatDateVN(r.invoiceDate)}</td>
-                <td className="px-4 py-2.5">{r.salesEmployee?.name ?? "—"}</td>
-                <td className="px-4 py-2.5">{formatDateVN(r.dueDate)}</td>
+                <td className="px-4 py-2.5">
+                  {isAdmin ? (
+                    <select
+                      value={r.salesEmployee?.id ?? ""}
+                      onChange={(e) => handleAdminInvoiceEdit(r, { salesEmployeeId: e.target.value || null })}
+                      className="input !py-1 !text-xs w-32"
+                    >
+                      <option value="">— Chưa gán —</option>
+                      {assignableEmployees.map((emp) => (
+                        <option key={emp.id} value={emp.id}>
+                          {emp.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    r.salesEmployee?.name ?? "—"
+                  )}
+                </td>
+                <td className="px-4 py-2.5">
+                  {isAdmin ? (
+                    <input
+                      type="date"
+                      defaultValue={toDateInputValueVN(r.dueDate)}
+                      onBlur={(e) => handleAdminInvoiceEdit(r, { dueDate: e.target.value || null })}
+                      className="input !py-1 !text-xs w-36"
+                    />
+                  ) : (
+                    formatDateVN(r.dueDate)
+                  )}
+                </td>
                 <td className={cn("px-4 py-2.5 text-right", r.daysOverdue !== null && r.daysOverdue > 0 && "text-brandRed-600 font-medium")}>
                   {r.daysOverdue === null ? "—" : r.daysOverdue}
                 </td>

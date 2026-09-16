@@ -26,7 +26,7 @@ export const NAV_ITEMS = [
   { href: "/shipment-slips", label: "Phiếu đi hàng", icon: Truck, adminOnly: false },
   { href: "/picking-slips", label: "Phiếu soạn hàng", icon: PackageCheck, adminOnly: true },
   { href: "/quotes", label: "Báo giá", icon: Receipt, adminOnly: true },
-  { href: "/debt", label: "Công nợ", icon: Wallet, adminOnly: true },
+  { href: "/debt", label: "Công nợ", icon: Wallet, adminOnly: false },
   { href: "/targets", label: "Kế hoạch kinh doanh", icon: Target, adminOnly: false },
   { href: "/kpi", label: "Đánh giá KPI", icon: Award, adminOnly: false },
   { href: "/business-trips", label: "Đăng ký đi công tác", icon: Briefcase, adminOnly: false },

@@ -2,9 +2,9 @@ import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
 // Bảo vệ toàn bộ route trừ /login, /api/auth, và static assets.
-// /admin/*, /debt, /quotes chỉ ADMIN được vào — công nợ và báo giá là số liệu tổng của cả
-// phòng, không gắn được theo từng nhân viên đăng nhập nên không cho SALES xem (chỉ xem số
-// liệu của chính mình).
+// /admin/*, /quotes, /picking-slips chỉ ADMIN được vào. /debt cho cả SALES xem — API đã tự
+// giới hạn theo salesEmployeeId (scopeByOwner trong lib/rbac.ts): SALES chỉ thấy công nợ của
+// chính mình, ADMIN thấy toàn phòng.
 export default auth((req) => {
   const { pathname } = req.nextUrl;
   const isLoggedIn = !!req.auth;
@@ -25,10 +25,7 @@ export default auth((req) => {
   }
 
   if (
-    (pathname.startsWith("/admin") ||
-      pathname.startsWith("/debt") ||
-      pathname.startsWith("/quotes") ||
-      pathname.startsWith("/picking-slips")) &&
+    (pathname.startsWith("/admin") || pathname.startsWith("/quotes") || pathname.startsWith("/picking-slips")) &&
     !isAdmin
   ) {
     return NextResponse.redirect(new URL("/", req.nextUrl));
