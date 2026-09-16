@@ -43,10 +43,11 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
+          port: ${{ secrets.VPS_PORT || 22 }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             cd ${{ secrets.VPS_DEPLOY_PATH }}
             docker compose pull
             docker compose up -d
-            docker compose exec -T web npx prisma migrate deploy --schema packages/db/prisma/schema.prisma
+            docker compose exec -T worker npx prisma migrate deploy --schema /repo/packages/db/prisma/schema.prisma

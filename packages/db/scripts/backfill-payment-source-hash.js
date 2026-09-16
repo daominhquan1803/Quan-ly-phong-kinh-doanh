@@ -12,8 +12,19 @@ function computeSourceHash({ paymentDate, customerCode, amount, rawDescription }
 }
 
 async function main() {
+  // select tường minh, KHÔNG lấy sourceHash — cột này còn NULL ở bước backfill (chưa SET NOT
+  // NULL), mà Prisma Client đã generate theo schema MỚI (String bắt buộc) nên nếu vô tình trả về
+  // sẽ validate lỗi ngay khi đọc (P2032). Không cần giá trị cũ của nó ở đây, chỉ cần tính lại.
   const payments = await prisma.debtPayment.findMany({
-    include: { allocations: true },
+    select: {
+      id: true,
+      paymentDate: true,
+      customerCode: true,
+      amount: true,
+      rawDescription: true,
+      createdAt: true,
+      allocations: { select: { invoiceId: true, amount: true } },
+    },
     orderBy: { createdAt: "asc" },
   });
 
@@ -48,12 +59,16 @@ async function main() {
         totalReversed += Number(alloc.amount);
         console.log(`  reverse invoice=${alloc.invoiceId} amount=${alloc.amount}`);
       }
-      await prisma.debtPayment.delete({ where: { id: dup.record.id } }); // cascade xoá allocations
+      // select: { id: true } — tránh Prisma trả về (và validate) cả cột sourceHash đang NULL của
+      // bản ghi vừa xoá, cùng lý do P2032 như findMany() ở trên.
+      await prisma.debtPayment.delete({ where: { id: dup.record.id }, select: { id: true } }); // cascade xoá allocations
       dupPaymentsDeleted++;
     }
   }
 
-  const remaining = await prisma.debtPayment.findMany();
+  const remaining = await prisma.debtPayment.findMany({
+    select: { id: true, paymentDate: true, customerCode: true, amount: true, rawDescription: true },
+  });
   for (const p of remaining) {
     const hash = computeSourceHash({
       paymentDate: p.paymentDate,
@@ -61,7 +76,7 @@ async function main() {
       amount: Number(p.amount),
       rawDescription: p.rawDescription,
     });
-    await prisma.debtPayment.update({ where: { id: p.id }, data: { sourceHash: hash } });
+    await prisma.debtPayment.update({ where: { id: p.id }, data: { sourceHash: hash }, select: { id: true } });
   }
 
   console.log(`Done. Tổng: ${payments.length} payment ban đầu -> xoá ${dupPaymentsDeleted} bản trùng, đảo ngược ${totalReversed}đ paidAmount cộng trùng. Đã điền sourceHash cho ${remaining.length} bản ghi còn lại.`);
