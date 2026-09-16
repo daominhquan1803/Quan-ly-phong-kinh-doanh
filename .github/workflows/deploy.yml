@@ -51,3 +51,4 @@ jobs:
             docker compose pull
             docker compose up -d
             docker compose exec -T worker npx prisma migrate deploy --schema /repo/packages/db/prisma/schema.prisma
+            docker compose exec -T worker node /repo/packages/db/scripts/repair-debt-paid-amounts.js

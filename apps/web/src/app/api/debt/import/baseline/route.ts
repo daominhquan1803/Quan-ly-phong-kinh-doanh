@@ -66,7 +66,6 @@ export async function POST(req: NextRequest) {
         invoiceDate: row.invoiceDate,
         dueDate: row.dueDate,
         originalAmount: row.originalAmount,
-        paidAmount: row.paidAmount,
         salesEmployeeId,
         source: "BASELINE",
         note: row.oldWeekPlanNote,
@@ -77,6 +76,11 @@ export async function POST(req: NextRequest) {
           where: { customerCode_invoiceNumber: { customerCode: row.customerCode, invoiceNumber: row.invoiceNumber } },
         });
         if (existing) {
+          // KHÔNG ghi đè paidAmount khi update — hoá đơn đã tồn tại có thể đã được cộng dồn
+          // paidAmount qua "Cập nhật Tiền về" (nguồn theo dõi thật trong app), trong khi paidAmount
+          // của file Công nợ gốc chỉ là số liệu AMIS tại thời điểm export, lỡ đè lên sẽ xoá mất tiến
+          // độ thanh toán đã ghi nhận (đã xác nhận qua dữ liệu thật — hoá đơn DONEX-HUNGYEN
+          // 00000959 và GLOBAL MATERIAL HANDLING 00001876 bị mất paidAmount theo đúng cách này).
           await prisma.debtInvoice.update({
             where: { id: existing.id },
             data: existing.expectedPaymentDate === null && weekPlanDate ? { ...data, expectedPaymentDate: weekPlanDate } : data,
@@ -85,7 +89,7 @@ export async function POST(req: NextRequest) {
           continue;
         }
       }
-      await prisma.debtInvoice.create({ data: { ...data, expectedPaymentDate: weekPlanDate } });
+      await prisma.debtInvoice.create({ data: { ...data, paidAmount: row.paidAmount, expectedPaymentDate: weekPlanDate } });
       createdCount++;
     }
 
