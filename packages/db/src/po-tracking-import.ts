@@ -144,16 +144,24 @@ export interface ImportPoTrackingResult {
 }
 
 /**
+ * Tạo bản ghi batch TRƯỚC KHI parse/ghi dữ liệu — cho phép route upload trả về batchId ngay lập
+ * tức (parse + ghi DB của file lớn có thể mất vài phút, xem importPoTrackingRows) để FE poll
+ * tiến độ thay vì giữ 1 request HTTP treo lâu (từng gây 502 Bad Gateway với file thật ~25k dòng).
+ */
+export async function createPoTrackingImportBatch(opts: { fileName: string; createdById: string }) {
+  return prisma.poTrackingImportBatch.create({
+    data: { fileName: opts.fileName, totalRows: 0, createdCount: 0, updatedCount: 0, errorCount: 0, createdById: opts.createdById },
+  });
+}
+
+/**
  * Ghi danh sách dòng đã parse vào DB — upsert theo naturalKey (Số PO + Mã hàng + số thứ tự xuất
  * hiện), tạo PoDeliveryEvent cho tối đa 3 đợt giao ghi trong file, giữ nguyên cờ "Kết thúc đơn"
  * bấm tay (manuallyClosed) không bị file ghi đè. Logic THUẦN Y HỆT scripts/import-po-tracking.ts
  * bản gốc — tách ra đây để route upload trong app và script CLI dùng chung 1 nguồn, tránh lệch
- * hành vi giữa 2 nơi theo thời gian.
+ * hành vi giữa 2 nơi theo thời gian. `batchId` phải đã tồn tại (xem createPoTrackingImportBatch).
  */
-export async function importPoTrackingRows(
-  rows: ParsedPoTrackingRow[],
-  opts: { fileName: string; createdById: string }
-): Promise<ImportPoTrackingResult> {
+export async function importPoTrackingRows(rows: ParsedPoTrackingRow[], batchId: string): Promise<ImportPoTrackingResult> {
   const occurrence = new Map<string, number>();
   function naturalKeyOf(r: ParsedPoTrackingRow): string {
     const itemKey = r.itemCode ?? r.itemName ?? "?";
@@ -180,13 +188,16 @@ export async function importPoTrackingRows(
   let errorCount = 0;
   const errors: string[] = [];
 
-  const batch = await prisma.poTrackingImportBatch.create({
-    data: { fileName: opts.fileName, totalRows: rows.length, createdCount: 0, updatedCount: 0, errorCount: 0, createdById: opts.createdById },
-  });
+  // File thật có thể có hàng chục nghìn dòng (đã gặp 23-26k dòng) — ghi tuần tự từng dòng (mỗi
+  // dòng vài round-trip DB) mất nhiều phút, vượt timeout của Nginx/trình duyệt (Bad Gateway đã
+  // tái hiện được với file thật). Tính sẵn naturalKey THEO ĐÚNG THỨ TỰ FILE trước (đồng bộ, không
+  // phụ thuộc nhau) rồi mới ghi DB SONG SONG theo lô — an toàn vì mỗi dòng chỉ đụng đúng 1
+  // PoTrackingLine của riêng nó, không đọc/ghi chéo dòng khác trong lúc ghi.
+  const rowsWithKey = rows.map((r) => ({ r, naturalKey: naturalKeyOf(r) }));
+  const CONCURRENCY = 20;
 
-  for (const r of rows) {
+  async function processRow(r: ParsedPoTrackingRow, naturalKey: string): Promise<void> {
     try {
-      const naturalKey = naturalKeyOf(r);
       const nvkdNorm = r.nvkdCodeRaw?.trim().toUpperCase() ?? null;
       const amisCode = nvkdNorm ? NVKD_TO_AMIS_CODE[nvkdNorm] : undefined;
       const salesEmployeeId = amisCode ? employeeByAmisCode.get(amisCode) ?? null : null;
@@ -227,7 +238,7 @@ export async function importPoTrackingRows(
         note: r.note,
         poValue: r.poValue,
         content: r.content,
-        importBatchId: batch.id,
+        importBatchId: batchId,
         baselineDeliveredValue: r.deliveredValue,
         baselineDeliveredQty: r.totalDeliveredQty,
         baselineClosed,
@@ -250,21 +261,36 @@ export async function importPoTrackingRows(
         [r.delivery2, 2],
         [r.delivery3, 3],
       ];
-      for (const [slot, seq] of slots) {
-        if (!slot) continue;
-        await prisma.poDeliveryEvent.create({
-          data: { lineId: line.id, salesEmployeeId, eventDate: slot.date, quantity: slot.qty, value: slot.value, sequence: seq },
-        });
-      }
+      await Promise.all(
+        slots
+          .filter(([slot]) => slot)
+          .map(([slot, seq]) =>
+            prisma.poDeliveryEvent.create({
+              data: { lineId: line.id, salesEmployeeId, eventDate: slot!.date, quantity: slot!.qty, value: slot!.value, sequence: seq },
+            })
+          )
+      );
     } catch (e) {
       errorCount++;
       errors.push(`${r.poCode} / ${r.itemCode ?? r.itemName ?? "?"}: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
+  for (let i = 0; i < rowsWithKey.length; i += CONCURRENCY) {
+    const chunk = rowsWithKey.slice(i, i + CONCURRENCY);
+    await Promise.all(chunk.map(({ r, naturalKey }) => processRow(r, naturalKey)));
+  }
+
   await prisma.poTrackingImportBatch.update({
-    where: { id: batch.id },
-    data: { createdCount: created, updatedCount: updated, errorCount, errorReport: errors.length ? errors : undefined },
+    where: { id: batchId },
+    data: {
+      totalRows: rows.length,
+      createdCount: created,
+      updatedCount: updated,
+      errorCount,
+      errorReport: errors.length ? errors : undefined,
+      completedAt: new Date(),
+    },
   });
 
   return { totalRows: rows.length, createdCount: created, updatedCount: updated, errorCount, errors };

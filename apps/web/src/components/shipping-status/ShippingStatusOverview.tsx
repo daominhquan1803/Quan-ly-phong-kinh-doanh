@@ -132,6 +132,10 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
     }
   }
 
+  // File PO tracking thật có thể tới ~25 nghìn dòng — parse + ghi DB mất vài phút, route upload
+  // trả về batchId ngay rồi chạy nền (xem docblock api/shipping-status/import/route.ts), FE ở
+  // đây poll trạng thái mỗi 2s tới khi xong thay vì giữ 1 request chờ lâu (vốn từng vượt timeout
+  // reverse proxy, ra lỗi 502 Bad Gateway với file thật).
   async function handleImportFile(file: File) {
     setUploading(true);
     setUploadError(null);
@@ -142,10 +146,24 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
       const res = await fetch("/api/shipping-status/import", { method: "POST", body: formData });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Nhập file thất bại");
-      setUploadResult(
-        `Đọc ${json.totalRows} dòng: tạo mới ${json.createdCount}, cập nhật ${json.updatedCount}` +
-          (json.errorCount > 0 ? `, lỗi ${json.errorCount} dòng` : "")
-      );
+      const batchId = json.batchId as string;
+
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        await new Promise((r) => setTimeout(r, 2000));
+        const statusRes = await fetch(`/api/shipping-status/import/${batchId}`);
+        const status = await statusRes.json();
+        if (!statusRes.ok) throw new Error(status.error ?? "Không kiểm tra được tiến độ nhập file");
+        if (!status.done) {
+          setUploadResult(`Đang xử lý... ${status.processedRows} dòng đã ghi`);
+          continue;
+        }
+        setUploadResult(
+          `Đọc ${status.totalRows} dòng: tạo mới ${status.createdCount}, cập nhật ${status.updatedCount}` +
+            (status.errorCount > 0 ? `, lỗi ${status.errorCount} dòng` : "")
+        );
+        break;
+      }
       queryClient.invalidateQueries({ queryKey: ["shipping-status-summary"] });
     } catch (e) {
       setUploadError(e instanceof Error ? e.message : "Có lỗi xảy ra");

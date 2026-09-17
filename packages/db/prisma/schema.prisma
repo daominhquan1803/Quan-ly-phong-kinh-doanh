@@ -773,6 +773,11 @@ model PoTrackingImportBatch {
   createdById  String
   createdBy    User     @relation(fields: [createdById], references: [id])
   createdAt    DateTime @default(now())
+  // File nhập qua app (25k+ dòng có thể mất vài phút) chạy NỀN sau khi trả response — null nghĩa
+  // là còn đang xử lý, có giá trị nghĩa là đã xong (thành công hay có lỗi từng dòng đều tính là
+  // xong). FE poll route status theo trường này để biết khi nào dừng loading (xem
+  // apps/web/src/app/api/shipping-status/import/[batchId]/route.ts).
+  completedAt DateTime?
 
   lines PoTrackingLine[]
 

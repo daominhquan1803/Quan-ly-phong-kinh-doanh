@@ -11,7 +11,7 @@
  */
 import { readFileSync } from "fs";
 import path from "path";
-import { prisma, parsePoTrackingExcel, importPoTrackingRows } from "@hoanggia/db";
+import { prisma, parsePoTrackingExcel, createPoTrackingImportBatch, importPoTrackingRows } from "@hoanggia/db";
 
 const args = process.argv.slice(2).filter((a) => !a.startsWith("--"));
 const excelPathArg = args[0];
@@ -34,7 +34,8 @@ async function main() {
   const rows = parsePoTrackingExcel(buffer);
   console.log(`Đọc được ${rows.length} dòng có Số PO từ file.`);
 
-  const result = await importPoTrackingRows(rows, { fileName: path.basename(EXCEL_PATH), createdById: runner.id });
+  const batch = await createPoTrackingImportBatch({ fileName: path.basename(EXCEL_PATH), createdById: runner.id });
+  const result = await importPoTrackingRows(rows, batch.id);
 
   console.log(`\n=== ĐÃ GHI DB ===`);
   console.log(`Tạo mới: ${result.createdCount}`);
