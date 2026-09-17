@@ -148,10 +148,15 @@ export async function syncPoTrackingFromOrders(orderCodes?: string[]): Promise<S
       // 3) Vẫn còn dòng chưa khớp — mã hàng đổi HẲN (không chỉ khác hậu tố phiên bản), thường do
       //    đã sửa lại mã hàng đúng trên file Excel PO tracking nhưng AMIS chưa cập nhật lại theo
       //    (còn ghi mã cũ) — đã xác nhận bằng dữ liệu thật (PO D05.26NT27A: Excel ghi "ST07800",
-      //    AMIS còn "AA07800", cùng 1 mặt hàng). Dò theo SL PO + Giá HĐ + Hạn giao GIỐNG HỆT
-      //    trong các dòng CÒN LẠI của CHÍNH PO này — chỉ ghép khi khớp DUY NHẤT 1 dòng, không
-      //    suy đoán khi khớp nhiều dòng hoặc không dòng nào (giữ đúng tinh thần "không suy đoán
-      //    ghép nhầm" của 2 bước trên).
+      //    AMIS còn "AA07800", cùng 1 mặt hàng, CÙNG itemName). Dò theo Tên hàng + SL PO + Giá HĐ
+      //    GIỐNG HỆT trong các dòng CÒN LẠI của CHÍNH PO này — BẮT BUỘC khớp cả Tên hàng, không
+      //    chỉ SL+Giá: đã kiểm chứng qua dữ liệu thật rằng riêng SL+Giá (+ Hạn giao, vốn CHUNG cho
+      //    mọi dòng hàng trong 1 PO nên không có tác dụng phân biệt) khớp trùng ngẫu nhiên giữa 2
+      //    mặt hàng THẬT SỰ KHÁC NHAU khá thường xuyên trong cùng 1 PO (933 nhóm nghi trùng khi
+      //    soát thử, nhiều nhóm rõ ràng là 2 mã hàng khác nhau chỉ tình cờ cùng SL/Giá) — nếu ghép
+      //    theo điều kiện lỏng đó sẽ merge nhầm 2 dòng hàng khác nhau, làm mất/trộn lẫn lịch sử
+      //    giao hàng. Chỉ ghép khi khớp DUY NHẤT 1 dòng, không suy đoán khi khớp nhiều dòng hoặc
+      //    không dòng nào (giữ đúng tinh thần "không suy đoán ghép nhầm" của 2 bước trên).
       const matchedByCodeChange = new Set<number>();
       for (const idx of targets.map((t, i) => (t == null ? i : -1)).filter((i) => i >= 0)) {
         const item = items[idx];
@@ -160,6 +165,8 @@ export async function syncPoTrackingFromOrders(orderCodes?: string[]): Promise<S
         const candidates = existingLines.filter(
           (l) =>
             !claimedExistingIds.has(l.id) &&
+            l.itemName === item.itemName &&
+            item.itemName != null &&
             Number(l.poQuantity) === qty &&
             Number(l.contractPrice) === price &&
             sameDay(l.requestedDeliveryDate, order.expectedDeliveryDate)
