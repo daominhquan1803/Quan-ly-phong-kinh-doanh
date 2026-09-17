@@ -32,6 +32,14 @@ export interface SyncPoTrackingFromOrdersResult {
 }
 
 
+/** So 2 ngày chỉ theo năm/tháng/ngày (bỏ giờ) — AMIS và Excel PO tracking có thể lưu cùng 1 ngày
+ * lệch vài giây/giờ do quy đổi múi giờ khác nhau, so đúng cả giờ sẽ trượt oan khi thật ra là
+ * cùng 1 ngày. */
+function sameDay(a: Date | null, b: Date | null): boolean {
+  if (!a || !b) return a === b;
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
 /** `orderCodes` (tuỳ chọn) giới hạn phạm vi chỉ 1 số PO cụ thể — dùng để đồng bộ lại đúng 1 PO
  * theo yêu cầu, hoặc để kiểm thử trên tập nhỏ trước khi chạy toàn bộ. Bỏ trống = chạy hết. */
 export async function syncPoTrackingFromOrders(orderCodes?: string[]): Promise<SyncPoTrackingFromOrdersResult> {
@@ -83,6 +91,9 @@ export async function syncPoTrackingFromOrders(orderCodes?: string[]): Promise<S
         baselineDeliveredQty: true,
         baselineClosed: true,
         manuallyClosed: true,
+        poQuantity: true,
+        contractPrice: true,
+        requestedDeliveryDate: true,
       },
       orderBy: { naturalKey: "asc" },
     });
@@ -134,6 +145,32 @@ export async function syncPoTrackingFromOrders(orderCodes?: string[]): Promise<S
         }
       }
 
+      // 3) Vẫn còn dòng chưa khớp — mã hàng đổi HẲN (không chỉ khác hậu tố phiên bản), thường do
+      //    đã sửa lại mã hàng đúng trên file Excel PO tracking nhưng AMIS chưa cập nhật lại theo
+      //    (còn ghi mã cũ) — đã xác nhận bằng dữ liệu thật (PO D05.26NT27A: Excel ghi "ST07800",
+      //    AMIS còn "AA07800", cùng 1 mặt hàng). Dò theo SL PO + Giá HĐ + Hạn giao GIỐNG HỆT
+      //    trong các dòng CÒN LẠI của CHÍNH PO này — chỉ ghép khi khớp DUY NHẤT 1 dòng, không
+      //    suy đoán khi khớp nhiều dòng hoặc không dòng nào (giữ đúng tinh thần "không suy đoán
+      //    ghép nhầm" của 2 bước trên).
+      const matchedByCodeChange = new Set<number>();
+      for (const idx of targets.map((t, i) => (t == null ? i : -1)).filter((i) => i >= 0)) {
+        const item = items[idx];
+        const qty = Number(item.quantity);
+        const price = Number(item.unitPrice);
+        const candidates = existingLines.filter(
+          (l) =>
+            !claimedExistingIds.has(l.id) &&
+            Number(l.poQuantity) === qty &&
+            Number(l.contractPrice) === price &&
+            sameDay(l.requestedDeliveryDate, order.expectedDeliveryDate)
+        );
+        if (candidates.length === 1) {
+          targets[idx] = candidates[0];
+          claimedExistingIds.add(candidates[0].id);
+          matchedByCodeChange.add(idx);
+        }
+      }
+
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
         const poQuantity = Number(item.quantity);
@@ -160,12 +197,17 @@ export async function syncPoTrackingFromOrders(orderCodes?: string[]): Promise<S
           slipAgg
         );
 
+        // Khớp ở bước 3 (SL+Giá+Hạn giao, mã hàng khác hẳn) nghĩa là mã hàng đã được SỬA ĐÚNG
+        // trên file Excel PO tracking nhưng AMIS còn ghi mã cũ — giữ nguyên mã hàng đang có
+        // (từ Excel), KHÔNG ghi đè lại bằng mã cũ của AMIS, để không xoá mất bản sửa của anh.
+        const itemCode = matchedByCodeChange.has(i) && existing ? existing.itemCode : item.itemCode;
+
         const data = {
           nvkdCodeRaw: null,
           salesEmployeeId: order.salesEmployeeId,
           customerCode: order.customerCode,
           poCode,
-          itemCode: item.itemCode,
+          itemCode,
           itemName: item.itemName,
           customerItemCode: item.poCustomerItemCode,
           poDate: order.orderDate,
