@@ -79,13 +79,19 @@ export class PoTrackingParseError extends Error {}
  * (nhập thủ công qua SSH) lẫn route upload trong app — 1 chỗ duy nhất hiểu cấu trúc file này.
  */
 export function parsePoTrackingExcel(buffer: Buffer): ParsedPoTrackingRow[] {
-  const wb = XLSX.read(buffer, { type: "buffer", cellDates: true });
-  const sheetName = KNOWN_SHEET_NAMES.find((n) => wb.Sheets[n]);
+  // File thật anh Quân gửi có thể có HÀNG NGHÌN sheet phụ (mỗi khách hàng 1 sheet riêng) —
+  // đã xác nhận qua dữ liệu thật (1 file gặp phải có 1825 sheet). KHÔNG parse toàn bộ workbook
+  // (XLSX.read mặc định dựng sẵn MỌI sheet dù chỉ dùng 1 cái) — sẽ tràn heap Node.js giữa chừng
+  // (đã tái hiện được lỗi này). Giới hạn ngay từ bước đọc, chỉ dựng đúng (các) sheet cần bằng
+  // option `sheets`, các sheet phụ khác không được parse.
+  const wbSheetsOnly = XLSX.read(buffer, { type: "buffer", bookSheets: true });
+  const sheetName = KNOWN_SHEET_NAMES.find((n) => wbSheetsOnly.SheetNames.includes(n));
   if (!sheetName) {
     throw new PoTrackingParseError(
       `Không tìm thấy sheet dữ liệu — cần 1 trong các tên: ${KNOWN_SHEET_NAMES.join(", ")}.`
     );
   }
+  const wb = XLSX.read(buffer, { type: "buffer", cellDates: true, sheets: [sheetName] });
   const ws = wb.Sheets[sheetName];
   // Range tường minh vì !ref của file này lỡ tràn tới cột XFA (do định dạng thừa), khiến
   // sheet_to_json không giới hạn range sẽ quét cực chậm/không cần thiết.
