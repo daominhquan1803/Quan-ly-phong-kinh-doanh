@@ -16,5 +16,5 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             cd ${{ secrets.VPS_DEPLOY_PATH }}
-            echo "===== repair-duplicate-po-lines DRY RUN ====="
-            docker compose exec -T worker npx tsx /repo/scripts/repair-duplicate-po-lines.ts --dry-run
+            echo "===== repair-duplicate-po-lines APPLY ====="
+            docker compose exec -T worker npx tsx /repo/scripts/repair-duplicate-po-lines.ts
