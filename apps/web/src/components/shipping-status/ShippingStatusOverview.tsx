@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn, formatCurrencyVND, formatDateVN } from "@/lib/utils";
 import { normalizeVN } from "@/lib/text-normalize";
 import { EmployeeFilterSelect } from "@/components/shared/EmployeeFilterSelect";
 import { FilterInput, SortableTh, toggleSort, type SortState } from "@/components/shared/SortableFilterableTable";
-import { AlertTriangle, CalendarDays, CheckCircle2, Clock, PackageCheck, TrendingUp, X } from "lucide-react";
+import { AlertTriangle, CalendarDays, CheckCircle2, Clock, PackageCheck, TrendingUp, UploadCloud, X } from "lucide-react";
 
 interface OrderRow {
   id: string;
@@ -89,6 +89,10 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
   const [filterEmployeeName, setFilterEmployeeName] = useState("");
   const [sort, setSort] = useState<SortState<SortField>>({ field: null, dir: "asc" });
   const [pendingCodes, setPendingCodes] = useState<Set<string>>(new Set());
+  const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -125,6 +129,28 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
         next.delete(poCode);
         return next;
       });
+    }
+  }
+
+  async function handleImportFile(file: File) {
+    setUploading(true);
+    setUploadError(null);
+    setUploadResult(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/shipping-status/import", { method: "POST", body: formData });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Nhập file thất bại");
+      setUploadResult(
+        `Đọc ${json.totalRows} dòng: tạo mới ${json.createdCount}, cập nhật ${json.updatedCount}` +
+          (json.errorCount > 0 ? `, lỗi ${json.errorCount} dòng` : "")
+      );
+      queryClient.invalidateQueries({ queryKey: ["shipping-status-summary"] });
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : "Có lỗi xảy ra");
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -189,8 +215,43 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
         <p className="text-sm text-muted-foreground">
           Dữ liệu độc lập với AMIS — theo dõi từ file Excel PO anh nhập, không tự động đồng bộ.
         </p>
-        <div className="flex items-center gap-2">{isAdmin && <EmployeeFilterSelect value={employeeId} onChange={setEmployeeId} />}</div>
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleImportFile(f);
+                  e.target.value = "";
+                }}
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="flex items-center gap-1.5 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-ink2 hover:bg-gray-50 disabled:opacity-60"
+              >
+                <UploadCloud className="h-4 w-4" />
+                {uploading ? "Đang nhập..." : "Nhập file PO tracking"}
+              </button>
+            </>
+          )}
+          {isAdmin && <EmployeeFilterSelect value={employeeId} onChange={setEmployeeId} />}
+        </div>
       </div>
+
+      {uploadResult && (
+        <div className="flex items-center justify-between gap-2 rounded-md bg-success-600/10 text-success-600 text-sm px-4 py-2.5">
+          <span>{uploadResult}</span>
+          <button onClick={() => setUploadResult(null)}>
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+      {uploadError && <div className="rounded-md bg-brandRed-50 text-brandRed-600 text-sm px-4 py-2.5">{uploadError}</div>}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="kpi-card kpi-card--navy">
