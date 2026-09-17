@@ -20,13 +20,15 @@ jobs:
             docker compose exec -T worker node -e "
             const {prisma}=require('/repo/packages/db/dist/index.js');
             (async () => {
+              const users = await prisma.user.findMany({ select: { id: true, amisEmployeeCode: true } });
+              const codeById = new Map(users.map(u => [u.id, u.amisEmployeeCode]));
               const events = await prisma.poDeliveryEvent.findMany({
                 where: { eventDate: { gte: new Date(2026,8,1), lt: new Date(2026,9,1) } },
-                select: { value: true, salesEmployeeId: true, sourceShipmentSlipId: true, salesEmployee: { select: { name: true, amisEmployeeCode: true } } },
+                select: { value: true, salesEmployeeId: true, sourceShipmentSlipId: true },
               });
               const byEmp = new Map();
               for (const e of events) {
-                const name = e.salesEmployee?.amisEmployeeCode || e.salesEmployeeId || 'null';
+                const name = (e.salesEmployeeId && codeById.get(e.salesEmployeeId)) || e.salesEmployeeId || 'null';
                 if (!byEmp.has(name)) byEmp.set(name, { baseline: 0, slip: 0, baselineCount: 0, slipCount: 0 });
                 const b = byEmp.get(name);
                 if (e.sourceShipmentSlipId) { b.slip += Number(e.value); b.slipCount++; }
