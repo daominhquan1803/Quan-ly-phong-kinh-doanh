@@ -20,9 +20,9 @@ jobs:
             docker compose exec -T worker node -e "
             const {prisma}=require('/repo/packages/db/dist/index.js');
             (async () => {
-              const batches = await prisma.poTrackingImportBatch.findMany({ orderBy: { createdAt: 'asc' }, select: { id: true, fileName: true, createdAt: true, completedAt: true, totalRows: true, createdCount: true, updatedCount: true } });
+              const batches = await prisma.poTrackingImportBatch.findMany({ orderBy: { createdAt: 'asc' }, select: { id: true, fileName: true, createdAt: true, completedAt: true, totalRows: true, createdCount: true, updatedCount: true, createdBy: { select: { name: true, email: true } } } });
               console.log('Import batches:', batches.length);
-              for (const b of batches) console.log(b.createdAt.toISOString(), b.fileName, 'rows=', b.totalRows, 'created=', b.createdCount, 'updated=', b.updatedCount);
+              for (const b of batches) console.log(b.createdAt.toISOString(), b.fileName, 'rows=', b.totalRows, 'created=', b.createdCount, 'updated=', b.updatedCount, 'by=', b.createdBy?.name, b.createdBy?.email);
               console.log('===== Shipment slips (Phieu di hang) date range in Sept 2026 =====');
               const slips = await prisma.shipmentSlip.findMany({ where: { slipDate: { gte: new Date(2026,8,1), lt: new Date(2026,9,1) } }, select: { id: true, slipDate: true, createdAt: true } , orderBy: { slipDate: 'asc' }});
               console.log('Sept slips:', slips.length);
