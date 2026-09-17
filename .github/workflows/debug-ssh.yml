@@ -1,0 +1,49 @@
+name: Debug SSH (temporary)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH debug
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd ${{ secrets.VPS_DEPLOY_PATH }}
+            echo "===== Sept 2026 events grouped by poCode+itemName, flag >1 distinct lineId ====="
+            docker compose exec -T worker node -e "
+            const {prisma}=require('/repo/packages/db/dist/index.js');
+            (async () => {
+              const events = await prisma.poDeliveryEvent.findMany({
+                where: { eventDate: { gte: new Date(2026,8,1), lt: new Date(2026,9,1) } },
+                select: { value: true, lineId: true, line: { select: { poCode: true, itemName: true, itemCode: true, nvkdCodeRaw: true } } },
+              });
+              const byKey = new Map();
+              for (const e of events) {
+                const key = e.line.poCode + '::' + e.line.itemName;
+                if (!byKey.has(key)) byKey.set(key, new Map());
+                const m = byKey.get(key);
+                m.set(e.lineId, (m.get(e.lineId) || { sum: 0, itemCode: e.line.itemCode, nvkd: e.line.nvkdCodeRaw }));
+                m.get(e.lineId).sum += Number(e.value);
+              }
+              let flaggedTotal = 0, flaggedGroups = 0;
+              const samples = [];
+              for (const [key, lineMap] of byKey) {
+                if (lineMap.size < 2) continue;
+                flaggedGroups++;
+                const vals = Array.from(lineMap.values()).map(v => v.sum).sort((a,b)=>a-b);
+                flaggedTotal += vals.slice(0, vals.length - 1).reduce((s,v)=>s+v, 0);
+                if (samples.length < 20) samples.push({ key, lines: Array.from(lineMap.entries()).map(([id,v]) => ({id, ...v})) });
+              }
+              console.log('Sept groups with >1 distinct line contributing (poCode+itemName):', flaggedGroups);
+              console.log('Estimated over-counted amount in Sept:', flaggedTotal);
+              console.log(JSON.stringify(samples, null, 2));
+              await prisma.\$disconnect();
+            })();
+            "
