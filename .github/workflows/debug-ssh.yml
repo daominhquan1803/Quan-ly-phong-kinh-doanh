@@ -16,22 +16,39 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             cd ${{ secrets.VPS_DEPLOY_PATH }}
-            echo "===== lines with >3 file-sourced delivery events (duplicate suspects) ====="
+            echo "===== duplicate PoTrackingLine pairs (same poCode+qty+price+date, diff itemCode) with delivered value on BOTH ====="
             docker compose exec -T worker node -e "
             const {prisma}=require('/repo/packages/db/dist/index.js');
             (async () => {
-              const groups = await prisma.poDeliveryEvent.groupBy({
-                by: ['lineId'],
-                where: { sourceShipmentSlipId: null },
-                _count: true,
-                _sum: { value: true },
-                having: { lineId: { _count: { gt: 3 } } },
-                orderBy: { _count: { lineId: 'desc' } },
-                take: 20,
+              const lines = await prisma.poTrackingLine.findMany({
+                select: { id: true, poCode: true, itemCode: true, poQuantity: true, contractPrice: true, requestedDeliveryDate: true, deliveredValue: true, salesEmployee: { select: { name: true } } },
               });
-              console.log('Duplicate-suspect lines:', JSON.stringify(groups, (k,v)=>typeof v==='bigint'?v.toString():v, 2));
-              const total = await prisma.poDeliveryEvent.aggregate({ where: { sourceShipmentSlipId: null }, _sum: { value: true }, _count: true });
-              console.log('TOTAL file-sourced events:', JSON.stringify(total, (k,v)=>typeof v==='bigint'?v.toString():v));
+              const byKey = new Map();
+              for (const l of lines) {
+                const dateKey = l.requestedDeliveryDate ? l.requestedDeliveryDate.toISOString().slice(0,10) : 'null';
+                const key = l.poCode + '::' + l.poQuantity + '::' + l.contractPrice + '::' + dateKey;
+                if (!byKey.has(key)) byKey.set(key, []);
+                byKey.get(key).push(l);
+              }
+              let dupGroups = 0, dupGroupsBothDelivered = 0, doubleCountedSum = 0;
+              const samples = [];
+              for (const [key, group] of byKey) {
+                if (group.length < 2) continue;
+                const distinctItemCodes = new Set(group.map(g => g.itemCode));
+                if (distinctItemCodes.size < 2) continue; // cung ma hang, khong phai truong hop AA/ST
+                dupGroups++;
+                const deliveredCount = group.filter(g => Number(g.deliveredValue) > 0).length;
+                if (deliveredCount >= 2) {
+                  dupGroupsBothDelivered++;
+                  const vals = group.map(g => Number(g.deliveredValue)).sort((a,b)=>a-b);
+                  doubleCountedSum += vals.slice(0, vals.length - 1).reduce((s,v)=>s+v, 0);
+                  if (samples.length < 15) samples.push({ key, lines: group.map(g => ({id:g.id, itemCode:g.itemCode, deliveredValue:g.deliveredValue, employee: g.salesEmployee?.name})) });
+                }
+              }
+              console.log('Total duplicate-code groups (diff itemCode, same qty/price/date):', dupGroups);
+              console.log('Groups where BOTH lines have deliveredValue>0 (real double count):', dupGroupsBothDelivered);
+              console.log('Estimated double-counted amount (sum of all-but-largest in each such group):', doubleCountedSum);
+              console.log('Samples:', JSON.stringify(samples, null, 2));
               await prisma.\$disconnect();
             })();
             "
