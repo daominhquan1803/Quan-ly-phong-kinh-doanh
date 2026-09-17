@@ -16,34 +16,38 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             cd ${{ secrets.VPS_DEPLOY_PATH }}
-            echo "===== Sept 2026 events grouped by poCode+itemName, flag >1 distinct lineId ====="
+            echo "===== Sept 2026 flagged groups: full line detail (qty/price/date) ====="
             docker compose exec -T worker node -e "
             const {prisma}=require('/repo/packages/db/dist/index.js');
             (async () => {
               const events = await prisma.poDeliveryEvent.findMany({
                 where: { eventDate: { gte: new Date(2026,8,1), lt: new Date(2026,9,1) } },
-                select: { value: true, lineId: true, line: { select: { poCode: true, itemName: true, itemCode: true, nvkdCodeRaw: true } } },
+                select: { value: true, lineId: true, line: { select: { poCode: true, itemName: true, itemCode: true, nvkdCodeRaw: true, poQuantity: true, contractPrice: true, requestedDeliveryDate: true, poDate: true, deliveredValue: true, naturalKey: true } } },
               });
               const byKey = new Map();
               for (const e of events) {
                 const key = e.line.poCode + '::' + e.line.itemName;
                 if (!byKey.has(key)) byKey.set(key, new Map());
                 const m = byKey.get(key);
-                m.set(e.lineId, (m.get(e.lineId) || { sum: 0, itemCode: e.line.itemCode, nvkd: e.line.nvkdCodeRaw }));
+                if (!m.has(e.lineId)) m.set(e.lineId, { sum: 0, line: e.line });
                 m.get(e.lineId).sum += Number(e.value);
               }
-              let flaggedTotal = 0, flaggedGroups = 0;
-              const samples = [];
+              const flagged = [];
               for (const [key, lineMap] of byKey) {
                 if (lineMap.size < 2) continue;
-                flaggedGroups++;
-                const vals = Array.from(lineMap.values()).map(v => v.sum).sort((a,b)=>a-b);
-                flaggedTotal += vals.slice(0, vals.length - 1).reduce((s,v)=>s+v, 0);
-                if (samples.length < 20) samples.push({ key, lines: Array.from(lineMap.entries()).map(([id,v]) => ({id, ...v})) });
+                flagged.push({
+                  key,
+                  lines: Array.from(lineMap.entries()).map(([id, v]) => ({
+                    id, naturalKey: v.line.naturalKey, sum: v.sum,
+                    itemCode: v.line.itemCode, nvkd: v.line.nvkdCodeRaw,
+                    qty: v.line.poQuantity, price: v.line.contractPrice,
+                    reqDate: v.line.requestedDeliveryDate, poDate: v.line.poDate,
+                    deliveredValue: v.line.deliveredValue,
+                  })),
+                });
               }
-              console.log('Sept groups with >1 distinct line contributing (poCode+itemName):', flaggedGroups);
-              console.log('Estimated over-counted amount in Sept:', flaggedTotal);
-              console.log(JSON.stringify(samples, null, 2));
+              console.log('Flagged groups:', flagged.length);
+              console.log(JSON.stringify(flagged, null, 2));
               await prisma.\$disconnect();
             })();
             "
