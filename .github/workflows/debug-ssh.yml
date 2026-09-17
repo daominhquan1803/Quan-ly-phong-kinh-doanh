@@ -21,12 +21,12 @@ jobs:
             const {prisma}=require('/repo/packages/db/dist/index.js');
             (async () => {
               const lines = await prisma.poTrackingLine.findMany({
-                select: { id: true, poCode: true, itemCode: true, poQuantity: true, contractPrice: true, requestedDeliveryDate: true, deliveredValue: true, salesEmployee: { select: { name: true } } },
+                select: { id: true, poCode: true, itemCode: true, itemName: true, poQuantity: true, contractPrice: true, requestedDeliveryDate: true, deliveredValue: true, salesEmployee: { select: { name: true } } },
               });
               const byKey = new Map();
               for (const l of lines) {
                 const dateKey = l.requestedDeliveryDate ? l.requestedDeliveryDate.toISOString().slice(0,10) : 'null';
-                const key = l.poCode + '::' + l.poQuantity + '::' + l.contractPrice + '::' + dateKey;
+                const key = l.poCode + '::' + l.itemName + '::' + l.poQuantity + '::' + l.contractPrice + '::' + dateKey;
                 if (!byKey.has(key)) byKey.set(key, []);
                 byKey.get(key).push(l);
               }
@@ -42,7 +42,7 @@ jobs:
                   dupGroupsBothDelivered++;
                   const vals = group.map(g => Number(g.deliveredValue)).sort((a,b)=>a-b);
                   doubleCountedSum += vals.slice(0, vals.length - 1).reduce((s,v)=>s+v, 0);
-                  if (samples.length < 15) samples.push({ key, lines: group.map(g => ({id:g.id, itemCode:g.itemCode, deliveredValue:g.deliveredValue, employee: g.salesEmployee?.name})) });
+                  if (samples.length < 15) samples.push({ key, lines: group.map(g => ({id:g.id, itemCode:g.itemCode, itemName:g.itemName, deliveredValue:g.deliveredValue, employee: g.salesEmployee?.name})) });
                 }
               }
               console.log('Total duplicate-code groups (diff itemCode, same qty/price/date):', dupGroups);
