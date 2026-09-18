@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma, resolveEmployeeIdByCode } from "@hoanggia/db";
 import { parseDebtNewInvoicesExcel } from "@/lib/debt-new-invoices-parser";
 import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
+import { computeDueDateFromTerm, PaymentTerm } from "@/lib/customer-payment-term";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,11 @@ export async function POST(req: NextRequest) {
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const { rows, errors, skippedReplaced } = parseDebtNewInvoicesExcel(buffer);
+
+    // Quy tắc thời hạn công nợ theo khách hàng (trang Khách hàng) — hoá đơn mới cuối tháng KHÔNG
+    // có cột hạn thanh toán trong file AMIS, tự tính thay vì để trống chờ nhập tay.
+    const customers = await prisma.customer.findMany({ where: { paymentTermType: { not: null } } });
+    const termByCode = new Map(customers.map((c) => [c.customerCode, c]));
 
     const employeeCache = new Map<string, string | null>();
     async function resolveEmployee(code: string | null): Promise<string | null> {
@@ -51,11 +57,18 @@ export async function POST(req: NextRequest) {
       const existing = await prisma.debtInvoice.findUnique({
         where: { customerCode_invoiceNumber: { customerCode: row.customerCode, invoiceNumber: row.invoiceNumber } },
       });
+      const term = termByCode.get(row.customerCode);
+      const dueDate = term ? computeDueDateFromTerm(row.invoiceDate, term as PaymentTerm) : null;
       if (existing) {
-        await prisma.debtInvoice.update({ where: { id: existing.id }, data });
+        // Chỉ set dueDate khi hoá đơn CHƯA có hạn thanh toán — tránh ghi đè hạn admin đã tự điền
+        // hoặc đã tự tính trước đó.
+        await prisma.debtInvoice.update({
+          where: { id: existing.id },
+          data: existing.dueDate === null && dueDate ? { ...data, dueDate } : data,
+        });
         updatedCount++;
       } else {
-        await prisma.debtInvoice.create({ data: { ...data, paidAmount: 0 } });
+        await prisma.debtInvoice.create({ data: { ...data, dueDate, paidAmount: 0 } });
         createdCount++;
       }
     }

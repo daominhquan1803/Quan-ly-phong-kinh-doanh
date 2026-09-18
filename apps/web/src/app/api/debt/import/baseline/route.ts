@@ -4,6 +4,7 @@ import { parseDebtBaselineExcel } from "@/lib/debt-baseline-parser";
 import { normalizeCustomerCode } from "@/lib/debt-customer-match";
 import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
 import { monthWeekMonday } from "@/lib/debt-status";
+import { computeDueDateFromTerm, PaymentTerm } from "@/lib/customer-payment-term";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,11 @@ export async function POST(req: NextRequest) {
       nameByCode.set(normalizeCustomerCode(o.customerCode), o.customerName);
     }
 
+    // Quy tắc thời hạn công nợ theo khách hàng (trang Khách hàng) — dùng khi file KHÔNG có sẵn
+    // cột "Hạn thanh toán" cho dòng đó (row.dueDate null), tự tính thay vì để trống chờ nhập tay.
+    const customers = await prisma.customer.findMany({ where: { paymentTermType: { not: null } } });
+    const termByCode = new Map(customers.map((c) => [c.customerCode, c]));
+
     const employeeCache = new Map<string, string | null>();
     async function resolveEmployee(nameRaw: string | null): Promise<string | null> {
       if (!nameRaw) return null;
@@ -59,12 +65,14 @@ export async function POST(req: NextRequest) {
       const stillOwed = row.paidAmount < row.originalAmount;
       const weekPlanDate =
         row.weekPlanIndex && stillOwed ? monthWeekMonday(currentYear, currentMonth, row.weekPlanIndex) : null;
+      const term = termByCode.get(row.customerCode);
+      const dueDate = row.dueDate ?? (term ? computeDueDateFromTerm(row.invoiceDate, term as PaymentTerm) : null);
       const data = {
         customerCode: row.customerCode,
         customerName,
         invoiceNumber: row.invoiceNumber,
         invoiceDate: row.invoiceDate,
-        dueDate: row.dueDate,
+        dueDate,
         originalAmount: row.originalAmount,
         salesEmployeeId,
         source: "BASELINE",

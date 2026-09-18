@@ -384,6 +384,29 @@ model ShipmentSlipItem {
 // paidAmount cộng dồn từ các allocation đã khớp; remainingAmount = originalAmount - paidAmount,
 // KHÔNG lưu cột riêng — tính tại chỗ khi đọc để không bao giờ lệch giữa 2 giá trị.
 
+// Danh sách khách hàng + thời hạn công nợ (payment term) — dùng để TỰ ĐỘNG tính dueDate của
+// DebtInvoice từ invoiceDate (Ngày chứng từ) thay vì phải NVKD/admin điền tay từng hoá đơn (xem
+// apps/web/src/lib/customer-payment-term.ts: computeDueDateFromTerm, và nơi dùng ở
+// api/debt/import/baseline, api/debt/import/new-invoices).
+model Customer {
+  id            String  @id @default(cuid())
+  customerCode  String  @unique
+  customerName  String
+  contactPerson String?
+
+  // paymentTermType null = chưa có quy tắc, dueDate vẫn nhập tay như cũ.
+  // "DAYS_FROM_INVOICE": dueDate = invoiceDate + paymentTermDays ngày.
+  // "END_OF_MONTH_OFFSET": dueDate = ngày cuối tháng thứ (tháng hoá đơn + paymentTermMonthOffset).
+  paymentTermType        String?
+  paymentTermDays        Int?
+  paymentTermMonthOffset Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("customers")
+}
+
 model DebtInvoice {
   id            String    @id @default(cuid())
   customerCode  String

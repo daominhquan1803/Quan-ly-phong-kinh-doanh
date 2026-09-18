@@ -25,7 +25,10 @@ export default auth((req) => {
   }
 
   if (
-    (pathname.startsWith("/admin") || pathname.startsWith("/quotes") || pathname.startsWith("/picking-slips")) &&
+    (pathname.startsWith("/admin") ||
+      pathname.startsWith("/quotes") ||
+      pathname.startsWith("/picking-slips") ||
+      pathname.startsWith("/customers")) &&
     !isAdmin
   ) {
     return NextResponse.redirect(new URL("/", req.nextUrl));
