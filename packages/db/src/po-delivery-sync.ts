@@ -148,9 +148,9 @@ export async function getSlipAggForAllLines(sinceEventDate?: Date): Promise<Map<
   return new Map(rows.map((r) => [r.lineId, { qty: Number(r._sum.quantity ?? 0), value: Number(r._sum.value ?? 0) }]));
 }
 
-async function getSlipAggForLine(lineId: string): Promise<SlipAgg> {
+async function getSlipAggForLine(lineId: string, sinceEventDate?: Date): Promise<SlipAgg> {
   const agg = await prisma.poDeliveryEvent.aggregate({
-    where: { lineId, sourceShipmentSlipId: { not: null } },
+    where: { lineId, sourceShipmentSlipId: { not: null }, ...(sinceEventDate ? { eventDate: { gte: sinceEventDate } } : {}) },
     _sum: { quantity: true, value: true },
   });
   return { qty: Number(agg._sum.quantity ?? 0), value: Number(agg._sum.value ?? 0) };
@@ -200,7 +200,14 @@ export function computeLineDeliveryFields(
 }
 
 /** Tính lại và ghi đè các trường tình trạng giao hàng của 1 dòng PO — dùng sau khi 1 Phiếu đi
- * hàng sinh/xoá đợt giao gắn với dòng đó, hoặc sau khi đổi cờ manuallyClosed. */
+ * hàng sinh/xoá đợt giao gắn với dòng đó, hoặc sau khi đổi cờ manuallyClosed.
+ *
+ * Chỉ cộng đợt giao Phiếu đi hàng có eventDate TỪ thời điểm nhập file PO tracking gần nhất của
+ * CHÍNH dòng này trở đi — nền (baselineDeliveredValue) đã bao gồm mọi đợt giao trước đó rồi (xem
+ * getSlipAggForAllLines). Thiếu điều kiện này khiến Phiếu đi hàng upload SAU nhưng ghi ngày giao
+ * (slipDate) TRƯỚC mốc nhập file vẫn bị cộng thêm — đúng bug tái diễn 18/09/2026 (lần sửa trước
+ * chỉ chặn ở đường nhập lại baseline, chưa chặn ở đường upload Phiếu đi hàng hàng ngày dùng hàm
+ * này) — xem scripts/repair-redundant-slip-events.ts. */
 export async function recomputeLineDeliveryFields(lineId: string): Promise<void> {
   const line = await prisma.poTrackingLine.findUnique({
     where: { id: lineId },
@@ -212,10 +219,11 @@ export async function recomputeLineDeliveryFields(lineId: string): Promise<void>
       baselineDeliveredQty: true,
       baselineClosed: true,
       manuallyClosed: true,
+      importBatch: { select: { createdAt: true } },
     },
   });
   if (!line) return;
-  const slipAgg = await getSlipAggForLine(lineId);
+  const slipAgg = await getSlipAggForLine(lineId, line.importBatch?.createdAt);
   const fields = computeLineDeliveryFields(
     {
       poValue: Number(line.poValue),
