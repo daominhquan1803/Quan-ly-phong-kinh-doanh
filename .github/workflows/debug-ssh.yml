@@ -2,11 +2,6 @@ name: Debug SSH (temporary)
 
 on:
   workflow_dispatch:
-    inputs:
-      dry_run:
-        description: "dry-run (true) hay xoa that (false)"
-        required: true
-        default: "true"
 
 jobs:
   debug:
@@ -21,4 +16,24 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             cd ${{ secrets.VPS_DEPLOY_PATH }}
-            docker compose exec -T worker npx tsx /repo/scripts/repair-redundant-slip-events.ts ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
+            echo "===== Sept 2026 doanh so theo nhan vien sau khi sua ====="
+            docker compose exec -T worker node -e "
+            const {prisma}=require('/repo/packages/db/dist/index.js');
+            (async () => {
+              const users = await prisma.user.findMany({ select: { id: true, amisEmployeeCode: true } });
+              const codeById = new Map(users.map(u => [u.id, u.amisEmployeeCode]));
+              const rows = await prisma.poDeliveryEvent.groupBy({
+                by: ['salesEmployeeId'],
+                where: { eventDate: { gte: new Date(2026,8,1), lt: new Date(2026,9,1) }, salesEmployeeId: { not: null } },
+                _sum: { value: true },
+              });
+              let total = 0;
+              for (const r of rows) {
+                const v = Number(r._sum.value ?? 0);
+                total += v;
+                console.log(codeById.get(r.salesEmployeeId) || r.salesEmployeeId, v.toLocaleString('vi-VN'));
+              }
+              console.log('TONG:', total.toLocaleString('vi-VN'));
+              await prisma.\$disconnect();
+            })();
+            "
