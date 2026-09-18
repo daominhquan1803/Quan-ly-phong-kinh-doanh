@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, KeyRound } from "lucide-react";
+import { Plus, KeyRound, Trash2 } from "lucide-react";
 
 interface UserRow {
   id: string;
@@ -94,6 +94,22 @@ export function UsersPanel() {
 
   async function handleToggleActive(userId: string, active: boolean) {
     await patchUser(userId, { active });
+  }
+
+  async function handleDeleteUser(userId: string, name: string) {
+    if (!confirm(`Xoá tài khoản "${name}"? Không thể hoàn tác.`)) return;
+    setRowBusy(userId);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Xoá thất bại");
+      await queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Có lỗi xảy ra");
+    } finally {
+      setRowBusy(null);
+    }
   }
 
   async function handleToggleIncludeInStats(userId: string, includeInSalesStats: boolean) {
@@ -252,6 +268,7 @@ export function UsersPanel() {
                 <th className="text-left font-medium px-4 py-2.5">Số điện thoại</th>
                 <th className="text-left font-medium px-4 py-2.5">Thống kê doanh số</th>
                 <th className="text-left font-medium px-4 py-2.5">Mật khẩu</th>
+                <th className="text-left font-medium px-4 py-2.5"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -408,6 +425,15 @@ export function UsersPanel() {
                         <KeyRound className="h-3.5 w-3.5" /> Đặt lại
                       </button>
                     )}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <button
+                      onClick={() => handleDeleteUser(u.id, u.name)}
+                      disabled={rowBusy === u.id}
+                      className="flex items-center gap-1 text-xs font-medium text-brandRed-600 hover:underline disabled:opacity-40"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> Xoá
+                    </button>
                   </td>
                 </tr>
               ))}

@@ -115,3 +115,50 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: "Không cập nhật được nhân viên" }, { status: 500 });
   }
 }
+
+export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const session = await requireAdmin();
+
+    if (session.user.id === params.id) {
+      return NextResponse.json({ error: "Không thể tự xoá tài khoản đang đăng nhập" }, { status: 400 });
+    }
+
+    const target = await prisma.user.findUnique({ where: { id: params.id } });
+    if (!target) return NextResponse.json({ error: "Không tìm thấy nhân viên" }, { status: 404 });
+
+    if (target.role === "ADMIN" && target.active) {
+      const otherActiveAdmins = await prisma.user.count({
+        where: { role: "ADMIN", active: true, id: { not: params.id } },
+      });
+      if (otherActiveAdmins === 0) {
+        return NextResponse.json(
+          { error: "Không thể xoá — hệ thống cần còn ít nhất 1 quản trị viên đang hoạt động" },
+          { status: 400 }
+        );
+      }
+    }
+
+    try {
+      await prisma.user.delete({ where: { id: params.id } });
+    } catch (e) {
+      // Lỗi khoá ngoại (P2003) — tài khoản còn dữ liệu liên quan (đơn hàng, công nợ, khách hàng
+      // phụ trách, phiếu soạn hàng...) nên KHÔNG xoá được, tránh mất/mồ côi dữ liệu kinh doanh
+      // thật. Dùng nút "Khoá" thay vì xoá cho tài khoản đã có lịch sử hoạt động.
+      if (e && typeof e === "object" && "code" in e && e.code === "P2003") {
+        return NextResponse.json(
+          { error: "Không xoá được — tài khoản này còn dữ liệu liên quan (đơn hàng, công nợ, khách hàng phụ trách...). Dùng nút \"Khoá\" thay vì xoá." },
+          { status: 409 }
+        );
+      }
+      throw e;
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    if (err instanceof UnauthorizedError) return NextResponse.json({ error: err.message }, { status: 401 });
+    if (err instanceof ForbiddenError) return NextResponse.json({ error: err.message }, { status: 403 });
+    console.error("admin/users/[id] DELETE error", err);
+    return NextResponse.json({ error: "Không xoá được nhân viên" }, { status: 500 });
+  }
+}
