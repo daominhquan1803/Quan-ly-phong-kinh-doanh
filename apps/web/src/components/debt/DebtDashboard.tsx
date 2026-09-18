@@ -70,6 +70,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<DebtStatus | "">("");
   const [employeeId, setEmployeeId] = useState("");
+  const [nvkdFilter, setNvkdFilter] = useState("");
   const [filterCustomer, setFilterCustomer] = useState("");
   const [sort, setSort] = useState<SortState<SortField>>({ field: "dueDate", dir: "asc" });
   const [page, setPage] = useState(1);
@@ -192,6 +193,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
   const visibleRows = useMemo(() => {
     let list = rowsWithStatus;
     if (status) list = list.filter((r) => r.debtStatus === status);
+    if (nvkdFilter) list = list.filter((r) => r.salesEmployee?.id === nvkdFilter);
     if (filterCustomer.trim()) {
       const q = normalizeVN(filterCustomer);
       list = list.filter((r) => normalizeVN(r.customerName).includes(q) || normalizeVN(r.customerCode).includes(q));
@@ -215,7 +217,15 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
       });
     }
     return list;
-  }, [rowsWithStatus, status, filterCustomer, sort]);
+  }, [rowsWithStatus, status, nvkdFilter, filterCustomer, sort]);
+
+  const nvkdOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of rowsWithStatus) {
+      if (r.salesEmployee) map.set(r.salesEmployee.id, r.salesEmployee.name);
+    }
+    return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1], "vi"));
+  }, [rowsWithStatus]);
 
   const totalPages = Math.max(1, Math.ceil(visibleRows.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -223,7 +233,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
 
   useEffect(() => {
     setPage(1);
-  }, [status, employeeId, filterCustomer, sort]);
+  }, [status, nvkdFilter, employeeId, filterCustomer, sort]);
 
   const expandedWeekInvoices = useMemo(() => {
     if (expandedWeek === null || !summary) return [];
@@ -450,6 +460,20 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
             </option>
           ))}
         </select>
+        {isAdmin && nvkdOptions.length > 0 && (
+          <select
+            value={nvkdFilter}
+            onChange={(e) => setNvkdFilter(e.target.value)}
+            className="text-sm bg-card text-ink rounded-md border border-gray-200 py-2 px-2 focus:outline-none focus:ring-2 focus:ring-amber-500"
+          >
+            <option value="">Tất cả NVKD</option>
+            {nvkdOptions.map(([id, name]) => (
+              <option key={id} value={id}>
+                {name}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       <div className="rounded-lg border border-gray-200 bg-card overflow-x-auto">
