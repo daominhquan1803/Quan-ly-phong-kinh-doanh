@@ -16,30 +16,19 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             cd ${{ secrets.VPS_DEPLOY_PATH }}
-            echo "===== Env config check (worker container) ====="
-            docker compose exec -T worker node -e "
-            console.log('VAPID_PUBLIC_KEY set:', !!process.env.VAPID_PUBLIC_KEY);
-            console.log('VAPID_PRIVATE_KEY set:', !!process.env.VAPID_PRIVATE_KEY);
-            console.log('INTERNAL_SYNC_TOKEN set:', !!process.env.INTERNAL_SYNC_TOKEN);
-            console.log('SMTP_HOST set:', !!process.env.SMTP_HOST);
-            console.log('SMTP_USER set:', !!process.env.SMTP_USER);
-            console.log('NOTIFY_CRON:', process.env.NOTIFY_CRON || '(default 0 8 * * *)');
-            "
-            echo "===== PushSubscription count + Notification recent rows ====="
+            echo "===== Users: notifyEmail + push subscription status ====="
             docker compose exec -T worker node -e "
             const {prisma}=require('/repo/packages/db/dist/index.js');
             (async () => {
-              const subCount = await prisma.pushSubscription.count();
-              console.log('PushSubscription rows:', subCount);
-              const recent = await prisma.notification.findMany({
-                where: { type: { in: ['WEEK_PLAN_REMINDER','KPI_REMINDER'] } },
-                orderBy: { createdAt: 'desc' },
-                take: 10,
-                select: { userId: true, type: true, title: true, createdAt: true, emailSentAt: true, pushSentAt: true },
+              const users = await prisma.user.findMany({
+                where: { role: 'SALES', active: true },
+                select: { id: true, name: true, notifyEmail: true, email: true },
               });
-              console.log('Recent reminder notifications:', JSON.stringify(recent, null, 2));
+              const subs = await prisma.pushSubscription.findMany({ select: { userId: true } });
+              const subUserIds = new Set(subs.map(s => s.userId));
+              for (const u of users) {
+                console.log(u.name, '| notifyEmail:', u.notifyEmail || '(trong)', '| co push:', subUserIds.has(u.id));
+              }
               await prisma.\$disconnect();
             })();
             "
-            echo "===== Worker recent logs (nhac viec) ====="
-            docker compose logs worker --since 48h 2>&1 | grep -i "nhac\|nhắc\|reminder\|VAPID\|SMTP" | tail -40 || true
