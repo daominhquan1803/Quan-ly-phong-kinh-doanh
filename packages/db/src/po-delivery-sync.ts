@@ -131,11 +131,18 @@ export interface SlipAgg {
 
 /** Tổng SL/giá trị các đợt giao do Phiếu đi hàng sinh ra (sourceShipmentSlipId khác null) của
  * TỪNG dòng PO — 1 query duy nhất, dùng cho việc nhập hàng loạt file PO tracking (23K+ dòng)
- * để tránh N+1 query khi tính lại từng dòng. */
-export async function getSlipAggForAllLines(): Promise<Map<string, SlipAgg>> {
+ * để tránh N+1 query khi tính lại từng dòng.
+ *
+ * `sinceEventDate` (tuỳ chọn): chỉ tính các đợt giao có eventDate >= mốc này. Dùng khi NHẬP LẠI
+ * file PO tracking (đè "nền") — nền mới coi như đã bao gồm mọi đợt giao Phiếu đi hàng TRƯỚC thời
+ * điểm nhập lại (vì file Excel PO tracking là dữ liệu gốc/master, luôn được cập nhật đầy đủ hơn
+ * Phiếu đi hàng theo xác nhận của anh Quân) — không cộng lại các đợt đó lần nữa, tránh đếm trùng
+ * doanh số (bug thật đã xảy ra 17/09/2026, xem scripts/repair-redundant-slip-events.ts).
+ */
+export async function getSlipAggForAllLines(sinceEventDate?: Date): Promise<Map<string, SlipAgg>> {
   const rows = await prisma.poDeliveryEvent.groupBy({
     by: ["lineId"],
-    where: { sourceShipmentSlipId: { not: null } },
+    where: { sourceShipmentSlipId: { not: null }, ...(sinceEventDate ? { eventDate: { gte: sinceEventDate } } : {}) },
     _sum: { quantity: true, value: true },
   });
   return new Map(rows.map((r) => [r.lineId, { qty: Number(r._sum.quantity ?? 0), value: Number(r._sum.value ?? 0) }]));

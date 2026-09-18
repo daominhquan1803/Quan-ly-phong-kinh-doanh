@@ -181,7 +181,12 @@ export async function importPoTrackingRows(rows: ParsedPoTrackingRow[], batchId:
   const existingByKey = new Map(existing.map((e) => [e.naturalKey, e.id]));
   const manuallyClosedById = new Map(existing.map((e) => [e.id, e.manuallyClosed]));
 
-  const slipAggByLine = await getSlipAggForAllLines();
+  // Mốc thời điểm nhập file NÀY — nền vừa ghi coi như đã bao gồm mọi đợt giao Phiếu đi hàng TRƯỚC
+  // mốc này (xem getSlipAggForAllLines), nên chỉ cộng slip TỪ mốc này trở đi, và xoá luôn các đợt
+  // slip cũ hơn (đã "hấp thụ" vào nền) để không bị đếm lại lần sau — tránh lặp lại bug đếm trùng
+  // doanh số đã xảy ra 17/09/2026 khi nhập lại baseline đè lên dữ liệu Phiếu đi hàng đã có sẵn.
+  const batch = await prisma.poTrackingImportBatch.findUniqueOrThrow({ where: { id: batchId }, select: { createdAt: true } });
+  const slipAggByLine = await getSlipAggForAllLines(batch.createdAt);
 
   let created = 0;
   let updated = 0;
@@ -254,8 +259,13 @@ export async function importPoTrackingRows(rows: ParsedPoTrackingRow[], batchId:
 
       // Mỗi lần import là 1 bản snapshot đầy đủ CỦA RIÊNG FILE NÀY cho dòng PO này — xoá hết
       // event do CHÍNH FILE PO TRACKING sinh ra (sourceShipmentSlipId = null) rồi ghi lại theo dữ
-      // liệu hiện tại — KHÔNG đụng đợt giao do Phiếu đi hàng sinh ra.
+      // liệu hiện tại — KHÔNG đụng đợt giao do Phiếu đi hàng sinh ra CHƯA bị nền mới hấp thụ.
       await prisma.poDeliveryEvent.deleteMany({ where: { lineId: line.id, sourceShipmentSlipId: null } });
+      // Xoá đợt giao Phiếu đi hàng ĐÃ bị nền mới hấp thụ (eventDate trước mốc nhập file này) — xem
+      // giải thích ở batch.createdAt phía trên.
+      await prisma.poDeliveryEvent.deleteMany({
+        where: { lineId: line.id, sourceShipmentSlipId: { not: null }, eventDate: { lt: batch.createdAt } },
+      });
       const slots: [ParsedPoTrackingRow["delivery1"], number][] = [
         [r.delivery1, 1],
         [r.delivery2, 2],
