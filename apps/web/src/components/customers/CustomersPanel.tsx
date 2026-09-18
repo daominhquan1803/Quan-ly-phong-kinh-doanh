@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, RefreshCw } from "lucide-react";
+import { Plus, RefreshCw, UploadCloud } from "lucide-react";
 import { PAYMENT_TERM_TYPE_LABEL, PaymentTermType, describePaymentTerm } from "@/lib/customer-payment-term";
 
 interface CustomerRow {
@@ -45,6 +45,9 @@ export function CustomersPanel() {
   const [edits, setEdits] = useState<Record<string, RowEdit>>({});
   const [busyRow, setBusyRow] = useState<string | null>(null);
   const [recomputeMsg, setRecomputeMsg] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [importMsg, setImportMsg] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data } = useQuery({
     queryKey: ["customers"],
@@ -63,6 +66,32 @@ export function CustomersPanel() {
       paymentTermDays: paymentTermType === "DAYS_FROM_INVOICE" ? numValue : null,
       paymentTermMonthOffset: paymentTermType === "END_OF_MONTH_OFFSET" ? numValue : null,
     };
+  }
+
+  async function handleImportFile(file: File) {
+    setUploading(true);
+    setError(null);
+    setImportMsg(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/customers/import", { method: "POST", body: formData });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Import thất bại");
+      const parts = [
+        `Đã xử lý ${json.totalRows} khách hàng (gộp ${json.mergedFromDuplicates} dòng trùng mã)`,
+        `tạo mới ${json.createdCount}, cập nhật ${json.updatedCount}`,
+      ];
+      if (json.skippedNoName > 0) parts.push(`bỏ qua ${json.skippedNoName} khách không tìm được tên (${json.noNameSamples.join(", ")})`);
+      if (json.unrecognizedTermCount > 0)
+        parts.push(`${json.unrecognizedTermCount} khách có thời hạn công nợ không nhận diện được (${json.unrecognizedTermSamples.join(", ")})`);
+      setImportMsg(parts.join("; ") + ".");
+      await queryClient.invalidateQueries({ queryKey: ["customers"] });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Có lỗi xảy ra");
+    } finally {
+      setUploading(false);
+    }
   }
 
   async function handleCreate() {
@@ -158,15 +187,37 @@ export function CustomersPanel() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="font-medium text-ink">Danh sách khách hàng</h2>
-        <button
-          onClick={() => setShowForm((v) => !v)}
-          className="flex items-center gap-1.5 rounded-md bg-brandRed-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brandRed-700"
-        >
-          <Plus className="h-4 w-4" /> Thêm khách hàng
-        </button>
+        <div className="flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleImportFile(f);
+              e.target.value = "";
+            }}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="flex items-center gap-1.5 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-ink2 hover:bg-gray-50 disabled:opacity-60"
+          >
+            <UploadCloud className="h-4 w-4" />
+            {uploading ? "Đang nhập..." : "Nhập danh sách khách hàng"}
+          </button>
+          <button
+            onClick={() => setShowForm((v) => !v)}
+            className="flex items-center gap-1.5 rounded-md bg-brandRed-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brandRed-700"
+          >
+            <Plus className="h-4 w-4" /> Thêm khách hàng
+          </button>
+        </div>
       </div>
 
       {error && <p className="text-sm text-brandRed-600">{error}</p>}
+      {importMsg && <p className="text-sm text-success-600">{importMsg}</p>}
       {recomputeMsg && <p className="text-sm text-success-600">{recomputeMsg}</p>}
 
       {showForm && (
