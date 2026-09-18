@@ -8,7 +8,10 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     await requireAdmin();
-    const customers = await prisma.customer.findMany({ orderBy: { customerName: "asc" } });
+    const customers = await prisma.customer.findMany({
+      orderBy: { customerName: "asc" },
+      include: { salesEmployee: { select: { id: true, name: true } } },
+    });
     return NextResponse.json({ customers });
   } catch (err) {
     if (err instanceof UnauthorizedError) return NextResponse.json({ error: err.message }, { status: 401 });
@@ -22,6 +25,7 @@ const createSchema = z.object({
   customerCode: z.string().trim().min(1, "Thiếu mã khách hàng"),
   customerName: z.string().trim().min(1, "Thiếu tên khách hàng"),
   contactPerson: z.string().trim().max(255).optional().nullable(),
+  salesEmployeeId: z.string().trim().min(1).optional().nullable(),
   paymentTermType: z.enum(["DAYS_FROM_INVOICE", "END_OF_MONTH_OFFSET"]).optional().nullable(),
   paymentTermDays: z.number().int().min(0).optional().nullable(),
   paymentTermMonthOffset: z.number().int().min(0).optional().nullable(),
@@ -35,7 +39,7 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Dữ liệu không hợp lệ" }, { status: 400 });
     }
-    const { customerCode, customerName, contactPerson, paymentTermType, paymentTermDays, paymentTermMonthOffset } = parsed.data;
+    const { customerCode, customerName, contactPerson, salesEmployeeId, paymentTermType, paymentTermDays, paymentTermMonthOffset } = parsed.data;
 
     const existing = await prisma.customer.findUnique({ where: { customerCode } });
     if (existing) return NextResponse.json({ error: "Mã khách hàng đã tồn tại" }, { status: 409 });
@@ -45,6 +49,7 @@ export async function POST(req: NextRequest) {
         customerCode,
         customerName,
         contactPerson: contactPerson || null,
+        salesEmployeeId: salesEmployeeId || null,
         paymentTermType: paymentTermType || null,
         paymentTermDays: paymentTermType === "DAYS_FROM_INVOICE" ? paymentTermDays ?? null : null,
         paymentTermMonthOffset: paymentTermType === "END_OF_MONTH_OFFSET" ? paymentTermMonthOffset ?? null : null,

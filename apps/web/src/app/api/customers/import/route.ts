@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@hoanggia/db";
+import { prisma, resolveEmployeeIdByName } from "@hoanggia/db";
 import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
 import { parseCustomerListExcel } from "@/lib/customer-import-parser";
 import { normalizeCustomerCode } from "@/lib/debt-customer-match";
@@ -57,6 +57,13 @@ export async function POST(req: NextRequest) {
     const unrecognizedTerms: string[] = [];
     const noNameFound: string[] = [];
 
+    const employeeCache = new Map<string, string | null>();
+    async function resolveEmployee(nameRaw: string | null): Promise<string | null> {
+      if (!nameRaw) return null;
+      if (!employeeCache.has(nameRaw)) employeeCache.set(nameRaw, await resolveEmployeeIdByName(nameRaw));
+      return employeeCache.get(nameRaw) ?? null;
+    }
+
     for (const row of rows) {
       const normCode = normalizeCustomerCode(row.customerCode);
       const fromOrder = orderByNormCode.get(normCode);
@@ -67,9 +74,11 @@ export async function POST(req: NextRequest) {
       }
       if (row.unrecognizedTermRaw) unrecognizedTerms.push(`${row.customerCode}: "${row.unrecognizedTermRaw}"`);
 
+      const salesEmployeeId = await resolveEmployee(row.employeeNameRaw);
       const existing = existingByCode.get(row.customerCode);
       const data = {
         customerName,
+        salesEmployeeId,
         paymentTermType: row.paymentTermType,
         paymentTermDays: row.paymentTermDays,
         paymentTermMonthOffset: row.paymentTermMonthOffset,

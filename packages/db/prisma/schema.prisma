@@ -135,6 +135,7 @@ model User {
   pushSubscriptions      PushSubscription[]
   debtInvoices           DebtInvoice[]      @relation("DebtInvoiceSalesEmployee")
   debtImportBatches      DebtImportBatch[]  @relation("DebtImportBatchCreatedBy")
+  customers              Customer[]         @relation("CustomerSalesEmployee")
 
   @@map("users")
 }
@@ -393,6 +394,12 @@ model Customer {
   customerCode  String  @unique
   customerName  String
   contactPerson String?
+
+  // NVKD phụ trách khách hàng này (khác với DebtInvoice.salesEmployeeId — đó là NVKD của TỪNG
+  // hoá đơn, có thể đổi tay; đây là NVKD phụ trách khách hàng nói chung, theo file "Danh sách
+  // khách hàng" gốc).
+  salesEmployeeId String?
+  salesEmployee   User?   @relation("CustomerSalesEmployee", fields: [salesEmployeeId], references: [id])
 
   // paymentTermType null = chưa có quy tắc, dueDate vẫn nhập tay như cũ.
   // "DAYS_FROM_INVOICE": dueDate = invoiceDate + paymentTermDays ngày.

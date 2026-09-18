@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 const updateSchema = z.object({
   customerName: z.string().trim().min(1).optional(),
   contactPerson: z.string().trim().max(255).optional().nullable(),
+  salesEmployeeId: z.string().trim().min(1).optional().nullable(),
   paymentTermType: z.enum(["DAYS_FROM_INVOICE", "END_OF_MONTH_OFFSET"]).optional().nullable(),
   paymentTermDays: z.number().int().min(0).optional().nullable(),
   paymentTermMonthOffset: z.number().int().min(0).optional().nullable(),
@@ -33,6 +34,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const data: Record<string, unknown> = {};
     if (fields.customerName !== undefined) data.customerName = fields.customerName;
     if (fields.contactPerson !== undefined) data.contactPerson = fields.contactPerson || null;
+    if (fields.salesEmployeeId !== undefined) data.salesEmployeeId = fields.salesEmployeeId || null;
     if (fields.paymentTermType !== undefined) {
       data.paymentTermType = fields.paymentTermType || null;
       data.paymentTermDays = fields.paymentTermType === "DAYS_FROM_INVOICE" ? fields.paymentTermDays ?? null : null;

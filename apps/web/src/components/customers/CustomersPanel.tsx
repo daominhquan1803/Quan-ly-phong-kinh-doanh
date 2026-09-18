@@ -1,23 +1,32 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, RefreshCw, UploadCloud } from "lucide-react";
+import { Plus, RefreshCw, Search, UploadCloud } from "lucide-react";
 import { PAYMENT_TERM_TYPE_LABEL, PaymentTermType, describePaymentTerm } from "@/lib/customer-payment-term";
+import { normalizeVN } from "@/lib/text-normalize";
 
 interface CustomerRow {
   id: string;
   customerCode: string;
   customerName: string;
   contactPerson: string | null;
+  salesEmployee: { id: string; name: string } | null;
   paymentTermType: PaymentTermType | null;
   paymentTermDays: number | null;
   paymentTermMonthOffset: number | null;
+}
+interface EmployeeOption {
+  id: string;
+  name: string;
+  active: boolean;
+  amisEmployeeCode: string | null;
 }
 
 interface RowEdit {
   customerName: string;
   contactPerson: string;
+  salesEmployeeId: string;
   paymentTermType: PaymentTermType | "";
   paymentTermValue: string;
 }
@@ -26,6 +35,7 @@ function toRowEdit(c: CustomerRow): RowEdit {
   return {
     customerName: c.customerName,
     contactPerson: c.contactPerson ?? "",
+    salesEmployeeId: c.salesEmployee?.id ?? "",
     paymentTermType: c.paymentTermType ?? "",
     paymentTermValue: String(c.paymentTermType === "DAYS_FROM_INVOICE" ? c.paymentTermDays ?? "" : c.paymentTermMonthOffset ?? ""),
   };
@@ -38,6 +48,7 @@ export function CustomersPanel() {
     customerCode: "",
     customerName: "",
     contactPerson: "",
+    salesEmployeeId: "",
     paymentTermType: "" as PaymentTermType | "",
     paymentTermValue: "",
   });
@@ -47,6 +58,7 @@ export function CustomersPanel() {
   const [recomputeMsg, setRecomputeMsg] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data } = useQuery({
@@ -57,6 +69,24 @@ export function CustomersPanel() {
       return res.json() as Promise<{ customers: CustomerRow[] }>;
     },
   });
+
+  // Cùng queryKey với DebtDashboard — dùng chung cache react-query cho danh sách nhân viên gán được.
+  const { data: usersData } = useQuery({
+    queryKey: ["admin-users-filter"],
+    queryFn: async () => {
+      const res = await fetch("/api/admin/users");
+      if (!res.ok) throw new Error("Không tải được danh sách nhân viên");
+      return res.json() as Promise<{ users: EmployeeOption[] }>;
+    },
+  });
+  const assignableEmployees = (usersData?.users ?? []).filter((u) => u.active && u.amisEmployeeCode);
+
+  const filteredCustomers = useMemo(() => {
+    const list = data?.customers ?? [];
+    if (!search.trim()) return list;
+    const q = normalizeVN(search);
+    return list.filter((c) => normalizeVN(c.customerName).includes(q) || normalizeVN(c.customerCode).includes(q));
+  }, [data, search]);
 
   function termPatch(edit: RowEdit) {
     const paymentTermType = edit.paymentTermType || null;
@@ -104,12 +134,13 @@ export function CustomersPanel() {
           customerCode: form.customerCode,
           customerName: form.customerName,
           contactPerson: form.contactPerson || null,
-          ...termPatch({ ...form, contactPerson: form.contactPerson }),
+          salesEmployeeId: form.salesEmployeeId || null,
+          ...termPatch(form),
         }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Tạo thất bại");
-      setForm({ customerCode: "", customerName: "", contactPerson: "", paymentTermType: "", paymentTermValue: "" });
+      setForm({ customerCode: "", customerName: "", contactPerson: "", salesEmployeeId: "", paymentTermType: "", paymentTermValue: "" });
       setShowForm(false);
       await queryClient.invalidateQueries({ queryKey: ["customers"] });
     } catch (e) {
@@ -129,6 +160,7 @@ export function CustomersPanel() {
         body: JSON.stringify({
           customerName: edit.customerName,
           contactPerson: edit.contactPerson || null,
+          salesEmployeeId: edit.salesEmployeeId || null,
           ...termPatch(edit),
         }),
       });
@@ -220,6 +252,16 @@ export function CustomersPanel() {
       {importMsg && <p className="text-sm text-success-600">{importMsg}</p>}
       {recomputeMsg && <p className="text-sm text-success-600">{recomputeMsg}</p>}
 
+      <div className="relative w-72">
+        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Tìm theo tên hoặc mã khách hàng..."
+          className="input w-full !pl-8"
+        />
+      </div>
+
       {showForm && (
         <div className="rounded-lg border border-gray-200 bg-card p-4 space-y-3">
           <div className="grid grid-cols-2 gap-3">
@@ -241,6 +283,18 @@ export function CustomersPanel() {
               onChange={(e) => setForm((f) => ({ ...f, contactPerson: e.target.value }))}
               className="input"
             />
+            <select
+              value={form.salesEmployeeId}
+              onChange={(e) => setForm((f) => ({ ...f, salesEmployeeId: e.target.value }))}
+              className="input"
+            >
+              <option value="">— Chưa gán NVKD —</option>
+              {assignableEmployees.map((emp) => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.name}
+                </option>
+              ))}
+            </select>
             <div className="flex gap-2">
               <select
                 value={form.paymentTermType}
@@ -279,12 +333,13 @@ export function CustomersPanel() {
               <th className="text-left font-medium px-4 py-2.5">Mã khách hàng</th>
               <th className="text-left font-medium px-4 py-2.5">Tên khách hàng</th>
               <th className="text-left font-medium px-4 py-2.5">Người liên hệ</th>
+              <th className="text-left font-medium px-4 py-2.5">NVKD phụ trách</th>
               <th className="text-left font-medium px-4 py-2.5">Thời hạn công nợ</th>
               <th className="text-left font-medium px-4 py-2.5"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {data?.customers.map((c) => {
+            {filteredCustomers.map((c) => {
               const edit = edits[c.id] ?? toRowEdit(c);
               const isEditing = !!edits[c.id];
               function setEdit(patch: Partial<RowEdit>) {
@@ -306,6 +361,20 @@ export function CustomersPanel() {
                       onChange={(e) => setEdit({ contactPerson: e.target.value })}
                       className="w-36 text-sm bg-card text-ink rounded-md border border-gray-200 py-1 px-2"
                     />
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <select
+                      value={edit.salesEmployeeId}
+                      onChange={(e) => setEdit({ salesEmployeeId: e.target.value })}
+                      className="text-sm bg-card text-ink rounded-md border border-gray-200 py-1 px-2 w-32"
+                    >
+                      <option value="">— Chưa gán —</option>
+                      {assignableEmployees.map((emp) => (
+                        <option key={emp.id} value={emp.id}>
+                          {emp.name}
+                        </option>
+                      ))}
+                    </select>
                   </td>
                   <td className="px-4 py-2.5">
                     <div className="flex items-center gap-2">
@@ -369,10 +438,10 @@ export function CustomersPanel() {
                 </tr>
               );
             })}
-            {data?.customers.length === 0 && (
+            {filteredCustomers.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">
-                  Chưa có khách hàng nào.
+                <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
+                  {search.trim() ? "Không tìm thấy khách hàng khớp." : "Chưa có khách hàng nào."}
                 </td>
               </tr>
             )}
