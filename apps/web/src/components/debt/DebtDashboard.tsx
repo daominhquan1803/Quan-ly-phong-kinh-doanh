@@ -74,6 +74,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
   const [sort, setSort] = useState<SortState<SortField>>({ field: "dueDate", dir: "asc" });
   const [page, setPage] = useState(1);
   const [showPaymentsWizard, setShowPaymentsWizard] = useState(false);
+  const [expandedWeek, setExpandedWeek] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadingBaseline, setUploadingBaseline] = useState(false);
@@ -224,6 +225,21 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
     setPage(1);
   }, [status, employeeId, filterCustomer, sort]);
 
+  const expandedWeekInvoices = useMemo(() => {
+    if (expandedWeek === null || !summary) return [];
+    const week = summary.weeklyPlan.find((w) => w.weekIndex === expandedWeek);
+    if (!week) return [];
+    const start = new Date(week.start).getTime();
+    const end = new Date(week.end).getTime();
+    return rowsWithStatus
+      .filter((r) => {
+        if (!r.expectedPaymentDate) return false;
+        const t = new Date(r.expectedPaymentDate).getTime();
+        return t >= start && t <= end;
+      })
+      .sort((a, b) => (a.debtStatus === "PAID" ? 1 : 0) - (b.debtStatus === "PAID" ? 1 : 0));
+  }, [expandedWeek, summary, rowsWithStatus]);
+
   function handleSort(field: SortField) {
     setSort((prev) => toggleSort(prev, field));
   }
@@ -280,7 +296,15 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             {summary.weeklyPlan.map((w) => (
-              <div key={w.weekIndex} className="rounded-md bg-gray-50 p-3">
+              <button
+                key={w.weekIndex}
+                type="button"
+                onClick={() => setExpandedWeek((cur) => (cur === w.weekIndex ? null : w.weekIndex))}
+                className={cn(
+                  "rounded-md p-3 text-left hover:bg-gray-100",
+                  expandedWeek === w.weekIndex ? "bg-amber-50 ring-1 ring-amber-400" : "bg-gray-50"
+                )}
+              >
                 <p className="text-xs text-muted-foreground">
                   Tuần {w.weekIndex} ({formatDateVN(w.start)}–{formatDateVN(w.end)})
                 </p>
@@ -292,9 +316,47 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                     {pct(w.rate)} đạt kế hoạch
                   </p>
                 )}
-              </div>
+              </button>
             ))}
           </div>
+
+          {expandedWeek !== null && (
+            <div className="mt-4 rounded-md border border-gray-200 overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-50 text-muted-foreground">
+                  <tr>
+                    <th className="text-left font-medium px-3 py-2">Khách hàng</th>
+                    <th className="text-left font-medium px-3 py-2">Số hoá đơn</th>
+                    <th className="text-right font-medium px-3 py-2">Số tiền</th>
+                    <th className="text-left font-medium px-3 py-2">Trạng thái</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {expandedWeekInvoices.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-3 py-4 text-center text-muted-foreground">
+                        Không có khoản nào dự kiến thu tuần này.
+                      </td>
+                    </tr>
+                  )}
+                  {expandedWeekInvoices.map((r) => (
+                    <tr key={r.id}>
+                      <td className="px-3 py-2">{r.customerName}</td>
+                      <td className="px-3 py-2">{r.invoiceNumber ?? "—"}</td>
+                      <td className="px-3 py-2 text-right">{formatCurrencyVND(Number(r.originalAmount))}</td>
+                      <td className="px-3 py-2">
+                        {r.debtStatus === "PAID" ? (
+                          <span className="text-success-600 font-medium">Đã về{r.lastPaymentDate ? ` (${formatDateVN(r.lastPaymentDate)})` : ""}</span>
+                        ) : (
+                          <span className="text-brandRed-600 font-medium">Chưa về</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
