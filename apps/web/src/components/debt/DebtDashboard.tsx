@@ -356,7 +356,12 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                       <td className="px-3 py-2 text-right">{formatCurrencyVND(Number(r.originalAmount))}</td>
                       <td className="px-3 py-2">
                         {r.debtStatus === "PAID" ? (
-                          <span className="text-success-600 font-medium">Đã về{r.lastPaymentDate ? ` (${formatDateVN(r.lastPaymentDate)})` : ""}</span>
+                          <span className="text-success-600 font-medium">Đã về{r.lastPaymentDate ? ` ngày ${formatDateVN(r.lastPaymentDate)}` : ""}</span>
+                        ) : Number(r.paidAmount) > 0 ? (
+                          <span className="text-success-600 font-medium whitespace-pre-wrap">
+                            Đã về {formatCurrencyVND(Number(r.paidAmount))}
+                            {r.lastPaymentDate ? ` ngày ${formatDateVN(r.lastPaymentDate)}` : ""}
+                          </span>
                         ) : (
                           <span className="text-brandRed-600 font-medium">Chưa về</span>
                         )}
