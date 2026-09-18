@@ -1,0 +1,33 @@
+name: Debug SSH (temporary)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH debug
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd ${{ secrets.VPS_DEPLOY_PATH }}
+            echo "===== Sample Order.rawData keys + scan for contact-like fields ====="
+            docker compose exec -T worker node -e "
+            const {prisma}=require('/repo/packages/db/dist/index.js');
+            (async () => {
+              const orders = await prisma.order.findMany({ where: { rawData: { not: null } }, select: { orderCode: true, customerName: true, rawData: true }, take: 3 });
+              for (const o of orders) {
+                console.log('=== order', o.orderCode, o.customerName, '===');
+                console.log('top-level keys:', Object.keys(o.rawData));
+                const str = JSON.stringify(o.rawData);
+                const matches = str.match(/\"[a-zA-Z_]*(contact|lien_he|lienhe|nguoi)[a-zA-Z_]*\":[^,}]*/gi);
+                console.log('contact-like matches:', matches);
+              }
+              await prisma.\$disconnect();
+            })();
+            "
