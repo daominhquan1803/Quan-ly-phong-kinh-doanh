@@ -59,6 +59,7 @@ export function CustomersPanel() {
   const [uploading, setUploading] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [nvkdFilter, setNvkdFilter] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data } = useQuery({
@@ -82,11 +83,14 @@ export function CustomersPanel() {
   const assignableEmployees = (usersData?.users ?? []).filter((u) => u.active && u.amisEmployeeCode);
 
   const filteredCustomers = useMemo(() => {
-    const list = data?.customers ?? [];
-    if (!search.trim()) return list;
-    const q = normalizeVN(search);
-    return list.filter((c) => normalizeVN(c.customerName).includes(q) || normalizeVN(c.customerCode).includes(q));
-  }, [data, search]);
+    let list = data?.customers ?? [];
+    if (nvkdFilter) list = list.filter((c) => c.salesEmployee?.id === nvkdFilter);
+    if (search.trim()) {
+      const q = normalizeVN(search);
+      list = list.filter((c) => normalizeVN(c.customerName).includes(q) || normalizeVN(c.customerCode).includes(q));
+    }
+    return list;
+  }, [data, search, nvkdFilter]);
 
   function termPatch(edit: RowEdit) {
     const paymentTermType = edit.paymentTermType || null;
@@ -252,14 +256,28 @@ export function CustomersPanel() {
       {importMsg && <p className="text-sm text-success-600">{importMsg}</p>}
       {recomputeMsg && <p className="text-sm text-success-600">{recomputeMsg}</p>}
 
-      <div className="relative w-72">
-        <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Tìm theo tên hoặc mã khách hàng..."
-          className="input w-full !pl-8"
-        />
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative w-72">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Tìm theo tên hoặc mã khách hàng..."
+            className="input w-full !pl-8"
+          />
+        </div>
+        <select
+          value={nvkdFilter}
+          onChange={(e) => setNvkdFilter(e.target.value)}
+          className="text-sm bg-card text-ink rounded-md border border-gray-200 py-2 px-2 focus:outline-none focus:ring-2 focus:ring-amber-500"
+        >
+          <option value="">Tất cả NVKD</option>
+          {assignableEmployees.map((emp) => (
+            <option key={emp.id} value={emp.id}>
+              {emp.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       {showForm && (
