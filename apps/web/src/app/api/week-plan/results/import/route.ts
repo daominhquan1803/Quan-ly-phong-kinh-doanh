@@ -76,7 +76,10 @@ export async function POST(req: NextRequest) {
       productInterest: string | null;
     }[] = [];
 
+    // Dòng nằm trước mọi ô "Mục" (NVKD quên điền) mặc định tính là "KH liên hệ mới" — theo chốt của
+    // anh Quân; số dòng bị mặc định được báo lại cho người tải để lần sau điền đủ cột Mục.
     let currentMetric: "NEW_CONTACT" | "NEW_MEETING" | null = null;
+    let defaultedMetricCount = 0;
     let swappedDateCount = 0;
 
     dataRows.forEach((row, i) => {
@@ -92,8 +95,12 @@ export async function POST(req: NextRequest) {
       if (!customerName && (dateRaw === "" || dateRaw == null)) return;
 
       if (!currentMetric) {
-        errors.push({ rowNumber, message: `Không xác định được "Mục" cho dòng này (${metricLabelRaw || "để trống"})` });
-        return;
+        if (metricLabelRaw) {
+          errors.push({ rowNumber, message: `Không xác định được "Mục" cho dòng này (${metricLabelRaw})` });
+          return;
+        }
+        currentMetric = "NEW_CONTACT";
+        defaultedMetricCount++;
       }
       const parsedDate = parseExcelDate(dateRaw);
       if (!parsedDate) {
@@ -128,6 +135,31 @@ export async function POST(req: NextRequest) {
       });
     });
 
+    // Tải lại cùng 1 file không được nhân đôi dòng đã có (vd tải lại sau khi điền Mục cho các dòng
+    // từng bị lỗi) — bỏ qua dòng trùng NVKD + Mục + Ngày + Khách hàng với dữ liệu đã lưu.
+    let duplicateCount = 0;
+    if (toCreate.length > 0) {
+      const existing = await prisma.weekPlanResultEntry.findMany({
+        where: {
+          employeeId,
+          entryDate: {
+            gte: new Date(Math.min(...toCreate.map((r) => r.entryDate.getTime()))),
+            lte: new Date(Math.max(...toCreate.map((r) => r.entryDate.getTime()))),
+          },
+        },
+        select: { metric: true, entryDate: true, customerName: true },
+      });
+      const key = (metric: string, d: Date, name: string) => `${metric}|${d.getTime()}|${name.trim().toLowerCase()}`;
+      const seen = new Set(existing.map((e) => key(e.metric, e.entryDate, e.customerName)));
+      for (let i = toCreate.length - 1; i >= 0; i--) {
+        const r = toCreate[i];
+        if (seen.has(key(r.metric, r.entryDate, r.customerName))) {
+          toCreate.splice(i, 1);
+          duplicateCount++;
+        }
+      }
+    }
+
     const batch = await prisma.weekPlanResultImportBatch.create({
       data: {
         fileName: file.name,
@@ -149,6 +181,8 @@ export async function POST(req: NextRequest) {
       batchId: batch.id,
       totalRows: dataRows.length,
       createdCount: toCreate.length,
+      duplicateCount,
+      defaultedMetricCount,
       swappedDateCount,
       errorCount: errors.length,
       errors,

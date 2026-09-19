@@ -838,7 +838,7 @@ function UploadPanel({
   const [employeeId, setEmployeeId] = useState(defaultEmployeeId);
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ createdCount: number; swappedDateCount?: number; errorCount: number; errors: { rowNumber: number; message: string }[] } | null>(null);
+  const [result, setResult] = useState<{ createdCount: number; duplicateCount?: number; defaultedMetricCount?: number; swappedDateCount?: number; errorCount: number; errors: { rowNumber: number; message: string }[] } | null>(null);
 
   useEffect(() => setEmployeeId(defaultEmployeeId), [defaultEmployeeId]);
 
@@ -890,6 +890,15 @@ function UploadPanel({
             Đã thêm <span className="font-mono">{result.createdCount}</span> dòng
             {result.errorCount > 0 && <span className="text-alert"> — {result.errorCount} dòng lỗi</span>}
           </p>
+          {!!result.duplicateCount && (
+            <p className="mt-1 text-muted2">Bỏ qua {result.duplicateCount} dòng đã có sẵn (tải trùng).</p>
+          )}
+          {!!result.defaultedMetricCount && (
+            <p className="mt-1 text-amber-400">
+              {result.defaultedMetricCount} dòng để trống cột &quot;Mục&quot; nên được tính là &quot;KH liên hệ mới&quot; — lần sau
+              vui lòng điền đủ cột Mục.
+            </p>
+          )}
           {!!result.swappedDateCount && (
             <p className="mt-1 text-amber-400">
               Đã tự sửa {result.swappedDateCount} dòng có ngày bị Excel đảo ngày/tháng (vd &quot;3/9&quot; bị đọc thành 9/3) —
