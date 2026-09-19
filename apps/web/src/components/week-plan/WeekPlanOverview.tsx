@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Plus, Trash2, UploadCloud, Info, Save } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Trash2, UploadCloud, Info, Save, X } from "lucide-react";
 import { cn, formatDateVN } from "@/lib/utils";
 
 type Metric = "NEW_CONTACT" | "NEW_MEETING" | "EXISTING_VISIT" | "NEW_CUSTOMER_SALE" | "NEW_QUOTE" | "BUSINESS_TRIP";
@@ -180,7 +180,7 @@ export function WeekPlanOverview({ isAdmin }: { isAdmin: boolean }) {
         />
       )}
 
-      <ProgressReport rows={summary?.rows ?? []} isLoading={summaryLoading} isAdmin={isAdmin} />
+      <ProgressReport rows={summary?.rows ?? []} isLoading={summaryLoading} isAdmin={isAdmin} weekStartISO={weekStartISO} />
 
       <ResultEntrySection
         weekStart={weekStart}
@@ -403,7 +403,96 @@ function Fragment2({ children }: { children: React.ReactNode }) {
 
 // ---------------- Báo cáo tiến độ ----------------
 
-function ProgressReport({ rows, isLoading, isAdmin }: { rows: ReportRow[]; isLoading: boolean; isAdmin: boolean }) {
+interface DetailItem {
+  date: string | null;
+  title: string;
+  subtitle: string | null;
+  note: string | null;
+  counted: boolean;
+}
+interface SelectedCell {
+  employeeId: string;
+  employeeName: string;
+  metric: Metric;
+  actual: number;
+  target: number;
+}
+
+function MetricDetailModal({ selected, weekStartISO, onClose }: { selected: SelectedCell; weekStartISO: string; onClose: () => void }) {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["week-plan-detail", weekStartISO, selected.employeeId, selected.metric],
+    queryFn: async () => {
+      const params = new URLSearchParams({ weekStart: weekStartISO, employeeId: selected.employeeId, metric: selected.metric });
+      const res = await fetch(`/api/week-plan/detail?${params.toString()}`);
+      if (!res.ok) throw new Error("Không tải được danh sách chi tiết");
+      return res.json() as Promise<{ items: DetailItem[] }>;
+    },
+  });
+  const items = data?.items ?? [];
+  const countedCount = items.filter((i) => i.counted).length;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div
+        className="glass-card w-full max-w-2xl max-h-[80vh] overflow-y-auto rounded-2xl border border-white/10 bg-[#0f172a] p-5 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-ink">
+              {selected.employeeName} — {METRIC_LABEL[selected.metric]}
+            </h3>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Thực tế {selected.actual}/{selected.target} · {METRIC_NOTE[selected.metric]}
+            </p>
+          </div>
+          <button onClick={onClose} className="rounded-md p-1 text-muted-foreground hover:bg-white/10 hover:text-ink" aria-label="Đóng">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Đang tải...</p>
+        ) : isError ? (
+          <p className="text-sm text-brandRed-600">Không tải được danh sách chi tiết.</p>
+        ) : items.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Chưa có dòng nào trong tuần này.</p>
+        ) : (
+          <>
+            <p className="mb-2 text-xs text-muted-foreground">
+              {countedCount} dòng được tính{items.length > countedCount ? ` · ${items.length - countedCount} dòng không tính (làm mờ)` : ""}
+            </p>
+            <ul className="divide-y divide-white/5">
+              {items.map((it, i) => (
+                <li key={i} className={cn("py-2.5", !it.counted && "opacity-50")}>
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-sm font-medium text-ink">{it.title}</p>
+                    {it.date && <span className="shrink-0 text-xs font-mono text-muted-foreground">{formatDateVN(it.date)}</span>}
+                  </div>
+                  {it.subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{it.subtitle}</p>}
+                  {it.note && <p className="mt-0.5 text-xs text-amber-400/80">{it.note}</p>}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ProgressReport({
+  rows,
+  isLoading,
+  isAdmin,
+  weekStartISO,
+}: {
+  rows: ReportRow[];
+  isLoading: boolean;
+  isAdmin: boolean;
+  weekStartISO: string;
+}) {
+  const [selected, setSelected] = useState<SelectedCell | null>(null);
   return (
     <div className="glass-card border border-white/10 p-5 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
       <div className="flex items-center justify-between mb-1">
@@ -438,7 +527,15 @@ function ProgressReport({ rows, isLoading, isAdmin }: { rows: ReportRow[]; isLoa
                     const cell = r.metrics[m];
                     const p = pct(cell.actual, cell.target);
                     return (
-                      <div key={m} className="glass-card border border-white/5 bg-white/[0.02] px-3.5 py-3 rounded-xl hover:border-white/15 transition-all">
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() =>
+                          setSelected({ employeeId: r.employeeId, employeeName: r.employeeName, metric: m, actual: cell.actual, target: cell.target })
+                        }
+                        title="Bấm để xem danh sách chi tiết"
+                        className="glass-card border border-white/5 bg-white/[0.02] px-3.5 py-3 rounded-xl text-left hover:border-amber-500/40 hover:bg-white/[0.04] transition-all cursor-pointer"
+                      >
                         <div className="flex items-center justify-between gap-2 mb-1">
                           <span className="text-xs text-muted-foreground truncate" title={METRIC_NOTE[m]}>
                             {METRIC_LABEL[m]}
@@ -453,7 +550,7 @@ function ProgressReport({ rows, isLoading, isAdmin }: { rows: ReportRow[]; isLoa
                         <p className="text-[11px] text-muted2 text-right">
                           Trọng số {cell.weight} · Điểm <span className="font-mono">{cell.point}</span>
                         </p>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -462,6 +559,7 @@ function ProgressReport({ rows, isLoading, isAdmin }: { rows: ReportRow[]; isLoa
           })}
         </div>
       )}
+      {selected && <MetricDetailModal selected={selected} weekStartISO={weekStartISO} onClose={() => setSelected(null)} />}
     </div>
   );
 }

@@ -230,6 +230,32 @@ async function getEligibleEmployees() {
 
 type AutoCounts = Record<"EXISTING_VISIT" | "NEW_CUSTOMER_SALE" | "NEW_QUOTE" | "BUSINESS_TRIP", number>;
 
+/** Với mỗi tên công ty đi gặp (NVKD ghi tên tắt), tìm ngày đơn hàng gần nhất TRƯỚC `before` của
+ * khách có tên đầy đủ CHỨA tên đó (so khớp đã chuẩn hoá) — dùng chung cho phần đếm EXISTING_VISIT
+ * và phần liệt kê chi tiết, để 2 nơi luôn khớp nhau. */
+async function lastPriorOrderForVisitedCompanies(companyNames: Set<string>, before: Date): Promise<Map<string, Date>> {
+  const result = new Map<string, Date>();
+  if (companyNames.size === 0) return result;
+  const priorOrderNames = await prisma.order.groupBy({
+    by: ["customerName"],
+    where: { orderDate: { lt: before } },
+    _max: { orderDate: true },
+  });
+  const normalizedPriorOrders = priorOrderNames
+    .filter((p): p is typeof p & { _max: { orderDate: Date } } => p._max.orderDate !== null)
+    .map((p) => ({ norm: normalizeVN(p.customerName), date: p._max.orderDate }));
+  for (const company of companyNames) {
+    const normCompany = normalizeVN(company);
+    if (normCompany.length < 3) continue;
+    let best: Date | null = null;
+    for (const o of normalizedPriorOrders) {
+      if (o.norm.includes(normCompany) && (!best || o.date > best)) best = o.date;
+    }
+    if (best) result.set(company, best);
+  }
+  return result;
+}
+
 async function computeAutoMetrics(
   weekStart: Date,
   employees: { id: string; quoteAssigneeCode: string | null }[]
@@ -313,26 +339,7 @@ async function computeAutoMetrics(
   // ponytail: heuristic substring 1 chiều, có thể khớp nhầm nếu tên khách viết quá ngắn/chung
   // chung (vd "Việt", "Vina") trùng nhiều công ty khác nhau — nếu phát sinh sai lệch rõ, nâng cấp
   // lên so khớp có trọng số/độ dài tối thiểu chặt hơn thay vì quay lại exact-match (đã biết là sai).
-  const lastPriorOrderByVisitedCompany = new Map<string, Date>();
-  if (allVisitCompanyNames.size > 0) {
-    const priorOrderNames = await prisma.order.groupBy({
-      by: ["customerName"],
-      where: { orderDate: { lt: start } },
-      _max: { orderDate: true },
-    });
-    const normalizedPriorOrders = priorOrderNames
-      .filter((p): p is typeof p & { _max: { orderDate: Date } } => p._max.orderDate !== null)
-      .map((p) => ({ norm: normalizeVN(p.customerName), date: p._max.orderDate }));
-    for (const company of allVisitCompanyNames) {
-      const normCompany = normalizeVN(company);
-      if (normCompany.length < 3) continue;
-      let best: Date | null = null;
-      for (const o of normalizedPriorOrders) {
-        if (o.norm.includes(normCompany) && (!best || o.date > best)) best = o.date;
-      }
-      if (best) lastPriorOrderByVisitedCompany.set(company, best);
-    }
-  }
+  const lastPriorOrderByVisitedCompany = await lastPriorOrderForVisitedCompanies(allVisitCompanyNames, start);
   for (const [employeeId, companySet] of visitCompaniesByEmployee) {
     let existingCount = 0;
     for (const company of companySet) {
@@ -522,4 +529,173 @@ export async function setWeekPlanTargets(
       })
     )
   );
+}
+
+// ---------- Danh sách chi tiết của từng ô trong Báo cáo tiến độ ----------
+
+export interface WeekPlanDetailItem {
+  date: string | null; // ISO
+  title: string;
+  subtitle: string | null;
+  note: string | null;
+  // false = có xuất hiện trong tuần nhưng KHÔNG được tính vào số "thực tế" (vd khách đã dừng mua
+  // ≥ 1 năm lại được xếp "khách cũ", hoặc ngược lại) — vẫn liệt kê để NVKD hiểu vì sao không tính.
+  counted: boolean;
+}
+
+const fmtVN = (d: Date) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+
+/** Liệt kê các dòng tạo nên con số "thực tế" của 1 mục trong 1 tuần — cùng định nghĩa/nguồn dữ
+ * liệu với getWeekPlanReport/computeAutoMetrics. */
+export async function getWeekPlanMetricDetail(
+  weekStartInput: Date,
+  employeeId: string,
+  metric: WeekPlanMetric
+): Promise<WeekPlanDetailItem[]> {
+  const { start, end } = weekRange(weekStartInput);
+  const oneYearBeforeStart = new Date(start);
+  oneYearBeforeStart.setFullYear(oneYearBeforeStart.getFullYear() - 1);
+
+  if (metric === "NEW_CONTACT" || metric === "NEW_MEETING") {
+    const entries = await prisma.weekPlanResultEntry.findMany({
+      where: { weekStart: start, employeeId, metric },
+      orderBy: [{ entryDate: "asc" }, { createdAt: "asc" }],
+    });
+    return entries.map((e) => ({
+      date: e.entryDate.toISOString(),
+      title: e.customerName,
+      subtitle: e.address,
+      note: [e.content, e.productInterest ? `Quan tâm: ${e.productInterest}` : null].filter(Boolean).join(" · ") || null,
+      counted: true,
+    }));
+  }
+
+  if (metric === "NEW_CUSTOMER_SALE") {
+    const orders = await prisma.order.findMany({
+      where: { orderDate: { gte: start, lt: end }, salesEmployeeId: employeeId },
+      select: { customerName: true, orderDate: true, totalValue: true },
+      orderBy: { orderDate: "asc" },
+    });
+    const byCustomer = new Map<string, { firstDate: Date | null; count: number; total: number }>();
+    for (const o of orders) {
+      const cur = byCustomer.get(o.customerName) ?? { firstDate: o.orderDate, count: 0, total: 0 };
+      cur.count += 1;
+      cur.total += Number(o.totalValue);
+      byCustomer.set(o.customerName, cur);
+    }
+    const names = Array.from(byCustomer.keys());
+    const prior = names.length
+      ? await prisma.order.groupBy({
+          by: ["customerName"],
+          where: { customerName: { in: names }, orderDate: { lt: start } },
+          _max: { orderDate: true },
+        })
+      : [];
+    const lastPrior = new Map(prior.filter((p) => p._max.orderDate).map((p) => [p.customerName, p._max.orderDate as Date]));
+    const items = names.map((name) => {
+      const info = byCustomer.get(name)!;
+      const last = lastPrior.get(name);
+      const isNew = !last || last <= oneYearBeforeStart;
+      return {
+        date: info.firstDate ? info.firstDate.toISOString() : null,
+        title: name,
+        subtitle: `${info.count} đơn · ${Math.round(info.total).toLocaleString("vi-VN")}đ`,
+        note: last ? `Đơn gần nhất trước tuần: ${fmtVN(last)}${isNew ? " (dừng mua ≥ 1 năm)" : " — khách cũ đang mua, không tính"}` : "Chưa từng mua trước đó",
+        counted: isNew,
+      };
+    });
+    return items.sort((a, b) => Number(b.counted) - Number(a.counted));
+  }
+
+  if (metric === "EXISTING_VISIT" || metric === "BUSINESS_TRIP") {
+    const [primary, supporter] = await Promise.all([
+      prisma.businessTripRequest.findMany({
+        where: { status: "APPROVED", visitDate: { gte: start, lt: end }, employeeId },
+        select: { visitDate: true, stops: { select: { companyName: true, content: true }, orderBy: { orderIndex: "asc" } } },
+      }),
+      prisma.businessTripSupporter.findMany({
+        where: { trip: { status: "APPROVED", visitDate: { gte: start, lt: end } }, employeeId },
+        select: { trip: { select: { visitDate: true, stops: { select: { companyName: true, content: true }, orderBy: { orderIndex: "asc" } } } } },
+      }),
+    ]);
+    const trips = [
+      ...primary.map((t) => ({ ...t, role: "Đi chính" })),
+      ...supporter.map((t) => ({ ...t.trip, role: "Hỗ trợ" })),
+    ];
+
+    if (metric === "BUSINESS_TRIP") {
+      // Mỗi NGÀY có lượt đi đã duyệt tính 1 buổi (gộp nhiều lượt cùng ngày thành 1 dòng).
+      const byDay = new Map<string, { date: Date; companies: string[]; roles: Set<string> }>();
+      for (const t of trips) {
+        const key = t.visitDate.toISOString().slice(0, 10);
+        const cur = byDay.get(key) ?? { date: t.visitDate, companies: [], roles: new Set<string>() };
+        for (const s of t.stops) cur.companies.push(s.companyName);
+        cur.roles.add(t.role);
+        byDay.set(key, cur);
+      }
+      return Array.from(byDay.values())
+        .sort((a, b) => a.date.getTime() - b.date.getTime())
+        .map((d) => ({
+          date: d.date.toISOString(),
+          title: d.companies.join(", ") || "(chưa ghi công ty)",
+          subtitle: Array.from(d.roles).join(" + "),
+          note: null,
+          counted: true,
+        }));
+    }
+
+    // EXISTING_VISIT — mỗi công ty tính 1 lần trong tuần dù ghé nhiều lần.
+    const firstVisit = new Map<string, { date: Date; content: string; role: string }>();
+    for (const t of trips) {
+      for (const s of t.stops) {
+        if (!firstVisit.has(s.companyName)) firstVisit.set(s.companyName, { date: t.visitDate, content: s.content, role: t.role });
+      }
+    }
+    const lastPrior = await lastPriorOrderForVisitedCompanies(new Set(firstVisit.keys()), start);
+    return Array.from(firstVisit.entries())
+      .map(([company, v]) => {
+        const last = lastPrior.get(company);
+        const isExisting = !!last && last > oneYearBeforeStart;
+        return {
+          date: v.date.toISOString(),
+          title: company,
+          subtitle: `${v.role} · ${v.content}`,
+          note: isExisting
+            ? `Khách cũ — đơn gần nhất ${fmtVN(last!)}`
+            : last
+              ? `Không tính: đã dừng mua ≥ 1 năm (đơn cuối ${fmtVN(last)}) — tính là khách mới`
+              : "Không tính: không tìm thấy đơn hàng nào khớp tên công ty này (khách chưa từng mua, hoặc tên ghi khác tên trong đơn hàng)",
+          counted: isExisting,
+        };
+      })
+      .sort((a, b) => Number(b.counted) - Number(a.counted));
+  }
+
+  // NEW_QUOTE
+  const user = await prisma.user.findUnique({ where: { id: employeeId }, select: { quoteAssigneeCode: true } });
+  if (!user?.quoteAssigneeCode) return [];
+  const monthsTouched = new Set<string>();
+  for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) monthsTouched.add(`${d.getFullYear()}-${d.getMonth() + 1}`);
+  const quotes = await prisma.quoteRequest.findMany({
+    where: {
+      OR: Array.from(monthsTouched).map((k) => {
+        const [y, m] = k.split("-").map(Number);
+        return { year: y, month: m };
+      }),
+      assigneeRaw: user.quoteAssigneeCode,
+    },
+    select: { year: true, month: true, requestDay: true, customerName: true, productInterest: true },
+  });
+  return quotes
+    .filter((q) => q.requestDay != null)
+    .map((q) => ({ q, d: new Date(q.year, q.month - 1, q.requestDay as number) }))
+    .filter(({ d }) => d >= start && d < end)
+    .sort((a, b) => a.d.getTime() - b.d.getTime())
+    .map(({ q, d }) => ({
+      date: d.toISOString(),
+      title: q.customerName,
+      subtitle: q.productInterest,
+      note: null,
+      counted: true,
+    }));
 }
