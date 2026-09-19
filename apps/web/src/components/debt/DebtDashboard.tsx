@@ -7,10 +7,11 @@ import { normalizeVN } from "@/lib/text-normalize";
 import { computeDebtStatus, remainingAmount, overdueDays, DEBT_STATUS_LABEL, DebtStatus } from "@/lib/debt-status";
 import { DebtStatusBadge } from "./DebtStatusBadge";
 import { DebtPaymentsImportWizard } from "./DebtPaymentsImportWizard";
+import { ManualPaymentModal, type ManualPaymentInvoice } from "./ManualPaymentModal";
 import { DebtUnmatchedPaymentsPanel } from "./DebtUnmatchedPaymentsPanel";
 import { EmployeeFilterSelect } from "@/components/shared/EmployeeFilterSelect";
 import { FilterInput, SortableTh, toggleSort, type SortState } from "@/components/shared/SortableFilterableTable";
-import { UploadCloud, ChevronLeft, ChevronRight, X, CheckCircle2 } from "lucide-react";
+import { UploadCloud, ChevronLeft, ChevronRight, X, CheckCircle2, Banknote } from "lucide-react";
 
 interface InvoiceRow {
   id: string;
@@ -76,6 +77,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
   const [page, setPage] = useState(1);
   const [showPaymentsWizard, setShowPaymentsWizard] = useState(false);
   const [expandedWeek, setExpandedWeek] = useState<number | null>(null);
+  const [paymentInvoice, setPaymentInvoice] = useState<ManualPaymentInvoice | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadingBaseline, setUploadingBaseline] = useState(false);
@@ -572,18 +574,19 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                 </SortableTh>
                 <th className="text-left font-medium px-4 py-3">Trạng thái</th>
                 <th className="text-left font-medium px-4 py-3">Ngày thanh toán / dự kiến</th>
+                {isAdmin && <th className="text-left font-medium px-4 py-3">Tiền về</th>}
               </tr>
               <tr className="bg-black/30 border-t border-white/5">
                 <th className="px-4 py-2 font-normal">
                   <FilterInput value={filterCustomer} onChange={setFilterCustomer} placeholder="Tìm khách hàng..." />
                 </th>
-                <th colSpan={9} />
+                <th colSpan={isAdmin ? 10 : 9} />
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {isLoading && (
                 <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={isAdmin ? 11 : 10} className="px-4 py-8 text-center text-muted-foreground">
                     <div className="inline-flex items-center gap-2">
                       <span className="h-2 w-2 rounded-full bg-amber-400 animate-ping" />
                       Đang tải danh sách công nợ...
@@ -593,7 +596,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
               )}
               {!isLoading && visibleRows.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={isAdmin ? 11 : 10} className="px-4 py-8 text-center text-muted-foreground">
                     Không còn công nợ nào khớp bộ lọc.
                   </td>
                 </tr>
@@ -660,6 +663,18 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                       />
                     )}
                   </td>
+                  {isAdmin && (
+                    <td className="px-4 py-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setPaymentInvoice({ id: r.id, customerName: r.customerName, invoiceNumber: r.invoiceNumber })}
+                        className="flex items-center gap-1 whitespace-nowrap rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+                        title="Nhập tay tiền về + ngày về, xem lịch sử tiền về"
+                      >
+                        <Banknote className="h-3.5 w-3.5" /> Tiền về
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -694,6 +709,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
       )}
 
       {showPaymentsWizard && <DebtPaymentsImportWizard onClose={() => setShowPaymentsWizard(false)} />}
+      {paymentInvoice && <ManualPaymentModal invoice={paymentInvoice} onClose={() => setPaymentInvoice(null)} />}
     </div>
   );
 }
