@@ -83,27 +83,31 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
   const baselineInputRef = useRef<HTMLInputElement>(null);
   const newInvoicesInputRef = useRef<HTMLInputElement>(null);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["debt-invoices", employeeId],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (employeeId) params.set("employeeId", employeeId);
-      const res = await fetch(`/api/debt?${params.toString()}`);
-      if (!res.ok) throw new Error("Không tải được danh sách công nợ");
-      return res.json() as Promise<{ invoices: InvoiceRow[] }>;
-    },
-  });
+  const fetchInvoices = (empId: string) => async () => {
+    const params = new URLSearchParams();
+    if (empId) params.set("employeeId", empId);
+    const res = await fetch(`/api/debt?${params.toString()}`);
+    if (!res.ok) throw new Error("Không tải được danh sách công nợ");
+    return (await res.json()) as { invoices: InvoiceRow[] };
+  };
+  const fetchSummary = (empId: string) => async () => {
+    const params = new URLSearchParams();
+    if (empId) params.set("employeeId", empId);
+    const res = await fetch(`/api/debt/summary?${params.toString()}`);
+    if (!res.ok) throw new Error("Không tải được tổng kết công nợ");
+    return (await res.json()) as SummaryResponse;
+  };
 
-  const { data: summary } = useQuery({
-    queryKey: ["debt-summary", employeeId],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (employeeId) params.set("employeeId", employeeId);
-      const res = await fetch(`/api/debt/summary?${params.toString()}`);
-      if (!res.ok) throw new Error("Không tải được tổng kết công nợ");
-      return res.json() as Promise<SummaryResponse>;
-    },
-  });
+  const { data, isLoading } = useQuery({ queryKey: ["debt-invoices", employeeId], queryFn: fetchInvoices(employeeId) });
+  const { data: summary } = useQuery({ queryKey: ["debt-summary", employeeId], queryFn: fetchSummary(employeeId) });
+
+  // Khối "Kế hoạch thu hồi công nợ tháng này" có bộ lọc riêng (Cả phòng / từng nhân viên) — mặc định
+  // theo bộ lọc "Xem theo" ở trên nhưng đổi độc lập được. Cùng queryKey với 2 query trên nên khi
+  // trùng phạm vi thì dùng chung cache, không gọi thêm.
+  const [weekEmployeeId, setWeekEmployeeId] = useState("");
+  useEffect(() => setWeekEmployeeId(employeeId), [employeeId]);
+  const { data: weekSummary } = useQuery({ queryKey: ["debt-summary", weekEmployeeId], queryFn: fetchSummary(weekEmployeeId) });
+  const { data: weekData } = useQuery({ queryKey: ["debt-invoices", weekEmployeeId], queryFn: fetchInvoices(weekEmployeeId) });
 
   // Cùng queryKey với EmployeeFilterSelect (dùng chung cache react-query) — cần danh sách nhân
   // viên đầy đủ ở đây để dựng dropdown "gán lại NVKD" cho từng dòng hoá đơn.
@@ -179,8 +183,8 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
     }
   }
 
-  const rowsWithStatus = useMemo(() => {
-    return (data?.invoices ?? []).map((inv) => {
+  function withStatus(invoices: InvoiceRow[]) {
+    return invoices.map((inv) => {
       const original = Number(inv.originalAmount);
       const paid = Number(inv.paidAmount);
       const remaining = remainingAmount(original, paid);
@@ -188,7 +192,9 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
       const daysOverdue = debtStatus === "PAID" ? null : overdueDays(inv.dueDate);
       return { ...inv, remaining, debtStatus, daysOverdue };
     });
-  }, [data]);
+  }
+  const rowsWithStatus = useMemo(() => withStatus(data?.invoices ?? []), [data]);
+  const weekRows = useMemo(() => withStatus(weekData?.invoices ?? []), [weekData]);
 
   const visibleRows = useMemo(() => {
     let list = rowsWithStatus;
@@ -236,19 +242,19 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
   }, [status, nvkdFilter, employeeId, filterCustomer, sort]);
 
   const expandedWeekInvoices = useMemo(() => {
-    if (expandedWeek === null || !summary) return [];
-    const week = summary.weeklyPlan.find((w) => w.weekIndex === expandedWeek);
+    if (expandedWeek === null || !weekSummary) return [];
+    const week = weekSummary.weeklyPlan.find((w) => w.weekIndex === expandedWeek);
     if (!week) return [];
     const start = new Date(week.start).getTime();
     const end = new Date(week.end).getTime();
-    return rowsWithStatus
+    return weekRows
       .filter((r) => {
         if (!r.expectedPaymentDate) return false;
         const t = new Date(r.expectedPaymentDate).getTime();
         return t >= start && t <= end;
       })
       .sort((a, b) => (a.debtStatus === "PAID" ? 1 : 0) - (b.debtStatus === "PAID" ? 1 : 0));
-  }, [expandedWeek, summary, rowsWithStatus]);
+  }, [expandedWeek, weekSummary, weekRows]);
 
   function handleSort(field: SortField) {
     setSort((prev) => toggleSort(prev, field));
@@ -327,16 +333,35 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
               </p>
               <p className="text-xs text-muted2 mt-0.5">Dựa trên ngày dự kiến thanh toán nhân viên kinh doanh cập nhật</p>
             </div>
-            <div className="text-xs font-mono text-muted2 bg-white/5 px-3 py-1.5 rounded-lg border border-white/5">
-              Cả tháng: <span className="text-emerald-400 font-semibold">{formatCurrencyVND(summary.monthlyPlan.collected)}</span> /{" "}
-              <span className="text-ink">{formatCurrencyVND(summary.monthlyPlan.planned)}</span>
-              {summary.monthlyPlan.rate !== null && (
-                <span className="ml-2 font-semibold text-amber-400">({pct(summary.monthlyPlan.rate)} đạt)</span>
+            <div className="flex flex-wrap items-center gap-2">
+              {isAdmin && (
+                <select
+                  value={weekEmployeeId}
+                  onChange={(e) => setWeekEmployeeId(e.target.value)}
+                  aria-label="Lọc kế hoạch thu theo nhân viên"
+                  className="text-xs bg-card text-ink rounded-lg border border-white/10 py-1.5 px-2 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                >
+                  <option value="">Cả phòng</option>
+                  {assignableEmployees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.name}
+                    </option>
+                  ))}
+                </select>
               )}
+              <div className="text-xs font-mono text-muted2 bg-white/5 px-3 py-1.5 rounded-lg border border-white/5">
+                Cả tháng:{" "}
+                <span className="text-emerald-400 font-semibold">{formatCurrencyVND(weekSummary?.monthlyPlan.collected ?? 0)}</span> /{" "}
+                <span className="text-ink">{formatCurrencyVND(weekSummary?.monthlyPlan.planned ?? 0)}</span>
+                {weekSummary?.monthlyPlan.rate != null && (
+                  <span className="ml-2 font-semibold text-amber-400">({pct(weekSummary.monthlyPlan.rate)} đạt)</span>
+                )}
+              </div>
             </div>
           </div>
+          {!weekSummary && <p className="text-sm text-muted-foreground">Đang tải...</p>}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            {summary.weeklyPlan.map((w) => (
+            {(weekSummary?.weeklyPlan ?? []).map((w) => (
               <button
                 key={w.weekIndex}
                 type="button"
