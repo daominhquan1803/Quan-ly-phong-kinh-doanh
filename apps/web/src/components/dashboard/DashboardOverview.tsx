@@ -73,7 +73,25 @@ interface SummaryResponse {
   debtTotal: number | null;
   debtOverdue: number | null;
   debtUpdatedAt: string | null;
+  debtPerEmployee?: {
+    employeeId: string | null;
+    employeeName: string;
+    totalDebt: number;
+    overdueDebt: number;
+    overdueRate: number | null;
+    weekPlanned: number;
+    weekCollected: number;
+    weekRate: number | null;
+  }[];
+  debtWeek?: { start: string; end: string };
 }
+
+const pct1 = (r: number | null) => (r == null ? "—" : `${(r * 100).toFixed(1)}%`);
+// Tỉ lệ nợ quá hạn càng thấp càng tốt; tỉ lệ thu hồi kế hoạch tuần càng cao càng tốt.
+const overdueRateColor = (r: number | null) =>
+  r == null ? "text-muted2" : r <= 0.15 ? "text-success-600" : r <= 0.3 ? "text-amber-400" : "text-brandRed-600";
+const collectRateColor = (r: number | null) =>
+  r == null ? "text-muted2" : r >= 1 ? "text-success-600" : r >= 0.5 ? "text-amber-400" : "text-brandRed-600";
 
 /** Dòng nhỏ hiện xu hướng tăng/giảm so với tháng trước dưới mỗi số KPI. */
 function TrendLine({
@@ -598,6 +616,55 @@ export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
                   </p>
                 </div>
               </div>
+
+              {(data?.debtPerEmployee?.length ?? 0) > 0 && (
+                <div className="mb-4">
+                  <p className="text-xs font-semibold text-ink mb-2">Theo từng nhân viên</p>
+                  <div className="overflow-x-auto rounded-xl border border-gray-200/70">
+                    <table className="min-w-full text-xs">
+                      <thead className="bg-white/[0.04] text-muted-foreground">
+                        <tr>
+                          <th className="text-left font-medium px-3 py-2">Nhân viên</th>
+                          <th className="text-right font-medium px-3 py-2">Tỉ lệ nợ quá hạn</th>
+                          <th className="text-right font-medium px-3 py-2">
+                            Thu hồi kế hoạch tuần
+                            {data?.debtWeek && (
+                              <span className="block font-normal text-[10px] text-muted2">
+                                {formatDateVN(data.debtWeek.start)} – {formatDateVN(data.debtWeek.end)}
+                              </span>
+                            )}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {data?.debtPerEmployee?.map((e) => (
+                          <tr key={e.employeeId ?? "none"}>
+                            <td className="px-3 py-2 text-ink font-medium">{e.employeeName}</td>
+                            <td className="px-3 py-2 text-right">
+                              <span className={cn("font-mono tabular-nums font-semibold", overdueRateColor(e.overdueRate))}>
+                                {pct1(e.overdueRate)}
+                              </span>
+                              <span className="block text-[10px] text-muted2 font-mono">
+                                {formatCurrencyVND(e.overdueDebt)} / {formatCurrencyVND(e.totalDebt)}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                              <span className={cn("font-mono tabular-nums font-semibold", collectRateColor(e.weekRate))}>
+                                {pct1(e.weekRate)}
+                              </span>
+                              <span className="block text-[10px] text-muted2 font-mono">
+                                {e.weekPlanned > 0 || e.weekCollected > 0
+                                  ? `${formatCurrencyVND(e.weekCollected)} / ${formatCurrencyVND(e.weekPlanned)}`
+                                  : "Chưa có kế hoạch thu"}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
               <p className="text-xs text-muted-foreground mb-4">
                 Cập nhật lần cuối:{" "}

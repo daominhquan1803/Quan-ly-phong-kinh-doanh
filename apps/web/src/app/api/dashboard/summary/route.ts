@@ -3,7 +3,7 @@ import { prisma, getPoAggregates } from "@hoanggia/db";
 import { requireSession, scopeByOwner, UnauthorizedError } from "@/lib/rbac";
 import { getEmployeeTargetVsActual, getProductGroupTargetVsActual } from "@/lib/dashboard-metrics";
 import { daysUntilDeadline } from "@/lib/order-status";
-import { remainingAmount, overdueDays } from "@/lib/debt-status";
+import { remainingAmount, overdueDays, mondayOfWeek } from "@/lib/debt-status";
 
 const TOP_OVERDUE_COUNT = 10;
 
@@ -80,18 +80,73 @@ export async function GET() {
     let debtTotal: number | null = null;
     let debtOverdue: number | null = null;
     let debtUpdatedAt: Date | null = null;
+    let debtPerEmployee: {
+      employeeId: string | null;
+      employeeName: string;
+      totalDebt: number;
+      overdueDebt: number;
+      overdueRate: number | null;
+      weekPlanned: number;
+      weekCollected: number;
+      weekRate: number | null;
+    }[] = [];
+    const weekStart = mondayOfWeek(now);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7); // exclusive
     if (isAdmin) {
       const invoices = await prisma.debtInvoice.findMany({
-        select: { originalAmount: true, paidAmount: true, dueDate: true },
+        select: {
+          originalAmount: true,
+          paidAmount: true,
+          dueDate: true,
+          expectedPaymentDate: true,
+          salesEmployeeId: true,
+          salesEmployee: { select: { name: true } },
+        },
       });
       debtTotal = 0;
       debtOverdue = 0;
+      const perEmp = new Map<string, (typeof debtPerEmployee)[number]>();
+      const entryOf = (id: string | null, name: string | undefined) => {
+        const key = id ?? "none";
+        let e = perEmp.get(key);
+        if (!e) {
+          e = { employeeId: id, employeeName: name ?? "Chưa gán NVKD", totalDebt: 0, overdueDebt: 0, overdueRate: null, weekPlanned: 0, weekCollected: 0, weekRate: null };
+          perEmp.set(key, e);
+        }
+        return e;
+      };
       for (const inv of invoices) {
         const remaining = remainingAmount(Number(inv.originalAmount), Number(inv.paidAmount));
         debtTotal += remaining;
         const days = overdueDays(inv.dueDate);
-        if (days !== null && days > 0) debtOverdue += remaining;
+        const isOverdue = days !== null && days > 0;
+        if (isOverdue) debtOverdue += remaining;
+        const e = entryOf(inv.salesEmployeeId, inv.salesEmployee?.name);
+        e.totalDebt += remaining;
+        if (isOverdue) e.overdueDebt += remaining;
+        // Kế hoạch thu tuần này: cùng cách tính với trang Công nợ (api/debt/summary) — "Kế hoạch" =
+        // toàn bộ originalAmount hoá đơn NVKD hẹn thu trong tuần; "Đã thu" lấy theo NGÀY TIỀN VỀ
+        // THẬT (bên dưới), không theo tuần hẹn.
+        if (inv.expectedPaymentDate && inv.expectedPaymentDate >= weekStart && inv.expectedPaymentDate < weekEnd) {
+          e.weekPlanned += Number(inv.originalAmount);
+        }
       }
+      const weekAllocations = await prisma.debtPaymentAllocation.findMany({
+        where: { payment: { paymentDate: { gte: weekStart, lt: weekEnd } } },
+        select: { amount: true, invoice: { select: { salesEmployeeId: true, salesEmployee: { select: { name: true } } } } },
+      });
+      for (const a of weekAllocations) {
+        entryOf(a.invoice.salesEmployeeId, a.invoice.salesEmployee?.name).weekCollected += Number(a.amount);
+      }
+      debtPerEmployee = Array.from(perEmp.values())
+        .map((e) => ({
+          ...e,
+          overdueRate: e.totalDebt > 0 ? e.overdueDebt / e.totalDebt : null,
+          weekRate: e.weekPlanned > 0 ? e.weekCollected / e.weekPlanned : null,
+        }))
+        .filter((e) => e.totalDebt > 0 || e.weekPlanned > 0 || e.weekCollected > 0)
+        .sort((a, b) => b.overdueDebt - a.overdueDebt);
       const lastBatch = await prisma.debtImportBatch.findFirst({ orderBy: { createdAt: "desc" } });
       debtUpdatedAt = lastBatch?.createdAt ?? null;
     }
@@ -119,6 +174,8 @@ export async function GET() {
       debtTotal,
       debtOverdue,
       debtUpdatedAt,
+      debtPerEmployee,
+      debtWeek: { start: weekStart.toISOString(), end: new Date(weekEnd.getTime() - 86_400_000).toISOString() },
     });
   } catch (err) {
     if (err instanceof UnauthorizedError) return NextResponse.json({ error: err.message }, { status: 401 });
