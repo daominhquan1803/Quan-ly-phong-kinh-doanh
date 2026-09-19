@@ -1,9 +1,7 @@
-import { auth } from "@/lib/auth";
 import { QuoteOverview } from "@/components/quotes/QuoteOverview";
 import { FileText } from "lucide-react";
 
-export default async function QuotesPage() {
-  const session = await auth();
+export default function QuotesPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -17,7 +15,7 @@ export default async function QuotesPage() {
           </p>
         </div>
       </div>
-      <QuoteOverview isAdmin={session?.user?.role === "ADMIN"} />
+      <QuoteOverview />
     </div>
   );
 }

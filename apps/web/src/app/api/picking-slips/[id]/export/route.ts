@@ -4,7 +4,8 @@ import sharp from "sharp";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { prisma } from "@hoanggia/db";
-import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
+import { pickingSlipScope } from "@/lib/picking-slips";
+import { requireSession, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
@@ -27,9 +28,9 @@ function qty(n: unknown): number {
  * hỗ trợ định dạng/nhúng ảnh ở bản miễn phí, nên đổi sang exceljs). */
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    await requireAdmin();
-    const slip = await prisma.pickingSlip.findUnique({
-      where: { id: params.id },
+    const session = await requireSession();
+    const slip = await prisma.pickingSlip.findFirst({
+      where: { id: params.id, ...pickingSlipScope(session.user) },
       include: { items: { orderBy: { lineOrder: "asc" } } },
     });
     if (!slip) return NextResponse.json({ error: "Không tìm thấy Phiếu soạn hàng" }, { status: 404 });

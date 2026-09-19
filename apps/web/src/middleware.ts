@@ -2,9 +2,9 @@ import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
 
 // Bảo vệ toàn bộ route trừ /login, /api/auth, và static assets.
-// /admin/*, /quotes, /picking-slips chỉ ADMIN được vào. /debt cho cả SALES xem — API đã tự
+// Chỉ /admin/* (trang Nhân viên) là ADMIN-only; mọi trang khác NVKD đều xem + dùng được. /debt cho cả SALES xem — API đã tự
 // giới hạn theo salesEmployeeId (scopeByOwner trong lib/rbac.ts): SALES chỉ thấy công nợ của
-// chính mình, ADMIN thấy toàn phòng. /customers cũng vậy nhưng SALES chỉ đọc (API ghi vẫn ADMIN).
+// chính mình, ADMIN thấy toàn phòng — /customers, /picking-slips cũng theo cách đó.
 export default auth((req) => {
   const { pathname } = req.nextUrl;
   const isLoggedIn = !!req.auth;
@@ -24,12 +24,7 @@ export default auth((req) => {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (
-    (pathname.startsWith("/admin") ||
-      pathname.startsWith("/quotes") ||
-      pathname.startsWith("/picking-slips")) &&
-    !isAdmin
-  ) {
+  if (pathname.startsWith("/admin") && !isAdmin) {
     return NextResponse.redirect(new URL("/", req.nextUrl));
   }
 

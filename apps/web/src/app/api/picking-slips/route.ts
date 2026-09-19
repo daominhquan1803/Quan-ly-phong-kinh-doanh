@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@hoanggia/db";
-import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
-import { generatePickingSlipNumber } from "@/lib/picking-slips";
+import { requireSession, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
+import { generatePickingSlipNumber, pickingSlipScope } from "@/lib/picking-slips";
 
 export const dynamic = "force-dynamic";
 
 /** Danh sách Phiếu soạn hàng đã tạo — mới nhất trước. */
 export async function GET() {
   try {
-    await requireAdmin();
+    const session = await requireSession();
     const slips = await prisma.pickingSlip.findMany({
+      where: pickingSlipScope(session.user),
       orderBy: { createdAt: "desc" },
       take: 100,
       select: {
@@ -58,13 +59,15 @@ const createSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await requireAdmin();
+    const session = await requireSession();
     const body = await req.json();
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Dữ liệu không hợp lệ" }, { status: 400 });
     }
     const data = parsed.data;
+    // NVKD chỉ được tạo phiếu cho chính mình, không chọn NVKD khác.
+    if (session.user.role !== "ADMIN") data.salesEmployeeId = session.user.id;
 
     let salesEmployeeNameSnapshot: string | null = null;
     let salesEmployeePhoneSnapshot: string | null = null;

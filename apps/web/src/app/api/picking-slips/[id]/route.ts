@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@hoanggia/db";
-import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
+import { requireSession, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
+import { pickingSlipScope } from "@/lib/picking-slips";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    await requireAdmin();
-    const slip = await prisma.pickingSlip.findUnique({
-      where: { id: params.id },
+    const session = await requireSession();
+    const slip = await prisma.pickingSlip.findFirst({
+      where: { id: params.id, ...pickingSlipScope(session.user) },
       include: { items: { orderBy: { lineOrder: "asc" } }, createdBy: { select: { name: true } } },
     });
     if (!slip) return NextResponse.json({ error: "Không tìm thấy Phiếu soạn hàng" }, { status: 404 });
@@ -25,8 +26,11 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
  * Cascade), không đụng gì tới dữ liệu PO tracking gốc vì phiếu chỉ lưu snapshot riêng. */
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    await requireAdmin();
-    const slip = await prisma.pickingSlip.findUnique({ where: { id: params.id }, select: { id: true } });
+    const session = await requireSession();
+    const slip = await prisma.pickingSlip.findFirst({
+      where: { id: params.id, ...pickingSlipScope(session.user) },
+      select: { id: true },
+    });
     if (!slip) return NextResponse.json({ error: "Không tìm thấy Phiếu soạn hàng" }, { status: 404 });
     await prisma.pickingSlip.delete({ where: { id: params.id } });
     return NextResponse.json({ ok: true });

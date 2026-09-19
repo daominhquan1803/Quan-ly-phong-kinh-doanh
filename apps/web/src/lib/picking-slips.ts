@@ -14,9 +14,9 @@ export interface PickingCustomerOption {
 
 /** Danh sách khách hàng còn ít nhất 1 dòng PO chưa giao (đang mở, SL chưa giao > 0) — lọc theo
  * tên hoặc mã khách hàng, không phân biệt hoa/thường. */
-export async function searchPickingCustomers(query: string): Promise<PickingCustomerOption[]> {
+export async function searchPickingCustomers(query: string, ownerId?: string): Promise<PickingCustomerOption[]> {
   const lines = await prisma.poTrackingLine.findMany({
-    where: { salesEmployeeId: { not: null }, customerCode: { not: null } },
+    where: { salesEmployeeId: ownerId ?? { not: null }, customerCode: { not: null } },
     select: { customerCode: true, statusRaw: true, remainingQty: true },
   });
 
@@ -70,9 +70,9 @@ export interface AvailablePickingLine {
 
 /** Toàn bộ dòng PO còn chưa giao (đang mở, SL chưa giao > 0) của 1 khách hàng — sắp theo Ngày PO
  * cũ nhất trước, đúng thứ tự cần soạn trước. */
-export async function getAvailablePickingLines(customerCode: string): Promise<AvailablePickingLine[]> {
+export async function getAvailablePickingLines(customerCode: string, ownerId?: string): Promise<AvailablePickingLine[]> {
   const lines = await prisma.poTrackingLine.findMany({
-    where: { customerCode, salesEmployeeId: { not: null } },
+    where: { customerCode, salesEmployeeId: ownerId ?? { not: null } },
     select: {
       id: true,
       poCode: true,
@@ -107,6 +107,11 @@ export async function getAvailablePickingLines(customerCode: string): Promise<Av
       poDate: l.poDate ? l.poDate.toISOString() : null,
       requestedDeliveryDate: l.requestedDeliveryDate ? l.requestedDeliveryDate.toISOString() : null,
     }));
+}
+
+/** ADMIN thấy mọi phiếu; NVKD chỉ thấy phiếu của mình (NVKD phụ trách hoặc chính mình tạo). */
+export function pickingSlipScope(user: { id: string; role: string }) {
+  return user.role === "ADMIN" ? {} : { OR: [{ salesEmployeeId: user.id }, { createdById: user.id }] };
 }
 
 /** Sinh Số phiếu tự động dạng "PSH-000001" — thử vài lần nếu đụng trùng (đếm rồi cộng 1, hiếm khi

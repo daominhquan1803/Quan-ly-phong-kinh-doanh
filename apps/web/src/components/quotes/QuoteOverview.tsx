@@ -87,7 +87,7 @@ const STATUS_KPI_BORDER: Record<QuoteStatus, string> = {
 
 type SortField = "requestDay" | "customerName" | "assigneeRaw";
 
-export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
+export function QuoteOverview() {
   const [year, setYear] = useState<number | null>(null);
   const [month, setMonth] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState<QuoteStatus | "">("");
@@ -223,16 +223,14 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
             {(summary?.availableMonths.length ?? 0) === 0 && <option value="">Chưa có dữ liệu</option>}
           </select>
         </div>
-        {isAdmin && (
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 px-4 py-2 text-xs font-semibold text-black shadow-[0_0_15px_rgba(224,163,39,0.3)] disabled:opacity-60 transition-all"
-          >
-            <RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} />
-            {syncing ? "Đang đồng bộ..." : "Đồng bộ Google Sheet"}
-          </button>
-        )}
+        <button
+          onClick={handleSync}
+          disabled={syncing}
+          className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 px-4 py-2 text-xs font-semibold text-black shadow-[0_0_15px_rgba(224,163,39,0.3)] disabled:opacity-60 transition-all"
+        >
+          <RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} />
+          {syncing ? "Đang đồng bộ..." : "Đồng bộ Google Sheet"}
+        </button>
       </div>
 
       {syncError && (

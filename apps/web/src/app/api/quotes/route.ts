@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma, QuoteStatus } from "@hoanggia/db";
-import { requireAdmin, ForbiddenError, UnauthorizedError } from "@/lib/rbac";
+import { requireSession, ForbiddenError, UnauthorizedError } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
 // Báo giá là số liệu tổng của cả phòng, không gắn theo từng tài khoản đăng nhập (cột "Phụ
-// trách" trong file nguồn không khớp tin cậy được với User) — chỉ ADMIN xem được, cùng lý do với
-// Công nợ (xem middleware.ts).
+// trách" trong file nguồn không khớp tin cậy được với User) — cả ADMIN và NVKD đều xem được toàn bộ.
 export async function GET(req: NextRequest) {
   try {
-    await requireAdmin();
+    await requireSession();
     const { searchParams } = new URL(req.url);
     const year = Number(searchParams.get("year"));
     const month = Number(searchParams.get("month"));

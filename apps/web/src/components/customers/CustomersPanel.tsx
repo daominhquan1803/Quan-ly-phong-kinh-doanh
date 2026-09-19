@@ -66,8 +66,8 @@ function toRowEdit(c: CustomerRow): RowEdit {
   };
 }
 
-/** readOnly = NVKD (SALES): chỉ xem khách của mình, không thêm/sửa/xoá/nhập Excel. */
-export function CustomersPanel({ readOnly = false }: { readOnly?: boolean }) {
+/** isAdmin=false (NVKD): chỉ thấy + sửa khách của mình; không đổi NVKD phụ trách, không nhập Excel hàng loạt. */
+export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
@@ -103,7 +103,7 @@ export function CustomersPanel({ readOnly = false }: { readOnly?: boolean }) {
   // Cùng queryKey với DebtDashboard — dùng chung cache react-query cho danh sách nhân viên gán được.
   const { data: usersData } = useQuery({
     queryKey: ["admin-users-filter"],
-    enabled: !readOnly,
+    enabled: isAdmin,
     queryFn: async () => {
       const res = await fetch("/api/admin/users");
       if (!res.ok) throw new Error("Không tải được danh sách nhân viên");
@@ -322,7 +322,7 @@ export function CustomersPanel({ readOnly = false }: { readOnly?: boolean }) {
   return (
     <div className="space-y-6">
       {/* 4 Thẻ KPI Glassmorphism Đầu Trang (thống kê gán NVKD chỉ có nghĩa với admin) */}
-      <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 ${readOnly ? "hidden" : ""}`}>
+      <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 ${isAdmin ? "" : "hidden"}`}>
         {/* Card 1: Tổng khách hàng */}
         <div
           onClick={() => {
@@ -562,7 +562,7 @@ export function CustomersPanel({ readOnly = false }: { readOnly?: boolean }) {
               />
             </div>
 
-            <div>
+            <div className={isAdmin ? "" : "hidden"}>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-ink2">
                 NVKD phụ trách
               </label>
@@ -665,7 +665,7 @@ export function CustomersPanel({ readOnly = false }: { readOnly?: boolean }) {
           </div>
 
           {/* Bộ lọc NVKD */}
-          <div className={`relative ${readOnly ? "hidden" : ""}`}>
+          <div className={`relative ${isAdmin ? "" : "hidden"}`}>
             <select
               value={nvkdFilter}
               onChange={(e) => {
@@ -706,7 +706,7 @@ export function CustomersPanel({ readOnly = false }: { readOnly?: boolean }) {
         </div>
 
         {/* Các nút hành động bên phải */}
-        <div className={`flex items-center gap-2.5 ${readOnly ? "hidden" : ""}`}>
+        <div className="flex items-center gap-2.5">
           <input
             ref={fileInputRef}
             type="file"
@@ -721,7 +721,7 @@ export function CustomersPanel({ readOnly = false }: { readOnly?: boolean }) {
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            className="flex items-center gap-2 rounded-xl border border-gray-200/90 bg-navy-50/70 px-4 py-2 text-sm font-medium text-ink transition-all hover:border-gray-300 hover:bg-navy-50 disabled:opacity-50 shadow-sm"
+            className={`${isAdmin ? "flex" : "hidden"} items-center gap-2 rounded-xl border border-gray-200/90 bg-navy-50/70 px-4 py-2 text-sm font-medium text-ink transition-all hover:border-gray-300 hover:bg-navy-50 disabled:opacity-50 shadow-sm`}
           >
             <UploadCloud className="h-4 w-4 text-info-500" />
             <span>{uploading ? "Đang nhập Excel..." : "Nhập file Excel"}</span>
@@ -747,7 +747,7 @@ export function CustomersPanel({ readOnly = false }: { readOnly?: boolean }) {
                 <th className="px-5 py-3.5 text-left min-w-[280px]">Tên khách hàng & Người liên hệ</th>
                 <th className="px-5 py-3.5 text-left w-64">NVKD phụ trách</th>
                 <th className="px-5 py-3.5 text-left min-w-[240px]">Thời hạn công nợ</th>
-                {!readOnly && <th className="px-5 py-3.5 text-right w-44">Thao tác</th>}
+                <th className="px-5 py-3.5 text-right w-44">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200/40">
@@ -780,12 +780,6 @@ export function CustomersPanel({ readOnly = false }: { readOnly?: boolean }) {
 
                     {/* Cột Tên khách hàng & Người liên hệ */}
                     <td className="px-5 py-3.5 align-middle">
-                      {readOnly ? (
-                        <div className="space-y-1">
-                          <p className="text-sm font-medium text-ink">{c.customerName}</p>
-                          <p className="text-xs text-ink2/90">LH: {c.contactPerson || "—"}</p>
-                        </div>
-                      ) : (
                       <div className="space-y-1">
                         <input
                           value={edit.customerName}
@@ -803,12 +797,11 @@ export function CustomersPanel({ readOnly = false }: { readOnly?: boolean }) {
                           />
                         </div>
                       </div>
-                      )}
                     </td>
 
                     {/* Cột NVKD phụ trách */}
                     <td className="px-5 py-3.5 align-middle">
-                      {readOnly ? (
+                      {!isAdmin ? (
                         <span className="text-sm text-ink">{c.salesEmployee?.name ?? "—"}</span>
                       ) : (
                       <div className="relative">
@@ -837,7 +830,7 @@ export function CustomersPanel({ readOnly = false }: { readOnly?: boolean }) {
                     {/* Cột Thời hạn công nợ */}
                     <td className="px-5 py-3.5 align-middle">
                       <div className="space-y-1.5">
-                        <div className={`flex items-center gap-2 ${readOnly ? "hidden" : ""}`}>
+                        <div className="flex items-center gap-2">
                           <select
                             value={edit.paymentTermType}
                             onChange={(e) =>
@@ -882,7 +875,7 @@ export function CustomersPanel({ readOnly = false }: { readOnly?: boolean }) {
                     </td>
 
                     {/* Cột Thao tác */}
-                    <td className={`px-5 py-3.5 align-middle text-right ${readOnly ? "hidden" : ""}`}>
+                    <td className="px-5 py-3.5 align-middle text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         {isEditing && (
                           <>
@@ -933,7 +926,7 @@ export function CustomersPanel({ readOnly = false }: { readOnly?: boolean }) {
 
               {filteredCustomers.length === 0 && (
                 <tr>
-                  <td colSpan={readOnly ? 4 : 5} className="px-5 py-12 text-center">
+                  <td colSpan={5} className="px-5 py-12 text-center">
                     <div className="flex flex-col items-center justify-center space-y-2 text-muted-foreground">
                       <Building2 className="h-10 w-10 text-muted2 opacity-50" />
                       <p className="text-sm font-medium text-ink">Không tìm thấy khách hàng nào</p>

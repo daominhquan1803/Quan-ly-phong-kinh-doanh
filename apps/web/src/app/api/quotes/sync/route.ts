@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@hoanggia/db";
-import { requireSession, requireAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
+import { requireSession, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +20,7 @@ export async function GET() {
 
 export async function POST() {
   try {
-    const session = await requireAdmin();
+    const session = await requireSession();
 
     const workerUrl = process.env.WORKER_INTERNAL_URL || "http://localhost:4001";
     const token = process.env.INTERNAL_SYNC_TOKEN;

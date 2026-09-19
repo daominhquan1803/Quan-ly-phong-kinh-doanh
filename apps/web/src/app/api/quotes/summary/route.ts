@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, QuoteStatus, QUOTE_STATUS_LABEL } from "@hoanggia/db";
-import { requireAdmin, ForbiddenError, UnauthorizedError } from "@/lib/rbac";
+import { requireSession, ForbiddenError, UnauthorizedError } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +10,7 @@ const STATUS_ORDER: QuoteStatus[] = [QuoteStatus.WON, QuoteStatus.NEGOTIATING, Q
 
 export async function GET(req: NextRequest) {
   try {
-    await requireAdmin();
+    await requireSession();
     const { searchParams } = new URL(req.url);
 
     // Danh sách tháng đang có dữ liệu (khớp đúng các sheet THÁNG đang tồn tại trong Google

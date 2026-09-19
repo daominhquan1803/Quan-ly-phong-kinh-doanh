@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@hoanggia/db";
-import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
+import { requireSession, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
 import { computeDueDateFromTerm, PaymentTerm } from "@/lib/customer-payment-term";
 import { z } from "zod";
 
@@ -20,7 +20,8 @@ const updateSchema = z.object({
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    await requireAdmin();
+    const session = await requireSession();
+    const isAdmin = session.user.role === "ADMIN";
     const body = await req.json();
     const parsed = updateSchema.safeParse(body);
     if (!parsed.success) {
@@ -28,13 +29,16 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
 
     const target = await prisma.customer.findUnique({ where: { id: params.id } });
-    if (!target) return NextResponse.json({ error: "Không tìm thấy khách hàng" }, { status: 404 });
+    if (!target || (!isAdmin && target.salesEmployeeId !== session.user.id)) {
+      return NextResponse.json({ error: "Không tìm thấy khách hàng" }, { status: 404 });
+    }
 
     const { recomputeDueDates, ...fields } = parsed.data;
     const data: Record<string, unknown> = {};
     if (fields.customerName !== undefined) data.customerName = fields.customerName;
     if (fields.contactPerson !== undefined) data.contactPerson = fields.contactPerson || null;
-    if (fields.salesEmployeeId !== undefined) data.salesEmployeeId = fields.salesEmployeeId || null;
+    // Chỉ ADMIN được đổi NVKD phụ trách.
+    if (isAdmin && fields.salesEmployeeId !== undefined) data.salesEmployeeId = fields.salesEmployeeId || null;
     if (fields.paymentTermType !== undefined) {
       data.paymentTermType = fields.paymentTermType || null;
       data.paymentTermDays = fields.paymentTermType === "DAYS_FROM_INVOICE" ? fields.paymentTermDays ?? null : null;
@@ -71,7 +75,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    await requireAdmin();
+    const session = await requireSession();
+    const target = await prisma.customer.findUnique({ where: { id: params.id }, select: { salesEmployeeId: true } });
+    if (!target || (session.user.role !== "ADMIN" && target.salesEmployeeId !== session.user.id)) {
+      return NextResponse.json({ error: "Không tìm thấy khách hàng" }, { status: 404 });
+    }
     await prisma.customer.delete({ where: { id: params.id } });
     return NextResponse.json({ ok: true });
   } catch (err) {

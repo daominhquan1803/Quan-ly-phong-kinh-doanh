@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
+import { requireSession, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
 import { getAvailablePickingLines } from "@/lib/picking-slips";
 
 export const dynamic = "force-dynamic";
@@ -8,10 +8,10 @@ export const dynamic = "force-dynamic";
  * điền SL cần soạn/Ngày cần giao). */
 export async function GET(req: NextRequest) {
   try {
-    await requireAdmin();
+    const session = await requireSession();
     const customerCode = req.nextUrl.searchParams.get("customerCode");
     if (!customerCode) return NextResponse.json({ error: "Thiếu customerCode" }, { status: 400 });
-    const lines = await getAvailablePickingLines(customerCode);
+    const lines = await getAvailablePickingLines(customerCode, session.user.role === "ADMIN" ? undefined : session.user.id);
     return NextResponse.json({ lines });
   } catch (err) {
     if (err instanceof UnauthorizedError) return NextResponse.json({ error: err.message }, { status: 401 });

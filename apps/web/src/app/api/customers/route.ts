@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    // SALES chỉ xem khách do mình phụ trách (chỉ đọc); ADMIN xem toàn bộ.
+    // SALES chỉ thấy khách do mình phụ trách; ADMIN thấy toàn bộ.
     const session = await requireSession();
     const customers = await prisma.customer.findMany({
       where: scopeByOwner(session, "salesEmployeeId"),
@@ -35,13 +35,16 @@ const createSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin();
+    const session = await requireSession();
     const body = await req.json();
     const parsed = createSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Dữ liệu không hợp lệ" }, { status: 400 });
     }
-    const { customerCode, customerName, contactPerson, salesEmployeeId, paymentTermType, paymentTermDays, paymentTermMonthOffset } = parsed.data;
+    const { customerCode, customerName, contactPerson, paymentTermType, paymentTermDays, paymentTermMonthOffset } = parsed.data;
+
+    // NVKD tạo khách thì tự là người phụ trách; chỉ ADMIN được chọn NVKD khác.
+    const salesEmployeeId = session.user.role === "ADMIN" ? parsed.data.salesEmployeeId : session.user.id;
 
     const existing = await prisma.customer.findUnique({ where: { customerCode } });
     if (existing) return NextResponse.json({ error: "Mã khách hàng đã tồn tại" }, { status: 409 });

@@ -24,12 +24,12 @@ export default async function CustomersPage() {
             <p className="text-xs text-gray-400 mt-0.5">
               {isAdmin
                 ? "Hồ sơ khách hàng, phân công NVKD phụ trách và quy chuẩn hạn nợ — tự động kích hoạt tính hạn trên Hub Công Nợ"
-                : "Danh sách khách hàng do anh/chị phụ trách và quy chuẩn hạn nợ (chỉ xem — liên hệ quản trị viên nếu cần chỉnh sửa)"}
+                : "Danh sách khách hàng do anh/chị phụ trách và quy chuẩn hạn nợ — tự động kích hoạt tính hạn trên Hub Công Nợ"}
             </p>
           </div>
         </div>
       </div>
-      <CustomersPanel readOnly={!isAdmin} />
+      <CustomersPanel isAdmin={isAdmin} />
     </div>
   );
 }
