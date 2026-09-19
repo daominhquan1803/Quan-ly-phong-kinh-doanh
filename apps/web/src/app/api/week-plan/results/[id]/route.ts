@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@hoanggia/db";
 import { requireSession, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
+import { isWeekEntryLocked, weekLockedMessage } from "@/lib/week-plan";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,9 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     if (!entry) return NextResponse.json({ error: "Không tìm thấy dòng kết quả" }, { status: 404 });
     if (session.user.role !== "ADMIN" && entry.employeeId !== session.user.id) {
       throw new ForbiddenError("Không có quyền xoá dòng của người khác");
+    }
+    if (session.user.role !== "ADMIN" && isWeekEntryLocked(entry.weekStart)) {
+      throw new ForbiddenError(weekLockedMessage(entry.weekStart));
     }
     await prisma.weekPlanResultEntry.delete({ where: { id: params.id } });
     return NextResponse.json({ ok: true });

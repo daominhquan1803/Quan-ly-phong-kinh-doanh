@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import { prisma, fixSwappedDayMonth } from "@hoanggia/db";
 import { parseExcelDate } from "@/lib/excel-parser";
 import { requireSession, UnauthorizedError } from "@/lib/rbac";
-import { matchMetricFromSectionLabel, snapToWeekStart } from "@/lib/week-plan";
+import { isWeekEntryLocked, matchMetricFromSectionLabel, snapToWeekStart, weekLockedMessage } from "@/lib/week-plan";
 
 export const dynamic = "force-dynamic";
 
@@ -108,9 +108,16 @@ export async function POST(req: NextRequest) {
         return;
       }
 
+      const rowWeekStart = snapToWeekStart(entryDate);
+      // Quá hạn nhập của tuần này — chỉ Quản trị viên được nhập bổ sung, bỏ qua dòng của NVKD.
+      if (session.user.role !== "ADMIN" && isWeekEntryLocked(rowWeekStart)) {
+        errors.push({ rowNumber, message: weekLockedMessage(rowWeekStart) });
+        return;
+      }
+
       toCreate.push({
         employeeId,
-        weekStart: snapToWeekStart(entryDate),
+        weekStart: rowWeekStart,
         metric: currentMetric,
         entryDate,
         customerName,

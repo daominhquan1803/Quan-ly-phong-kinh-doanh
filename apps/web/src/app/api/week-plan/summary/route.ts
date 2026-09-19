@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSession, UnauthorizedError } from "@/lib/rbac";
-import { getWeekPlanReport } from "@/lib/week-plan";
+import { getWeekPlanReport, isWeekEntryLocked, weekEntryDeadlineDay } from "@/lib/week-plan";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +26,11 @@ export async function GET(req: NextRequest) {
       weekStart: report.weekStart.toISOString(),
       rows: report.rows,
       isAdmin: session.user.role === "ADMIN",
+      // Hạn nhập kết quả của tuần này (hết ngày thứ Hai tuần kế tiếp) — quá hạn thì NVKD bị khoá.
+      entryLock: {
+        locked: isWeekEntryLocked(report.weekStart),
+        deadlineDay: weekEntryDeadlineDay(report.weekStart).toISOString(),
+      },
     });
   } catch (err) {
     if (err instanceof UnauthorizedError) return NextResponse.json({ error: err.message }, { status: 401 });

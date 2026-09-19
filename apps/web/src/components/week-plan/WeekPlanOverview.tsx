@@ -41,7 +41,8 @@ interface ReportRow {
   totalPoints: number;
   weekGrade: 0 | 1 | 2;
 }
-interface SummaryResponse { weekStart: string; rows: ReportRow[]; isAdmin: boolean }
+interface EntryLock { locked: boolean; deadlineDay: string }
+interface SummaryResponse { weekStart: string; rows: ReportRow[]; isAdmin: boolean; entryLock?: EntryLock }
 interface ResultEntry {
   id: string;
   entryDate: string;
@@ -187,6 +188,7 @@ export function WeekPlanOverview({ isAdmin }: { isAdmin: boolean }) {
         weekStart={weekStart}
         weekStartISO={weekStartISO}
         isAdmin={isAdmin}
+        entryLock={summary?.entryLock}
         employees={employeesData?.users ?? []}
         entryEmployeeId={entryEmployeeId}
         onEmployeeChange={setEntryEmployeeId}
@@ -575,6 +577,7 @@ function ResultEntrySection({
   weekStart,
   weekStartISO,
   isAdmin,
+  entryLock,
   employees,
   entryEmployeeId,
   onEmployeeChange,
@@ -583,6 +586,7 @@ function ResultEntrySection({
   weekStart: Date;
   weekStartISO: string;
   isAdmin: boolean;
+  entryLock?: EntryLock;
   employees: Employee[];
   entryEmployeeId: string;
   onEmployeeChange: (id: string) => void;
@@ -594,6 +598,10 @@ function ResultEntrySection({
   const [form, setForm] = useState({ entryDate: toISODate(new Date()), customerName: "", address: "", content: "", productInterest: "" });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Quá hạn nhập (hết thứ Hai tuần kế tiếp): NVKD bị khoá, chỉ Quản trị viên nhập bổ sung được.
+  const lockedForUser = !!entryLock?.locked && !isAdmin;
+  const deadlineText = entryLock ? formatDateVN(entryLock.deadlineDay) : "";
 
   const enabled = !!entryEmployeeId;
   const { data, isLoading } = useQuery({
@@ -646,7 +654,13 @@ function ResultEntrySection({
   }
 
   async function handleDelete(id: string) {
-    await fetch(`/api/week-plan/results/${id}`, { method: "DELETE" });
+    setError(null);
+    const res = await fetch(`/api/week-plan/results/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setError(json.error ?? "Không xoá được");
+      return;
+    }
     invalidate();
   }
 
@@ -688,20 +702,40 @@ function ResultEntrySection({
         {METRIC_NOTE[metric]}
       </p>
 
+      {entryLock && (
+        <p
+          className={cn(
+            "mb-3 rounded-lg border px-3 py-2 text-xs",
+            entryLock.locked
+              ? "border-brandRed-600/40 bg-brandRed-600/10 text-brandRed-600"
+              : "border-amber-500/30 bg-amber-500/10 text-amber-400"
+          )}
+        >
+          {entryLock.locked
+            ? isAdmin
+              ? `Tuần này đã quá hạn nhập của NVKD (hạn chót hết ngày ${deadlineText}) — chỉ Quản trị viên nhập bổ sung được, bạn vẫn nhập được.`
+              : `Tuần này đã khoá nhập liệu (hạn chót hết ngày ${deadlineText}). Cần bổ sung, vui lòng liên hệ Quản trị viên.`
+            : `Hạn chót nhập kết quả tuần này: hết ngày ${deadlineText} (thứ Hai của tuần kế tiếp). Sau hạn, chỉ Quản trị viên nhập bổ sung được.`}
+        </p>
+      )}
+
       <div className="flex items-center gap-2 mb-3">
         <button
           onClick={() => { setShowForm((v) => !v); setShowUpload(false); }}
-          className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2 text-xs font-semibold text-ink hover:bg-white/[0.08] transition-all"
+          disabled={lockedForUser}
+          className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2 text-xs font-semibold text-ink hover:bg-white/[0.08] transition-all disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Plus className="h-3.5 w-3.5" /> Thêm dòng
         </button>
         <button
           onClick={() => { setShowUpload((v) => !v); setShowForm(false); }}
-          className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2 text-xs font-semibold text-ink hover:bg-white/[0.08] transition-all"
+          disabled={lockedForUser}
+          className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2 text-xs font-semibold text-ink hover:bg-white/[0.08] transition-all disabled:cursor-not-allowed disabled:opacity-40"
         >
           <UploadCloud className="h-3.5 w-3.5" /> Tải Excel lên
         </button>
       </div>
+      {error && !showForm && <p className="mb-3 text-xs text-brandRed-600">{error}</p>}
 
       {showForm && (
         <div className="rounded-md border border-gray-200 bg-gray-50 p-3 mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -776,9 +810,11 @@ function ResultEntrySection({
                 <td className="px-2 py-1.5 text-muted-foreground">{e.content ?? "—"}</td>
                 <td className="px-2 py-1.5 text-muted-foreground">{e.productInterest ?? "—"}</td>
                 <td className="px-2 py-1.5 text-right">
-                  <button onClick={() => handleDelete(e.id)} className="text-muted2 hover:text-brandRed-600">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  {!lockedForUser && (
+                    <button onClick={() => handleDelete(e.id)} className="text-muted2 hover:text-brandRed-600">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

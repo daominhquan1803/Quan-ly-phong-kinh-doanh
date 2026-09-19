@@ -8,6 +8,8 @@ import {
   formatWeekLabel,
   weekGradeFromTotalPoints,
   matchMetricFromSectionLabel,
+  weekEntryLockAt,
+  isWeekEntryLocked,
 } from "./week-plan";
 
 function d(y: number, m: number, day: number): Date {
@@ -98,6 +100,26 @@ describe("formatWeekLabel", () => {
   it("hiện đúng số tuần + tháng + khoảng ngày", () => {
     expect(formatWeekLabel(d(2026, 8, 1))).toBe("Tuần 1 tháng 8 (01/08 – 09/08/2026)");
     expect(formatWeekLabel(d(2026, 8, 24))).toBe("Tuần 4 tháng 8 (24/08 – 31/08/2026)");
+  });
+});
+
+describe("weekEntryLockAt — khoá nhập liệu sau hết thứ Hai tuần kế tiếp", () => {
+  // Tháng 9/2026: T1 = 1-13/9, T2 = 14-20/9, T3 = 21-27/9, T4 = 28-30/9.
+  it("Tuần 1-3: khoá từ đầu ngày Thứ Ba sau (hết thứ Hai của tuần kế tiếp)", () => {
+    expect(fmt(weekEntryLockAt(d(2026, 9, 1)))).toBe("15/09/2026");
+    expect(fmt(weekEntryLockAt(d(2026, 9, 14)))).toBe("22/09/2026");
+    expect(fmt(weekEntryLockAt(d(2026, 9, 21)))).toBe("29/09/2026");
+  });
+
+  it("Tuần 4: tuần kế tiếp là Tuần 1 tháng sau — hạn hết thứ Hai đầu tiên của tháng sau", () => {
+    // Tháng 10/2026 bắt đầu thứ Năm 1/10 -> thứ Hai đầu tiên = 5/10 -> khoá từ 6/10.
+    expect(fmt(weekEntryLockAt(d(2026, 9, 28)))).toBe("06/10/2026");
+  });
+
+  it("isWeekEntryLocked: còn mở đến hết thứ Hai, khoá từ 0h thứ Ba", () => {
+    const week1 = d(2026, 9, 1);
+    expect(isWeekEntryLocked(week1, new Date(2026, 8, 14, 23, 59, 59))).toBe(false);
+    expect(isWeekEntryLocked(week1, new Date(2026, 8, 15, 0, 0, 0))).toBe(true);
   });
 });
 

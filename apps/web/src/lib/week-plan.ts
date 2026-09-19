@@ -173,6 +173,34 @@ export function snapToWeekStart(d: Date): Date {
   return findMonthWeekForDate(d).start;
 }
 
+/**
+ * Thời điểm KHOÁ nhập kết quả của 1 tuần (đầu ngày sau hạn — tức "hết ngày" hạn chót): NVKD chỉ
+ * được nhập/sửa/xoá/tải file cho tuần này chậm nhất đến hết ngày THỨ HAI của tuần kế tiếp; sau đó
+ * chỉ Quản trị viên được nhập bổ sung (anh Quân chốt 19/09/2026). Tuần 4 của tháng kết thúc cuối
+ * tháng nên "tuần kế tiếp" là Tuần 1 tháng sau — thứ Hai của tuần đó là thứ Hai đầu tiên của
+ * tháng sau (Tuần 1 có thể bắt đầu giữa tuần, lấy thứ Hai đầu tiên kể từ ngày bắt đầu).
+ */
+export function weekEntryLockAt(weekStartInput: Date): Date {
+  const { end } = weekRange(weekStartInput); // end EXCLUSIVE = đầu tuần kế tiếp
+  return addDays(firstMondayOnOrAfter(end), 1);
+}
+
+export function isWeekEntryLocked(weekStartInput: Date, now: Date = new Date()): boolean {
+  return now.getTime() >= weekEntryLockAt(weekStartInput).getTime();
+}
+
+/** Ngày hạn chót (hết ngày này thì khoá) của 1 tuần — dùng để hiển thị. */
+export function weekEntryDeadlineDay(weekStartInput: Date): Date {
+  return addDays(weekEntryLockAt(weekStartInput), -1);
+}
+
+export function weekLockedMessage(weekStartInput: Date): string {
+  const d = weekEntryDeadlineDay(weekStartInput);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `Tuần này đã khoá nhập liệu (hạn chót hết ngày ${dd}/${mm}/${d.getFullYear()}) — chỉ Quản trị viên nhập bổ sung được`;
+}
+
 /** Tuần liền trước/sau — có thể nhảy sang tháng khác (Tuần 1 lùi 1 = Tuần 4 tháng trước, Tuần 4
  * tiến 1 = Tuần 1 tháng sau). */
 export function adjacentWeekStart(weekStart: Date, direction: 1 | -1): Date {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@hoanggia/db";
 import { requireSession, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
-import { isManualMetric, MANUAL_METRICS, snapToWeekStart, weekRange } from "@/lib/week-plan";
+import { isManualMetric, isWeekEntryLocked, MANUAL_METRICS, snapToWeekStart, weekLockedMessage, weekRange } from "@/lib/week-plan";
 
 export const dynamic = "force-dynamic";
 
@@ -79,6 +79,10 @@ export async function POST(req: NextRequest) {
     }
     if (!isManualMetric(parsed.data.metric as never)) {
       return NextResponse.json({ error: "Mục này được tính tự động, không nhập tay" }, { status: 400 });
+    }
+    // Quá hạn nhập (hết thứ Hai tuần kế tiếp) — chỉ Quản trị viên được nhập bổ sung.
+    if (session.user.role !== "ADMIN" && isWeekEntryLocked(weekStart)) {
+      return NextResponse.json({ error: weekLockedMessage(weekStart) }, { status: 403 });
     }
 
     const entry = await prisma.weekPlanResultEntry.create({
