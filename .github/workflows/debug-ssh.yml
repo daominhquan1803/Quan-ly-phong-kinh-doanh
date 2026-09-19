@@ -2,11 +2,6 @@ name: Debug SSH (temporary)
 
 on:
   workflow_dispatch:
-    inputs:
-      dry_run:
-        description: "dry-run (true) hay sua that (false)"
-        required: true
-        default: "true"
 
 jobs:
   debug:
@@ -21,4 +16,16 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             cd ${{ secrets.VPS_DEPLOY_PATH }}
-            docker compose exec -T -e TZ=Asia/Ho_Chi_Minh worker npx tsx /repo/scripts/repair-week-plan-swapped-dates.ts ${{ github.event.inputs.dry_run == 'true' && '--dry-run' || '' }}
+            docker compose exec -T -e TZ=Asia/Ho_Chi_Minh worker node -e "
+            const {prisma}=require('/repo/packages/db/dist/index.js');
+            (async () => {
+              const es = await prisma.weekPlanResultEntry.findMany({ where: { weekStart: { gte: new Date(2026,8,1), lt: new Date(2026,8,14) } }, include: { employee: { select: { name: true } } } });
+              const g = {};
+              for (const e of es) { const k = e.employee.name + ' | ' + e.metric + ' | ' + e.entryDate.getDate() + '/' + (e.entryDate.getMonth()+1); g[k] = (g[k]||0)+1; }
+              console.log('Tuan 1 thang 9 - so dong theo NV/muc/ngay:'); console.log(JSON.stringify(g, null, 1));
+              const totals = {};
+              for (const e of es) { const k = e.employee.name + ' | ' + e.metric; totals[k] = (totals[k]||0)+1; }
+              console.log('Tong:', JSON.stringify(totals, null, 1));
+              await prisma.\$disconnect();
+            })();
+            "
