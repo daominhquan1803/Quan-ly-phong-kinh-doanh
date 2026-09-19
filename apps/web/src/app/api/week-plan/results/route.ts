@@ -52,6 +52,7 @@ const createSchema = z.object({
   address: z.string().trim().max(500).optional().nullable(),
   content: z.string().trim().max(1000).optional().nullable(),
   productInterest: z.string().trim().max(500).optional().nullable(),
+  contactInfo: z.string().trim().max(500).optional().nullable(),
   // ADMIN có thể ghi hộ cho người khác — SALES chỉ ghi cho chính mình (bỏ qua nếu có gửi lên).
   employeeId: z.string().trim().min(1).optional(),
 });
@@ -95,6 +96,7 @@ export async function POST(req: NextRequest) {
         address: parsed.data.address?.trim() || null,
         content: parsed.data.content?.trim() || null,
         productInterest: parsed.data.productInterest?.trim() || null,
+        contactInfo: parsed.data.contactInfo?.trim() || null,
         createdById: session.user.id,
       },
     });

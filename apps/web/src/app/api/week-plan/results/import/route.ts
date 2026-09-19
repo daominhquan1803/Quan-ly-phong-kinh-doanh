@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * Tải file Excel theo đúng cấu trúc sheet "KẾT QUẢ" trong file mẫu — cột: STT, Mục, Ngày tháng,
- * Khách hàng, Địa chỉ, Nội dung, Sản phẩm quan tâm. Cột "Mục" chỉ có ở dòng đầu mỗi nhóm (các
+ * Khách hàng, Địa chỉ, Thông tin liên hệ (tên + SĐT, không bắt buộc), Nội dung, Sản phẩm quan tâm. Cột "Mục" chỉ có ở dòng đầu mỗi nhóm (các
  * dòng sau cùng nhóm để trống) — tự động lấy Mục của dòng gần nhất phía trên (forward-fill),
  * đúng cách file mẫu trình bày. weekStart của mỗi dòng lấy trực tiếp từ "Ngày tháng" của dòng đó
  * (không ép theo tuần đang xem trên UI) — 1 file có thể chứa nhiều tuần, mỗi dòng tự xếp đúng
@@ -56,6 +56,7 @@ export async function POST(req: NextRequest) {
       address: headers.findIndex((h) => /địa chỉ/i.test(h)),
       content: headers.findIndex((h) => /nội dung/i.test(h)),
       productInterest: headers.findIndex((h) => /sản phẩm/i.test(h)),
+      contactInfo: headers.findIndex((h) => /liên hệ/i.test(h)),
     };
     if (colIdx.date < 0 || colIdx.customer < 0) {
       return NextResponse.json(
@@ -74,6 +75,7 @@ export async function POST(req: NextRequest) {
       address: string | null;
       content: string | null;
       productInterest: string | null;
+      contactInfo: string | null;
     }[] = [];
 
     // Dòng nằm trước mọi ô "Mục" (NVKD quên điền) mặc định tính là "KH liên hệ mới" — theo chốt của
@@ -132,6 +134,7 @@ export async function POST(req: NextRequest) {
         content: colIdx.content >= 0 ? String(row[colIdx.content] ?? "").trim() || null : null,
         productInterest:
           colIdx.productInterest >= 0 ? String(row[colIdx.productInterest] ?? "").trim() || null : null,
+        contactInfo: colIdx.contactInfo >= 0 ? String(row[colIdx.contactInfo] ?? "").trim() || null : null,
       });
     });
 

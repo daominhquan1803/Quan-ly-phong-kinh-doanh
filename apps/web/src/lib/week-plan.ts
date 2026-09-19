@@ -593,7 +593,10 @@ export async function getWeekPlanMetricDetail(
       date: e.entryDate.toISOString(),
       title: e.customerName,
       subtitle: e.address,
-      note: [e.content, e.productInterest ? `Quan tâm: ${e.productInterest}` : null].filter(Boolean).join(" · ") || null,
+      note:
+        [e.contactInfo ? `LH: ${e.contactInfo}` : null, e.content, e.productInterest ? `Quan tâm: ${e.productInterest}` : null]
+          .filter(Boolean)
+          .join(" · ") || null,
       counted: true,
     }));
   }

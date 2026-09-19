@@ -985,6 +985,8 @@ model WeekPlanResultEntry {
   address         String?
   content         String?
   productInterest String?
+  // "Thông tin liên hệ" — tên người liên hệ + số điện thoại của khách (NVKD tự ghi).
+  contactInfo     String?
   importBatchId   String?
   importBatch     WeekPlanResultImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
   createdById     String

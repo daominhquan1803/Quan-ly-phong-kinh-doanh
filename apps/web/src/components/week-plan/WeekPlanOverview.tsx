@@ -50,6 +50,7 @@ interface ResultEntry {
   address: string | null;
   content: string | null;
   productInterest: string | null;
+  contactInfo: string | null;
 }
 
 // ---- "Tuần" riêng của Kế hoạch làm việc tuần — luôn đúng 4 tuần/tháng, không vắt qua tháng ----
@@ -594,7 +595,7 @@ function ResultEntrySection({
   const [metric, setMetric] = useState<Metric>("NEW_CONTACT");
   const [showForm, setShowForm] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
-  const [form, setForm] = useState({ entryDate: toISODate(new Date()), customerName: "", address: "", content: "", productInterest: "" });
+  const [form, setForm] = useState({ entryDate: toISODate(new Date()), customerName: "", address: "", contactInfo: "", content: "", productInterest: "" });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -638,6 +639,7 @@ function ResultEntrySection({
         address: form.address || null,
         content: form.content || null,
         productInterest: form.productInterest || null,
+        contactInfo: form.contactInfo || null,
         employeeId: isAdmin ? entryEmployeeId : undefined,
       }),
     });
@@ -645,7 +647,7 @@ function ResultEntrySection({
     if (!res.ok) {
       setError(json.error ?? "Không lưu được");
     } else {
-      setForm({ entryDate: toISODate(new Date()), customerName: "", address: "", content: "", productInterest: "" });
+      setForm({ entryDate: toISODate(new Date()), customerName: "", address: "", contactInfo: "", content: "", productInterest: "" });
       setShowForm(false);
       invalidate();
     }
@@ -752,6 +754,10 @@ function ResultEntrySection({
             <input value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} className="input" />
           </label>
           <label className="text-xs text-muted-foreground flex flex-col gap-1">
+            Thông tin liên hệ (tên người liên hệ, số điện thoại)
+            <input value={form.contactInfo} onChange={(e) => setForm((f) => ({ ...f, contactInfo: e.target.value }))} placeholder="VD: Chị Lan - 0912 345 678" className="input" />
+          </label>
+          <label className="text-xs text-muted-foreground flex flex-col gap-1">
             Sản phẩm quan tâm
             <input value={form.productInterest} onChange={(e) => setForm((f) => ({ ...f, productInterest: e.target.value }))} className="input" />
           </label>
@@ -785,6 +791,7 @@ function ResultEntrySection({
               <th className="font-medium px-2 py-1.5">Ngày</th>
               <th className="font-medium px-2 py-1.5">Khách hàng</th>
               <th className="font-medium px-2 py-1.5">Địa chỉ</th>
+              <th className="font-medium px-2 py-1.5">Thông tin liên hệ</th>
               <th className="font-medium px-2 py-1.5">Nội dung</th>
               <th className="font-medium px-2 py-1.5">SP quan tâm</th>
               <th className="font-medium px-2 py-1.5"></th>
@@ -793,12 +800,12 @@ function ResultEntrySection({
           <tbody className="divide-y divide-gray-100">
             {isLoading && (
               <tr>
-                <td colSpan={6} className="px-2 py-4 text-center text-muted-foreground">Đang tải...</td>
+                <td colSpan={7} className="px-2 py-4 text-center text-muted-foreground">Đang tải...</td>
               </tr>
             )}
             {!isLoading && (data?.entries.length ?? 0) === 0 && (
               <tr>
-                <td colSpan={6} className="px-2 py-4 text-center text-muted-foreground">Chưa có dòng nào trong tuần này.</td>
+                <td colSpan={7} className="px-2 py-4 text-center text-muted-foreground">Chưa có dòng nào trong tuần này.</td>
               </tr>
             )}
             {data?.entries.map((e) => (
@@ -806,6 +813,7 @@ function ResultEntrySection({
                 <td className="px-2 py-1.5 text-ink2 whitespace-nowrap">{formatDateVN(e.entryDate)}</td>
                 <td className="px-2 py-1.5 text-ink font-medium">{e.customerName}</td>
                 <td className="px-2 py-1.5 text-muted-foreground">{e.address ?? "—"}</td>
+                <td className="px-2 py-1.5 text-muted-foreground">{e.contactInfo ?? "—"}</td>
                 <td className="px-2 py-1.5 text-muted-foreground">{e.content ?? "—"}</td>
                 <td className="px-2 py-1.5 text-muted-foreground">{e.productInterest ?? "—"}</td>
                 <td className="px-2 py-1.5 text-right">
@@ -863,7 +871,7 @@ function UploadPanel({
   return (
     <div className="rounded-md border border-gray-200 bg-gray-50 p-3 mb-4 space-y-3">
       <p className="text-xs text-muted-foreground">
-        File cần đúng cấu trúc sheet &quot;KẾT QUẢ&quot; trong file mẫu (STT, Mục, Ngày tháng, Khách hàng, Địa chỉ, Nội dung, Sản phẩm quan tâm) —
+        File cần đúng cấu trúc sheet &quot;KẾT QUẢ&quot; trong file mẫu (STT, Mục, Ngày tháng, Khách hàng, Địa chỉ, Thông tin liên hệ, Nội dung, Sản phẩm quan tâm) —
         1 file có thể chứa cả 2 mục, mỗi dòng tự xếp đúng tuần theo Ngày tháng. (Mục &quot;Khách hàng cũ liên hệ gặp
         thăm hỏi&quot; giờ tính tự động từ Đăng ký đi công tác, không cần nhập ở đây nữa.)
       </p>
