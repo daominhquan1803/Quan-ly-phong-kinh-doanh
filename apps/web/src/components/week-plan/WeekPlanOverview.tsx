@@ -803,7 +803,7 @@ function UploadPanel({
   const [employeeId, setEmployeeId] = useState(defaultEmployeeId);
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ createdCount: number; errorCount: number; errors: { rowNumber: number; message: string }[] } | null>(null);
+  const [result, setResult] = useState<{ createdCount: number; swappedDateCount?: number; errorCount: number; errors: { rowNumber: number; message: string }[] } | null>(null);
 
   useEffect(() => setEmployeeId(defaultEmployeeId), [defaultEmployeeId]);
 
@@ -855,6 +855,12 @@ function UploadPanel({
             Đã thêm <span className="font-mono">{result.createdCount}</span> dòng
             {result.errorCount > 0 && <span className="text-brandRed-600"> — {result.errorCount} dòng lỗi</span>}
           </p>
+          {!!result.swappedDateCount && (
+            <p className="mt-1 text-amber-400">
+              Đã tự sửa {result.swappedDateCount} dòng có ngày bị Excel đảo ngày/tháng (vd &quot;3/9&quot; bị đọc thành 9/3) —
+              vui lòng xem lại ngày của các dòng vừa thêm.
+            </p>
+          )}
           {result.errors.length > 0 && (
             <ul className="mt-1 space-y-0.5 text-brandRed-600">
               {result.errors.slice(0, 10).map((e, i) => (

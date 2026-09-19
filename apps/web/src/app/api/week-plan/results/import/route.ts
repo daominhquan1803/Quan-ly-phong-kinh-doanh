@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
-import { prisma } from "@hoanggia/db";
+import { prisma, fixSwappedDayMonth } from "@hoanggia/db";
 import { parseExcelDate } from "@/lib/excel-parser";
 import { requireSession, UnauthorizedError } from "@/lib/rbac";
 import { matchMetricFromSectionLabel, snapToWeekStart } from "@/lib/week-plan";
@@ -77,6 +77,7 @@ export async function POST(req: NextRequest) {
     }[] = [];
 
     let currentMetric: "NEW_CONTACT" | "NEW_MEETING" | null = null;
+    let swappedDateCount = 0;
 
     dataRows.forEach((row, i) => {
       const rowNumber = i + 2; // +1 header, +1 về 1-based
@@ -94,11 +95,14 @@ export async function POST(req: NextRequest) {
         errors.push({ rowNumber, message: `Không xác định được "Mục" cho dòng này (${metricLabelRaw || "để trống"})` });
         return;
       }
-      const entryDate = parseExcelDate(dateRaw);
-      if (!entryDate) {
+      const parsedDate = parseExcelDate(dateRaw);
+      if (!parsedDate) {
         errors.push({ rowNumber, message: "Ngày tháng không đọc được" });
         return;
       }
+      // Ngày bị Excel (định dạng Mỹ) đảo ngày/tháng — xem fixSwappedDayMonth.
+      const { date: entryDate, swapped } = fixSwappedDayMonth(parsedDate, new Date());
+      if (swapped) swappedDateCount++;
       if (!customerName) {
         errors.push({ rowNumber, message: "Thiếu tên khách hàng" });
         return;
@@ -138,6 +142,7 @@ export async function POST(req: NextRequest) {
       batchId: batch.id,
       totalRows: dataRows.length,
       createdCount: toCreate.length,
+      swappedDateCount,
       errorCount: errors.length,
       errors,
     });
