@@ -13,8 +13,8 @@ const updateSchema = z.object({
   paymentTermType: z.enum(["DAYS_FROM_INVOICE", "END_OF_MONTH_OFFSET"]).optional().nullable(),
   paymentTermDays: z.number().int().min(0).optional().nullable(),
   paymentTermMonthOffset: z.number().int().min(0).optional().nullable(),
-  // true = sau khi lưu quy tắc, tính lại dueDate cho mọi hoá đơn công nợ CHƯA có hạn thanh toán
-  // của khách này (không đụng hoá đơn đã có hạn — dù tự tính trước đó hay admin tự điền tay).
+  // true = tính lại dueDate cho mọi hoá đơn công nợ còn nợ của khách này theo quy tắc hiện tại (đổi
+  // quy tắc cũng tự làm việc này — xem PATCH bên dưới).
   recomputeDueDates: z.boolean().optional(),
 });
 
@@ -50,15 +50,24 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     const customer = await prisma.customer.update({ where: { id: params.id }, data });
 
+    // Quy tắc hạn nợ của khách là nguồn chuẩn: đổi quy tắc (hoặc bấm "tính lại") thì áp lại hạn thanh
+    // toán cho MỌI hoá đơn còn nợ của khách — kể cả hoá đơn đã có hạn từ file gốc/nhập tay trước đó
+    // (anh Quân: sửa hạn công nợ ở trang Khách hàng phải đồng bộ sang trang Công nợ). Hoá đơn đã
+    // thanh toán đủ giữ nguyên để không đổi lịch sử.
+    const termChanged =
+      customer.paymentTermType !== target.paymentTermType ||
+      customer.paymentTermDays !== target.paymentTermDays ||
+      customer.paymentTermMonthOffset !== target.paymentTermMonthOffset;
     let recomputedCount = 0;
-    if (recomputeDueDates && customer.paymentTermType) {
+    if ((recomputeDueDates || termChanged) && customer.paymentTermType) {
       const invoices = await prisma.debtInvoice.findMany({
-        where: { customerCode: customer.customerCode, dueDate: null, invoiceDate: { not: null } },
-        select: { id: true, invoiceDate: true },
+        where: { customerCode: customer.customerCode, invoiceDate: { not: null } },
+        select: { id: true, invoiceDate: true, dueDate: true, originalAmount: true, paidAmount: true },
       });
       for (const inv of invoices) {
+        if (Number(inv.originalAmount) - Number(inv.paidAmount) <= 0) continue;
         const dueDate = computeDueDateFromTerm(inv.invoiceDate, customer as PaymentTerm);
-        if (!dueDate) continue;
+        if (!dueDate || inv.dueDate?.getTime() === dueDate.getTime()) continue;
         await prisma.debtInvoice.update({ where: { id: inv.id }, data: { dueDate } });
         recomputedCount++;
       }

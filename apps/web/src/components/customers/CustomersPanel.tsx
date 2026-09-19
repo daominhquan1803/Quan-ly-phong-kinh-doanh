@@ -267,6 +267,11 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
         delete next[id];
         return next;
       });
+      if (json.recomputedCount > 0) {
+        setRecomputeMsg(`Đã cập nhật hạn thanh toán của ${json.recomputedCount} hoá đơn công nợ theo quy tắc mới.`);
+        await queryClient.invalidateQueries({ queryKey: ["debt-invoices"] });
+        await queryClient.invalidateQueries({ queryKey: ["debt-summary"] });
+      }
       await queryClient.invalidateQueries({ queryKey: ["customers"] });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Có lỗi xảy ra");
