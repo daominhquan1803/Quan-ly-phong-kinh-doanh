@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
@@ -25,10 +26,14 @@ export function MobileNav({ role }: { role?: "ADMIN" | "SALES" }) {
         <Menu className="h-5 w-5" />
       </button>
 
-      {open && (
+      {/* Render ra document.body (portal): header có backdrop-blur nên trở thành khung chứa của mọi
+          phần tử position:fixed bên trong nó — nếu để khay trong header, khay bị bó vào chiều cao
+          thanh header và không hiện được menu trên điện thoại. */}
+      {open &&
+        createPortal(
         <>
-          <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setOpen(false)} />
-          <div className="fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-navy-900 text-white shadow-xl">
+          <div className="fixed inset-0 z-[60] bg-black/60" onClick={() => setOpen(false)} />
+          <div className="fixed inset-y-0 left-0 z-[70] flex w-72 max-w-[85vw] flex-col bg-[#0b1628] text-white shadow-xl border-r border-white/10">
             <div className="flex items-center justify-between gap-3 px-5 py-5 border-b border-white/10">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white p-1.5">
@@ -72,7 +77,8 @@ export function MobileNav({ role }: { role?: "ADMIN" | "SALES" }) {
               })}
             </nav>
           </div>
-        </>
+        </>,
+        document.body
       )}
     </div>
   );
