@@ -32,7 +32,7 @@ interface RiskReport {
 
 const LEVEL_STYLE: Record<CustomerRiskLevel, { badge: string; label: string; dot: string }> = {
   HIGH: {
-    badge: "bg-brandRed-50 text-brandRed-600 border border-brandRed-600/30 shadow-[0_0_8px_rgba(200,16,46,0.15)] animate-pulse",
+    badge: "bg-brandRed-50 text-alert border border-brandRed-600/30 shadow-[0_0_8px_rgba(200,16,46,0.15)] animate-pulse",
     label: "Nguy cơ cao",
     dot: "bg-brandRed-600 shadow-[0_0_6px_#C8102E]",
   },
@@ -87,19 +87,19 @@ export function CustomerRiskPanel({ employeeId }: { employeeId: string }) {
   return (
     <div className="rounded-2xl border border-brandRed-600/40 bg-gradient-to-br from-navy-900/95 via-brandRed-50/10 to-navy-900/95 shadow-card backdrop-blur-xl transition-all">
       <div className="flex items-start gap-3.5 p-4 sm:p-5">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brandRed-50 border border-brandRed-600/30 text-brandRed-600 shadow-[0_0_12px_rgba(200,16,46,0.2)]">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brandRed-50 border border-brandRed-600/30 text-alert shadow-[0_0_12px_rgba(200,16,46,0.2)]">
           <ShieldAlert className="h-5 w-5" />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs font-bold uppercase tracking-wider text-brandRed-600">
+            <span className="text-xs font-bold uppercase tracking-wider text-alert">
               Cảnh báo khách hàng có nguy cơ mất
             </span>
           </div>
           <p className="text-sm text-ink2 leading-relaxed">
             {high.length > 0 ? (
               <>
-                <strong className="text-brandRed-600">{high.length} khách hàng</strong> đang im lặng bất thường so với nhịp đặt hàng của chính họ
+                <strong className="text-alert">{high.length} khách hàng</strong> đang im lặng bất thường so với nhịp đặt hàng của chính họ
                 {highValue > 0 && (
                   <>
                     {" "}— tương ứng <strong className="text-ink font-mono">{formatCurrencyVND(highValue)}</strong> giá trị đơn đã phát sinh
@@ -173,7 +173,7 @@ export function CustomerRiskPanel({ employeeId }: { employeeId: string }) {
                       <p
                         className={cn(
                           "text-[11px] font-mono",
-                          r.trendPct < 0 ? "text-brandRed-600" : "text-success-600"
+                          r.trendPct < 0 ? "text-alert" : "text-success-600"
                         )}
                       >
                         {r.trendPct >= 0 ? "+" : ""}
@@ -191,7 +191,7 @@ export function CustomerRiskPanel({ employeeId }: { employeeId: string }) {
       {data.rows.length > 5 && (
         <button
           onClick={() => setExpanded((v) => !v)}
-          className="flex w-full items-center justify-center gap-1.5 border-t border-gray-200/50 py-2.5 text-xs font-semibold text-brandRed-600 hover:bg-brandRed-50/10 transition-colors"
+          className="flex w-full items-center justify-center gap-1.5 border-t border-gray-200/50 py-2.5 text-xs font-semibold text-alert hover:bg-brandRed-50/10 transition-colors"
         >
           {expanded ? (
             <>

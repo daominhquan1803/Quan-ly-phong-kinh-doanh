@@ -98,9 +98,7 @@ export function TargetsTable() {
                             "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold border",
                             r.completionPct >= 100
                               ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.2)]"
-                              : r.completionPct < 60
-                              ? "bg-brandRed-500/15 text-brandRed-400 border-brandRed-500/30 shadow-[0_0_8px_rgba(200,16,46,0.15)]"
-                              : "bg-amber-500/15 text-amber-400 border-amber-500/30 shadow-[0_0_8px_rgba(224,163,39,0.15)]"
+                              : "bg-brandRed-500/15 text-alert border-brandRed-500/40 shadow-[0_0_8px_rgba(255,59,71,0.25)]"
                           )}
                         >
                           {r.completionPct}%
@@ -109,7 +107,7 @@ export function TargetsTable() {
                         "—"
                       )}
                     </td>
-                    <td className={cn("px-4 py-2.5 text-right font-mono", shortfall > 0 ? "text-brandRed-400 font-bold" : "text-muted2")}>
+                    <td className={cn("px-4 py-2.5 text-right font-mono", shortfall > 0 ? "text-alert font-bold" : "text-muted2")}>
                       {shortfall > 0 ? formatCurrencyVND(shortfall) : "—"}
                     </td>
                     <td className="px-4 py-2.5 text-right font-mono text-muted2">{formatCurrencyVND(r.oihValue)}</td>
@@ -138,9 +136,7 @@ export function TargetsTable() {
                             "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold border",
                             pct >= 100
                               ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.25)]"
-                              : pct < 60
-                              ? "bg-brandRed-500/20 text-brandRed-400 border-brandRed-500/40"
-                              : "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                              : "bg-brandRed-500/20 text-alert border-brandRed-500/40"
                           )}
                         >
                           {pct}%
@@ -150,7 +146,7 @@ export function TargetsTable() {
                       );
                     })()}
                   </td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-brandRed-400">
+                  <td className="px-4 py-3 text-right font-mono font-bold text-alert">
                     {formatCurrencyVND(data.rows.reduce((s, r) => s + Math.max(0, r.targetRevenue - r.actualRevenue), 0))}
                   </td>
                   <td className="px-4 py-3 text-right font-mono font-bold text-muted2">

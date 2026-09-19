@@ -53,7 +53,7 @@ export function PickingSlipDetail({ id }: { id: string }) {
   });
 
   if (isLoading) return <p className="text-sm text-muted-foreground">Đang tải...</p>;
-  if (error || !data) return <p className="text-sm text-brandRed-600">Không tải được phiếu.</p>;
+  if (error || !data) return <p className="text-sm text-alert">Không tải được phiếu.</p>;
   const slip = data.slip;
   const d = new Date(slip.slipDate);
 

@@ -40,7 +40,7 @@ const MATCH_LABEL: Record<PreviewRow["matchStatus"], string> = {
 const MATCH_ICON: Record<PreviewRow["matchStatus"], React.ReactNode> = {
   MATCHED: <CheckCircle2 className="h-3.5 w-3.5 text-success-600" />,
   PARTIAL: <AlertTriangle className="h-3.5 w-3.5 text-warning-500" />,
-  UNMATCHED: <XCircle className="h-3.5 w-3.5 text-brandRed-600" />,
+  UNMATCHED: <XCircle className="h-3.5 w-3.5 text-alert" />,
 };
 
 export function DebtPaymentsImportWizard({ onClose }: { onClose: () => void }) {
@@ -114,7 +114,7 @@ export function DebtPaymentsImportWizard({ onClose }: { onClose: () => void }) {
         </div>
 
         {error && (
-          <div className="rounded-xl border border-brandRed-500/30 bg-brandRed-500/10 text-brandRed-400 text-sm px-4 py-3 flex items-center gap-2 shadow-[0_0_12px_rgba(200,16,46,0.15)]">
+          <div className="rounded-xl border border-brandRed-500/30 bg-brandRed-500/10 text-alert text-sm px-4 py-3 flex items-center gap-2 shadow-[0_0_12px_rgba(200,16,46,0.15)]">
             <XCircle className="h-4 w-4 shrink-0" />
             <span>{error}</span>
           </div>
@@ -162,7 +162,7 @@ export function DebtPaymentsImportWizard({ onClose }: { onClose: () => void }) {
               </div>
               <div className="glass-card border border-brandRed-500/30 bg-brandRed-500/[0.04] !p-3.5 rounded-xl">
                 <p className="text-xs text-muted2">Chưa khớp</p>
-                <p className="text-xl font-bold font-mono text-brandRed-400 mt-1">{preview.summary.unmatched}</p>
+                <p className="text-xl font-bold font-mono text-alert mt-1">{preview.summary.unmatched}</p>
               </div>
               <div className="glass-card border border-white/10 bg-white/[0.02] !p-3.5 rounded-xl">
                 <p className="text-xs text-muted2">Trùng lặp</p>
@@ -214,7 +214,7 @@ export function DebtPaymentsImportWizard({ onClose }: { onClose: () => void }) {
             </div>
 
             {preview.errorCount > 0 && (
-              <p className="text-xs text-brandRed-400">{preview.errorCount} dòng lỗi sẽ bị bỏ qua khi ghi nhận.</p>
+              <p className="text-xs text-alert">{preview.errorCount} dòng lỗi sẽ bị bỏ qua khi ghi nhận.</p>
             )}
 
             <div className="flex items-center justify-end gap-3 pt-2">
@@ -251,7 +251,7 @@ export function DebtPaymentsImportWizard({ onClose }: { onClose: () => void }) {
               </div>
               <div className="glass-card border border-brandRed-500/30 bg-brandRed-500/[0.04] !p-3.5 rounded-xl">
                 <p className="text-xs text-muted2">Chưa khớp</p>
-                <p className="text-xl font-bold font-mono text-brandRed-400 mt-1">{result.unmatchedCount}</p>
+                <p className="text-xl font-bold font-mono text-alert mt-1">{result.unmatchedCount}</p>
               </div>
               <div className="glass-card border border-white/10 bg-white/[0.02] !p-3.5 rounded-xl">
                 <p className="text-xs text-muted2">Trùng lặp (bỏ qua)</p>

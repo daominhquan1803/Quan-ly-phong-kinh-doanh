@@ -400,7 +400,7 @@ export function CustomersPanel() {
             <div
               className={`flex h-10 w-10 items-center justify-center rounded-xl border group-hover:scale-110 transition-transform ${
                 stats.unassigned > 0
-                  ? "bg-brandRed-50 border-brandRed-600/30 text-brandRed-600 shadow-[0_0_12px_rgba(200,16,46,0.2)]"
+                  ? "bg-brandRed-50 border-brandRed-600/30 text-alert shadow-[0_0_12px_rgba(200,16,46,0.2)]"
                   : "bg-gray-100 border-gray-200 text-muted2"
               }`}
             >
@@ -410,13 +410,13 @@ export function CustomersPanel() {
           <div className="mt-3 flex items-baseline gap-2">
             <span
               className={`font-mono text-3xl font-bold tracking-tight ${
-                stats.unassigned > 0 ? "text-brandRed-600" : "text-ink"
+                stats.unassigned > 0 ? "text-alert" : "text-ink"
               }`}
             >
               {stats.unassigned}
             </span>
             {stats.unassigned > 0 ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-brandRed-50 px-2 py-0.5 text-xs font-semibold text-brandRed-600 border border-brandRed-600/20 animate-pulse">
+              <span className="inline-flex items-center gap-1 rounded-full bg-brandRed-50 px-2 py-0.5 text-xs font-semibold text-alert border border-brandRed-600/20 animate-pulse">
                 Cần gán
               </span>
             ) : (
@@ -470,12 +470,12 @@ export function CustomersPanel() {
 
       {/* Thông báo thông tin / lỗi */}
       {error && (
-        <div className="flex items-center justify-between rounded-xl border border-brandRed-600/40 bg-brandRed-50/20 p-4 text-sm text-brandRed-600 backdrop-blur-md">
+        <div className="flex items-center justify-between rounded-xl border border-brandRed-600/40 bg-brandRed-50/20 p-4 text-sm text-alert backdrop-blur-md">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 shrink-0 text-brandRed-600" />
+            <AlertTriangle className="h-4 w-4 shrink-0 text-alert" />
             <span>{error}</span>
           </div>
-          <button onClick={() => setError(null)} className="text-brandRed-600 hover:text-white">
+          <button onClick={() => setError(null)} className="text-alert hover:text-white">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -526,7 +526,7 @@ export function CustomersPanel() {
           <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-ink2">
-                Mã khách hàng <span className="text-brandRed-600">*</span>
+                Mã khách hàng <span className="text-alert">*</span>
               </label>
               <input
                 placeholder="VD: KH-00951"
@@ -538,7 +538,7 @@ export function CustomersPanel() {
 
             <div>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-ink2">
-                Tên khách hàng / Công ty <span className="text-brandRed-600">*</span>
+                Tên khách hàng / Công ty <span className="text-alert">*</span>
               </label>
               <input
                 placeholder="VD: CÔNG TY TNHH ABC..."
@@ -673,7 +673,7 @@ export function CustomersPanel() {
               className="rounded-xl border border-gray-200/80 bg-navy-50/80 px-3 py-2 text-sm text-ink transition-all focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
             >
               <option value="">Tất cả NVKD ({stats.total})</option>
-              <option value="UNASSIGNED" className="text-brandRed-600 font-medium">
+              <option value="UNASSIGNED" className="text-alert font-medium">
                 ⚠️ Chưa gán NVKD ({stats.unassigned})
               </option>
               {assignableEmployees.map((emp) => {
@@ -806,10 +806,10 @@ export function CustomersPanel() {
                           className={`w-full text-xs font-medium rounded-xl border px-3 py-2 transition-all focus:outline-none ${
                             edit.salesEmployeeId
                               ? "bg-navy-50/80 border-gray-200/90 text-ink focus:border-amber-500"
-                              : "bg-brandRed-50/90 border-brandRed-600/40 text-brandRed-600 font-semibold focus:border-brandRed-600 shadow-[0_0_10px_rgba(200,16,46,0.1)]"
+                              : "bg-brandRed-50/90 border-brandRed-600/40 text-alert font-semibold focus:border-brandRed-600 shadow-[0_0_10px_rgba(200,16,46,0.1)]"
                           }`}
                         >
-                          <option value="" className="text-brandRed-600 font-semibold">
+                          <option value="" className="text-alert font-semibold">
                             ⚠️ Chưa gán NVKD
                           </option>
                           {assignableEmployees.map((emp) => (
@@ -908,7 +908,7 @@ export function CustomersPanel() {
                           onClick={() => handleDelete(c.id)}
                           disabled={busyRow === c.id}
                           title="Xoá khách hàng"
-                          className="rounded-lg p-1.5 text-muted-foreground hover:bg-brandRed-50 hover:text-brandRed-600 transition-colors disabled:opacity-40"
+                          className="rounded-lg p-1.5 text-muted-foreground hover:bg-brandRed-50 hover:text-alert transition-colors disabled:opacity-40"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>

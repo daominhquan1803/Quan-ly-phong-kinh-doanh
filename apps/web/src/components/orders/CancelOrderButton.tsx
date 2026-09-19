@@ -41,7 +41,7 @@ export function CancelOrderButton({ orderId, isCancelled }: { orderId: string; i
           <RotateCcw className="h-4 w-4" />
           {loading ? "Đang xử lý..." : "Khôi phục đơn hàng"}
         </button>
-        {error && <p className="text-xs text-brandRed-600">{error}</p>}
+        {error && <p className="text-xs text-alert">{error}</p>}
       </div>
     );
   }
@@ -66,7 +66,7 @@ export function CancelOrderButton({ orderId, isCancelled }: { orderId: string; i
             Thôi
           </button>
         </div>
-        {error && <p className="text-xs text-brandRed-600">{error}</p>}
+        {error && <p className="text-xs text-alert">{error}</p>}
       </div>
     );
   }
@@ -74,7 +74,7 @@ export function CancelOrderButton({ orderId, isCancelled }: { orderId: string; i
   return (
     <button
       onClick={() => setConfirming(true)}
-      className="flex items-center gap-1.5 rounded-md border border-brandRed-600 px-3 py-1.5 text-sm font-medium text-brandRed-600 hover:bg-brandRed-50"
+      className="flex items-center gap-1.5 rounded-md border border-brandRed-600 px-3 py-1.5 text-sm font-medium text-alert hover:bg-brandRed-50"
     >
       <Ban className="h-4 w-4" />
       Huỷ đơn hàng

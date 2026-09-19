@@ -269,7 +269,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
         </div>
       )}
       {uploadError && (
-        <div className="flex items-center gap-2 rounded-xl border border-brandRed-600/40 bg-brandRed-50/20 text-brandRed-600 text-xs px-4 py-3 backdrop-blur-md">
+        <div className="flex items-center gap-2 rounded-xl border border-brandRed-600/40 bg-brandRed-50/20 text-alert text-xs px-4 py-3 backdrop-blur-md">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <span>{uploadError}</span>
         </div>
@@ -330,7 +330,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
               className={cn(
                 "flex h-9 w-9 items-center justify-center rounded-xl border group-hover:scale-110 transition-transform",
                 data && data.overdueCount > 0
-                  ? "bg-brandRed-50 border-brandRed-600/30 text-brandRed-600 shadow-[0_0_12px_rgba(200,16,46,0.25)]"
+                  ? "bg-brandRed-50 border-brandRed-600/30 text-alert shadow-[0_0_12px_rgba(200,16,46,0.25)]"
                   : "bg-gray-100 border-gray-200 text-muted2"
               )}
             >
@@ -341,7 +341,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
             <p
               className={cn(
                 "font-mono text-2xl font-bold tracking-tight tabular-nums",
-                data && data.overdueCount > 0 ? "text-brandRed-600" : "text-ink"
+                data && data.overdueCount > 0 ? "text-alert" : "text-ink"
               )}
             >
               {isLoading ? "—" : formatCurrencyVND(data?.overdueValue ?? 0)}
@@ -395,7 +395,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
                   <tr key={e.employeeId} className="hover:bg-navy-50/50 transition-colors">
                     <td className="px-5 py-3 font-semibold text-ink">{e.employeeName}</td>
                     <td className="px-5 py-3 text-right font-mono text-ink">{e.openCount}</td>
-                    <td className={cn("px-5 py-3 text-right font-mono", e.overdueCount > 0 ? "text-brandRed-600 font-bold" : "text-muted2")}>
+                    <td className={cn("px-5 py-3 text-right font-mono", e.overdueCount > 0 ? "text-alert font-bold" : "text-muted2")}>
                       {e.overdueCount}
                     </td>
                     <td className={cn("px-5 py-3 text-right font-mono", e.upcomingCount > 0 ? "text-amber-400 font-bold" : "text-muted2")}>
@@ -404,7 +404,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
                     <td className="px-5 py-3 text-right font-mono font-semibold text-success-600">
                       {formatCurrencyVND(e.deliveredValue)}
                     </td>
-                    <td className="px-5 py-3 text-right font-mono font-semibold text-brandRed-600">
+                    <td className="px-5 py-3 text-right font-mono font-semibold text-alert">
                       {formatCurrencyVND(e.undeliveredValue)}
                     </td>
                   </tr>
@@ -414,12 +414,12 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
                 <tr>
                   <td className="px-5 py-3.5 text-ink">Tổng toàn phòng</td>
                   <td className="px-5 py-3.5 text-right font-mono text-ink">{data.openCount}</td>
-                  <td className="px-5 py-3.5 text-right font-mono text-brandRed-600">{data.overdueCount}</td>
+                  <td className="px-5 py-3.5 text-right font-mono text-alert">{data.overdueCount}</td>
                   <td className="px-5 py-3.5 text-right font-mono text-amber-400">{data.upcomingCount}</td>
                   <td className="px-5 py-3.5 text-right font-mono text-success-600">
                     {formatCurrencyVND(data.totalDeliveredValue)}
                   </td>
-                  <td className="px-5 py-3.5 text-right font-mono text-brandRed-600">
+                  <td className="px-5 py-3.5 text-right font-mono text-alert">
                     {formatCurrencyVND(data.totalUndeliveredValue)}
                   </td>
                 </tr>
@@ -582,7 +582,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
                     <td
                       className={cn(
                         "px-5 py-3 align-middle text-right font-mono font-bold text-xs",
-                        tab === "overdue" ? "text-brandRed-600" : "text-amber-400"
+                        tab === "overdue" ? "text-alert" : "text-amber-400"
                       )}
                     >
                       {o.daysUntilDeadline != null
@@ -600,7 +600,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
                       <button
                         onClick={() => setPoClosed(o.orderCode, true)}
                         disabled={pendingCodes.has(o.orderCode)}
-                        className="rounded-lg border border-gray-200/90 bg-navy-50/70 px-2.5 py-1 text-xs font-semibold text-ink2 hover:border-brandRed-600 hover:text-brandRed-600 hover:bg-brandRed-50/10 disabled:opacity-50 transition-all"
+                        className="rounded-lg border border-gray-200/90 bg-navy-50/70 px-2.5 py-1 text-xs font-semibold text-ink2 hover:border-brandRed-600 hover:text-alert hover:bg-brandRed-50/10 disabled:opacity-50 transition-all"
                       >
                         {pendingCodes.has(o.orderCode) ? "Đang xử lý..." : "Kết thúc đơn"}
                       </button>

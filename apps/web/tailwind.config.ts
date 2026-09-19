@@ -19,9 +19,16 @@ const config: Config = {
         },
         brandRed: {
           50: "rgba(200,16,46,0.16)", // nền nhạt cho badge (trước là đỏ rất nhạt trên nền trắng)
-          600: "#C8102E",
+          // 400/500: trước đây các lớp brandRed-400/500 được dùng khắp nơi nhưng CHƯA có màu nên không
+          // hiển thị gì — định nghĩa thành đỏ tươi để badge/viền cảnh báo nhìn thấy được trên nền tối.
+          400: "#FF6B76",
+          500: "#FF3B47",
+          600: "#C8102E", // đỏ thương hiệu (nền nút) — KHÔNG dùng làm màu chữ cảnh báo, xem "alert"
           700: "#9E0B22",
         },
+        // Đỏ TƯƠI cho chữ/biểu tượng cảnh báo: chỉ số chưa đạt, quá hạn, nợ xấu... (anh Quân yêu cầu
+        // 19/09/2026 — #C8102E quá tối trên nền xanh đen nên khó nhận ra để nhắc nhở).
+        alert: "#FF3B47",
         // Thang xám bị đảo tông hoàn toàn: gray-50 giờ là nền tối nhất (nền trang),
         // gray-900 gần trắng nhất (chữ chính) — đúng như cách các theme tối vẫn làm.
         gray: {

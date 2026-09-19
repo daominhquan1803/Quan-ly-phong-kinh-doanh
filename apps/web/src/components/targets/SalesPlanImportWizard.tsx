@@ -110,7 +110,7 @@ export function SalesPlanImportWizard({ onDone }: { onDone: () => void }) {
 
   return (
     <div className="space-y-4">
-      {error && <div className="rounded-md bg-brandRed-50 text-brandRed-600 text-sm px-4 py-2.5">{error}</div>}
+      {error && <div className="rounded-md bg-brandRed-50 text-alert text-sm px-4 py-2.5">{error}</div>}
 
       {step === "upload" && (
         <div className="space-y-3">
@@ -191,7 +191,7 @@ export function SalesPlanImportWizard({ onDone }: { onDone: () => void }) {
               {SALES_PLAN_FIELDS.filter((f) => !(wideMode && f.key === "targetRevenue")).map((field) => (
                 <div key={field.key}>
                   <label className="block text-xs text-ink2 mb-1">
-                    {field.label} {field.required && <span className="text-brandRed-600">*</span>}
+                    {field.label} {field.required && <span className="text-alert">*</span>}
                   </label>
                   <select
                     value={mapping[field.key] ?? ""}
@@ -240,7 +240,7 @@ export function SalesPlanImportWizard({ onDone }: { onDone: () => void }) {
           </div>
 
           {requiredMissing.length > 0 && (
-            <p className="text-sm text-brandRed-600">
+            <p className="text-sm text-alert">
               Cần map đủ các cột bắt buộc: {requiredMissing.map((f) => f.label).join(", ")}
             </p>
           )}
@@ -269,11 +269,11 @@ export function SalesPlanImportWizard({ onDone }: { onDone: () => void }) {
             </div>
             <div className="kpi-card kpi-card--red">
               <p className="text-sm text-muted-foreground">Lỗi</p>
-              <p className="text-2xl font-bold text-brandRed-600">{result.errorCount}</p>
+              <p className="text-2xl font-bold text-alert">{result.errorCount}</p>
             </div>
             <div className="kpi-card kpi-card--red">
               <p className="text-sm text-muted-foreground">NV chưa khớp</p>
-              <p className="text-2xl font-bold text-brandRed-600">{result.unmatchedEmployeeNames.length}</p>
+              <p className="text-2xl font-bold text-alert">{result.unmatchedEmployeeNames.length}</p>
             </div>
           </div>
           {result.wideMode && result.monthsImported.length > 0 && (

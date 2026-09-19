@@ -69,7 +69,7 @@ const STATUS_LABEL: Record<QuoteStatus, string> = {
 const STATUS_STYLE: Record<QuoteStatus, string> = {
   WON: "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.2)]",
   NEGOTIATING: "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_8px_rgba(224,163,39,0.2)]",
-  LOST: "bg-brandRed-500/15 text-brandRed-400 border border-brandRed-500/30 shadow-[0_0_8px_rgba(200,16,46,0.2)]",
+  LOST: "bg-brandRed-500/15 text-alert border border-brandRed-500/30 shadow-[0_0_8px_rgba(200,16,46,0.2)]",
   NOT_QUOTED: "bg-white/5 text-gray-400 border border-white/10",
 };
 const STATUS_CHART_COLOR: Record<QuoteStatus, string> = {
@@ -236,7 +236,7 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
       </div>
 
       {syncError && (
-        <div className="rounded-xl border border-brandRed-500/30 bg-brandRed-500/10 text-brandRed-400 text-sm px-4 py-3 shadow-[0_0_15px_rgba(200,16,46,0.15)]">
+        <div className="rounded-xl border border-brandRed-500/30 bg-brandRed-500/10 text-alert text-sm px-4 py-3 shadow-[0_0_15px_rgba(200,16,46,0.15)]">
           {syncError}
         </div>
       )}
@@ -246,14 +246,14 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
           {syncData.lastSync.status === "SUCCESS" ? (
             <CheckCircle2 className="h-4 w-4 text-emerald-400" />
           ) : syncData.lastSync.status === "FAILED" ? (
-            <XCircle className="h-4 w-4 text-brandRed-400" />
+            <XCircle className="h-4 w-4 text-alert" />
           ) : (
             <RefreshCw className="h-4 w-4 animate-spin text-amber-400" />
           )}
           <span>Đồng bộ gần nhất: <strong className="text-ink font-mono">{formatDateVN(syncData.lastSync.startedAt)}</strong></span>
           {syncData.lastSync.recordsSynced != null && <span className="font-mono">({syncData.lastSync.recordsSynced} dòng)</span>}
           {syncData.lastSync.status === "FAILED" && syncData.lastSync.message && (
-            <span className="text-brandRed-400">— {syncData.lastSync.message}</span>
+            <span className="text-alert">— {syncData.lastSync.message}</span>
           )}
         </div>
       )}
@@ -372,7 +372,7 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
                   <th className="text-right font-medium px-4 py-3">Tổng</th>
                   <th className="text-right font-medium px-4 py-3 text-emerald-400">Chốt</th>
                   <th className="text-right font-medium px-4 py-3 text-amber-400">Thương thảo</th>
-                  <th className="text-right font-medium px-4 py-3 text-brandRed-400">Không bán</th>
+                  <th className="text-right font-medium px-4 py-3 text-alert">Không bán</th>
                   <th className="text-right font-medium px-4 py-3">Chưa báo giá</th>
                 </tr>
               </thead>
@@ -398,7 +398,7 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
                     <td className="px-4 py-2.5 text-right font-mono font-bold text-ink">{a.total}</td>
                     <td className="px-4 py-2.5 text-right font-mono font-bold text-emerald-400">{a.WON || "—"}</td>
                     <td className="px-4 py-2.5 text-right font-mono font-bold text-amber-400">{a.NEGOTIATING || "—"}</td>
-                    <td className="px-4 py-2.5 text-right font-mono font-bold text-brandRed-400">{a.LOST || "—"}</td>
+                    <td className="px-4 py-2.5 text-right font-mono font-bold text-alert">{a.LOST || "—"}</td>
                     <td className="px-4 py-2.5 text-right font-mono text-muted2">{a.NOT_QUOTED || "—"}</td>
                   </tr>
                 ))}
@@ -459,7 +459,7 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
                 </th>
                 <th colSpan={4} className="px-4 py-2 text-right">
                   {hasActiveFilter && (
-                    <button onClick={() => setQ("")} className="inline-flex items-center gap-1 text-xs text-brandRed-400 hover:underline">
+                    <button onClick={() => setQ("")} className="inline-flex items-center gap-1 text-xs text-alert hover:underline">
                       <X className="h-3 w-3" /> Xoá lọc
                     </button>
                   )}

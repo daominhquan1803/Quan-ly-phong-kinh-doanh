@@ -29,8 +29,7 @@ interface TrendResponse {
 function completionColor(pct: number | null): string {
   if (pct == null) return "text-ink";
   if (pct >= 100) return "text-success-600";
-  if (pct < 60) return "text-brandRed-600";
-  return "text-ink";
+  return "text-alert"; // chưa đạt chỉ tiêu -> đỏ tươi
 }
 
 /** Bảng "Doanh số đi hàng từ đầu năm" — doanh số đã giao thực tế theo từng tháng (Tháng 1 -> tháng
@@ -148,9 +147,7 @@ export function RevenueTrendTable() {
                           "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold border",
                           r.ytdCompletionPct >= 100
                             ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.2)]"
-                            : r.ytdCompletionPct < 60
-                            ? "bg-brandRed-500/15 text-brandRed-400 border-brandRed-500/30 shadow-[0_0_8px_rgba(200,16,46,0.15)]"
-                            : "bg-amber-500/15 text-amber-400 border-amber-500/30 shadow-[0_0_8px_rgba(224,163,39,0.15)]"
+                            : "bg-brandRed-500/15 text-alert border-brandRed-500/40 shadow-[0_0_8px_rgba(255,59,71,0.25)]"
                         )}
                       >
                         {r.ytdCompletionPct}%
@@ -186,9 +183,7 @@ export function RevenueTrendTable() {
                           "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold border",
                           data.ytdTotalCompletionPct >= 100
                             ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.25)]"
-                            : data.ytdTotalCompletionPct < 60
-                            ? "bg-brandRed-500/20 text-brandRed-400 border-brandRed-500/40"
-                            : "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                            : "bg-brandRed-500/20 text-alert border-brandRed-500/40"
                         )}
                       >
                         {data.ytdTotalCompletionPct}%

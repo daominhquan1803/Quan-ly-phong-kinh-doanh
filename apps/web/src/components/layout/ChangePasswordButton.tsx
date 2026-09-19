@@ -63,7 +63,7 @@ export function ChangePasswordButton() {
         <>
           <div className="fixed inset-0 z-10" onClick={resetAndClose} />
           <div className="absolute right-0 top-full mt-2 w-64 sm:w-72 rounded-lg border border-gray-200 bg-card p-4 shadow-lg z-20 space-y-3">
-            {error && <p className="text-xs text-brandRed-600">{error}</p>}
+            {error && <p className="text-xs text-alert">{error}</p>}
             {success && <p className="text-xs text-success-600">Đổi mật khẩu thành công</p>}
             <input
               type="password"

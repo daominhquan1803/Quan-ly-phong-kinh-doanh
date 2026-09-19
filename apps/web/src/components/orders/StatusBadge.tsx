@@ -34,7 +34,7 @@ const STATUS_CONFIG: Record<
 export function OrderStatusBadge({ status, overdue }: { status: string; overdue?: boolean }) {
   if (overdue) {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold border bg-brandRed-50 text-brandRed-600 border-brandRed-600/30 shadow-[0_0_10px_rgba(200,16,46,0.2)] animate-pulse">
+      <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold border bg-brandRed-50 text-alert border-brandRed-600/30 shadow-[0_0_10px_rgba(200,16,46,0.2)] animate-pulse">
         <span className="h-1.5 w-1.5 rounded-full bg-brandRed-600 shadow-[0_0_6px_#C8102E]"></span>
         Quá hạn giao
       </span>

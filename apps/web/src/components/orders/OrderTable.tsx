@@ -219,7 +219,7 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
       </div>
 
       {syncError && (
-        <div className="rounded-xl border border-brandRed-600/40 bg-brandRed-50/20 p-4 text-xs font-medium text-brandRed-600 backdrop-blur-md flex items-center gap-2">
+        <div className="rounded-xl border border-brandRed-600/40 bg-brandRed-50/20 p-4 text-xs font-medium text-alert backdrop-blur-md flex items-center gap-2">
           <XCircle className="h-4 w-4 shrink-0" />
           <span>{syncError}</span>
         </div>
@@ -230,7 +230,7 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
           {syncData.lastSync.status === "SUCCESS" ? (
             <CheckCircle2 className="h-4 w-4 text-success-600" />
           ) : syncData.lastSync.status === "FAILED" ? (
-            <XCircle className="h-4 w-4 text-brandRed-600" />
+            <XCircle className="h-4 w-4 text-alert" />
           ) : (
             <RefreshCw className="h-4 w-4 animate-spin text-amber-500" />
           )}
@@ -239,7 +239,7 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
             <span className="font-mono text-ink"> — {syncData.lastSync.recordsSynced} đơn</span>
           )}
           {syncData.lastSync.status === "FAILED" && syncData.lastSync.message && (
-            <span className="text-brandRed-600">— {syncData.lastSync.message}</span>
+            <span className="text-alert">— {syncData.lastSync.message}</span>
           )}
           {syncData.lastSync.status === "SUCCESS" && syncData.lastSync.message && (
             <span className="text-warning-500">— {syncData.lastSync.message}</span>

@@ -124,7 +124,7 @@ export function SlipTable({ isAdmin }: { isAdmin: boolean }) {
       </div>
 
       {syncError && (
-        <div className="rounded-xl border border-brandRed-600/40 bg-brandRed-50/20 p-4 text-xs font-medium text-brandRed-600 backdrop-blur-md flex items-center gap-2">
+        <div className="rounded-xl border border-brandRed-600/40 bg-brandRed-50/20 p-4 text-xs font-medium text-alert backdrop-blur-md flex items-center gap-2">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <span>{syncError}</span>
         </div>

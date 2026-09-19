@@ -73,7 +73,7 @@ export function DebtUnmatchedPaymentsPanel() {
                   <td className="px-3.5 py-2 text-muted-foreground max-w-xs truncate" title={p.rawDescription ?? ""}>
                     {p.rawDescription ?? "—"}
                   </td>
-                  <td className="px-3.5 py-2 text-right text-brandRed-400 font-mono font-semibold">
+                  <td className="px-3.5 py-2 text-right text-alert font-mono font-semibold">
                     {formatCurrencyVND(p.unallocatedAmount)}
                   </td>
                 </tr>

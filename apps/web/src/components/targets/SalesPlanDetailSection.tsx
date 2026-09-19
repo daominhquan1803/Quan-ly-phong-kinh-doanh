@@ -122,9 +122,9 @@ export function SalesPlanDetailSection({ isAdmin }: { isAdmin: boolean }) {
                     "px-2 py-0.5 rounded-full text-xs font-bold border",
                     group.completionPct != null && group.completionPct >= 100
                       ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.2)]"
-                      : group.completionPct != null && group.completionPct < 60
-                      ? "bg-brandRed-500/15 text-brandRed-400 border-brandRed-500/30"
-                      : "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                      : group.completionPct != null
+                      ? "bg-brandRed-500/15 text-alert border-brandRed-500/40"
+                      : "bg-white/5 text-muted2 border-white/10"
                   )}
                 >
                   {group.completionPct != null ? `${group.completionPct}%` : "—"}
@@ -161,9 +161,7 @@ export function SalesPlanDetailSection({ isAdmin }: { isAdmin: boolean }) {
                               "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold border",
                               r.completionPct >= 100
                                 ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.2)]"
-                                : r.completionPct < 60
-                                ? "bg-brandRed-500/15 text-brandRed-400 border-brandRed-500/30"
-                                : "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                                : "bg-brandRed-500/15 text-alert border-brandRed-500/40"
                             )}
                           >
                             {r.completionPct}%
@@ -191,9 +189,7 @@ export function SalesPlanDetailSection({ isAdmin }: { isAdmin: boolean }) {
                             "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold border",
                             group.completionPct >= 100
                               ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.25)]"
-                              : group.completionPct < 60
-                              ? "bg-brandRed-500/20 text-brandRed-400 border-brandRed-500/40"
-                              : "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                              : "bg-brandRed-500/20 text-alert border-brandRed-500/40"
                           )}
                         >
                           {group.completionPct}%

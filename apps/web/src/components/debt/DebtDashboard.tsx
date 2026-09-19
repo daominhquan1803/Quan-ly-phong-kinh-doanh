@@ -266,7 +266,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
     <div className="space-y-6">
       {toast && <ImportResultToast message={toast} onClose={() => setToast(null)} />}
       {uploadError && (
-        <div className="rounded-xl border border-brandRed-500/30 bg-brandRed-500/10 text-brandRed-400 text-sm px-4 py-3 flex items-center justify-between shadow-[0_0_15px_rgba(200,16,46,0.15)]">
+        <div className="rounded-xl border border-brandRed-500/30 bg-brandRed-500/10 text-alert text-sm px-4 py-3 flex items-center justify-between shadow-[0_0_15px_rgba(200,16,46,0.15)]">
           <span>{uploadError}</span>
           <button onClick={() => setUploadError(null)} className="p-1 hover:bg-white/10 rounded-lg">
             <X className="h-3.5 w-3.5" />
@@ -291,26 +291,26 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
 
           <div className="glass-card border border-brandRed-500/30 bg-brandRed-500/[0.04] p-4 relative overflow-hidden group hover:shadow-[0_0_20px_rgba(200,16,46,0.15)] transition-all">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-brandRed-400 tracking-wider uppercase">Quá hạn</p>
+              <p className="text-xs font-medium text-alert tracking-wider uppercase">Quá hạn</p>
               <span className="h-2 w-2 rounded-full bg-brandRed-500 shadow-[0_0_6px_#C8102E]" />
             </div>
-            <p className="text-2xl font-bold font-mono text-brandRed-400 mt-2">{formatCurrencyVND(summary.overdueDebt)}</p>
+            <p className="text-2xl font-bold font-mono text-alert mt-2">{formatCurrencyVND(summary.overdueDebt)}</p>
             <p className="text-xs text-muted2 mt-1">{pct(summary.overdueRate)} tổng công nợ</p>
             <div className="h-0.5 w-12 bg-brandRed-500/40 mt-3 group-hover:w-full group-hover:bg-brandRed-500 transition-all duration-300" />
           </div>
 
           <div className="glass-card border border-brandRed-500/25 bg-brandRed-500/[0.02] p-4 relative overflow-hidden group hover:shadow-[0_0_20px_rgba(200,16,46,0.15)] transition-all">
-            <p className="text-xs font-medium text-brandRed-400/80 tracking-wider uppercase">Tỉ lệ nợ quá hạn</p>
-            <p className="text-2xl font-bold font-mono text-brandRed-400 mt-2">{pct(summary.overdueRate)}</p>
+            <p className="text-xs font-medium text-alert/80 tracking-wider uppercase">Tỉ lệ nợ quá hạn</p>
+            <p className="text-2xl font-bold font-mono text-alert mt-2">{pct(summary.overdueRate)}</p>
             <div className="h-0.5 w-12 bg-brandRed-500/30 mt-3 group-hover:w-full transition-all duration-300" />
           </div>
 
           <div className="glass-card border border-brandRed-500/40 bg-brandRed-500/[0.06] p-4 relative overflow-hidden group hover:shadow-[0_0_25px_rgba(200,16,46,0.2)] transition-all">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-brandRed-400 tracking-wider uppercase">Nợ xấu (&gt;180 ngày)</p>
+              <p className="text-xs font-medium text-alert tracking-wider uppercase">Nợ xấu (&gt;180 ngày)</p>
               <span className="h-2 w-2 rounded-full bg-brandRed-500 animate-ping" />
             </div>
-            <p className="text-2xl font-bold font-mono text-brandRed-400 mt-2">{formatCurrencyVND(summary.badDebt)}</p>
+            <p className="text-2xl font-bold font-mono text-alert mt-2">{formatCurrencyVND(summary.badDebt)}</p>
             <p className="text-xs text-muted2 mt-1">{pct(summary.badDebtRate)} tổng công nợ</p>
             <div className="h-0.5 w-12 bg-brandRed-500/50 mt-3 group-hover:w-full group-hover:bg-brandRed-500 transition-all duration-300" />
           </div>
@@ -356,7 +356,9 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                 <span className="text-emerald-400 font-semibold">{formatCurrencyVND(weekSummary?.monthlyPlan.collected ?? 0)}</span> /{" "}
                 <span className="text-ink">{formatCurrencyVND(weekSummary?.monthlyPlan.planned ?? 0)}</span>
                 {weekSummary?.monthlyPlan.rate != null && (
-                  <span className="ml-2 font-semibold text-amber-400">({pct(weekSummary.monthlyPlan.rate)} đạt)</span>
+                  <span className={cn("ml-2 font-semibold", weekSummary.monthlyPlan.rate >= 1 ? "text-emerald-400" : "text-alert")}>
+                    ({pct(weekSummary.monthlyPlan.rate)} đạt)
+                  </span>
                 )}
               </div>
             </div>
@@ -386,7 +388,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                   <span className="text-muted2 text-xs font-normal"> / {formatCurrencyVND(w.planned)}</span>
                 </p>
                 {w.rate !== null && (
-                  <p className={cn("text-xs mt-1.5 font-medium font-mono", w.rate >= 1 ? "text-emerald-400" : "text-amber-400")}>
+                  <p className={cn("text-xs mt-1.5 font-medium font-mono", w.rate >= 1 ? "text-emerald-400" : "text-alert")}>
                     {pct(w.rate)} đạt chỉ tiêu
                   </p>
                 )}
@@ -429,7 +431,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                             {r.lastPaymentDate ? ` ngày ${formatDateVN(r.lastPaymentDate)}` : ""}
                           </span>
                         ) : (
-                          <span className="text-brandRed-400 font-medium">Chưa về</span>
+                          <span className="text-alert font-medium">Chưa về</span>
                         )}
                       </td>
                     </tr>
@@ -464,8 +466,8 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                   <tr key={e.employeeId} className="hover:bg-white/[0.02] transition-colors">
                     <td className="px-4 py-2 text-ink font-medium">{e.employeeName}</td>
                     <td className="px-4 py-2 text-right font-mono text-ink font-medium">{formatCurrencyVND(e.totalDebt)}</td>
-                    <td className="px-4 py-2 text-right font-mono text-brandRed-400 font-medium">{formatCurrencyVND(e.overdueDebt)}</td>
-                    <td className="px-4 py-2 text-right font-mono text-brandRed-400 font-bold">{formatCurrencyVND(e.badDebt)}</td>
+                    <td className="px-4 py-2 text-right font-mono text-alert font-medium">{formatCurrencyVND(e.overdueDebt)}</td>
+                    <td className="px-4 py-2 text-right font-mono text-alert font-bold">{formatCurrencyVND(e.badDebt)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -636,14 +638,14 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                       formatDateVN(r.dueDate)
                     )}
                   </td>
-                  <td className={cn("px-4 py-2.5 text-right font-mono", r.daysOverdue !== null && r.daysOverdue > 0 ? "text-brandRed-400 font-bold" : "text-muted2")}>
+                  <td className={cn("px-4 py-2.5 text-right font-mono", r.daysOverdue !== null && r.daysOverdue > 0 ? "text-alert font-bold" : "text-muted2")}>
                     {r.daysOverdue === null ? "—" : r.daysOverdue}
                   </td>
                   <td className="px-4 py-2.5 text-right font-mono text-ink">{formatCurrencyVND(Number(r.originalAmount))}</td>
                   <td
                     className={cn(
                       "px-4 py-2.5 text-right font-mono font-bold",
-                      r.debtStatus !== "CURRENT" && r.debtStatus !== "PAID" ? "text-brandRed-400" : "text-emerald-400"
+                      r.debtStatus !== "CURRENT" && r.debtStatus !== "PAID" ? "text-alert" : "text-emerald-400"
                     )}
                   >
                     {formatCurrencyVND(r.remaining)}

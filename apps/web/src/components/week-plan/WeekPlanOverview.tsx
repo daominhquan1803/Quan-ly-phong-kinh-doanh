@@ -124,13 +124,12 @@ function pct(actual: number, target: number): number {
 }
 function barColor(p: number): string {
   if (p >= 100) return "bg-success-600";
-  if (p >= 60) return "bg-amber-500";
-  return "bg-brandRed-600";
+  return "bg-alert"; // chưa đạt chỉ tiêu -> đỏ tươi
 }
 function gradeBadge(g: 0 | 1 | 2): { label: string; cls: string } {
   if (g === 2) return { label: "Đạt chuẩn", cls: "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-[0_0_8px_rgba(16,185,129,0.25)] font-bold" };
   if (g === 1) return { label: "Cần cố gắng", cls: "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-[0_0_8px_rgba(224,163,39,0.2)] font-semibold" };
-  return { label: "Chưa đạt", cls: "bg-brandRed-500/25 text-brandRed-400 border border-brandRed-500/40 shadow-[0_0_8px_rgba(200,16,46,0.3)] font-bold" };
+  return { label: "Chưa đạt", cls: "bg-brandRed-500/25 text-alert border border-brandRed-500/40 shadow-[0_0_8px_rgba(200,16,46,0.3)] font-bold" };
 }
 
 export function WeekPlanOverview({ isAdmin }: { isAdmin: boolean }) {
@@ -384,7 +383,7 @@ function TargetGrid({
                         </td>
                       </Fragment2>
                     ))}
-                    <td className={cn("px-3 py-2 text-center font-semibold border-l border-gray-100", wSum === WEIGHT_TOTAL ? "text-success-600" : "text-brandRed-600")}>
+                    <td className={cn("px-3 py-2 text-center font-semibold border-l border-gray-100", wSum === WEIGHT_TOTAL ? "text-success-600" : "text-alert")}>
                       {wSum}
                     </td>
                   </tr>
@@ -460,7 +459,7 @@ function MetricDetailModal({ selected, weekStartISO, onClose }: { selected: Sele
         {isLoading ? (
           <p className="text-sm text-muted-foreground">Đang tải...</p>
         ) : isError ? (
-          <p className="text-sm text-brandRed-600">Không tải được danh sách chi tiết.</p>
+          <p className="text-sm text-alert">Không tải được danh sách chi tiết.</p>
         ) : items.length === 0 ? (
           <p className="text-sm text-muted-foreground">Chưa có dòng nào trong tuần này.</p>
         ) : (
@@ -707,7 +706,7 @@ function ResultEntrySection({
           className={cn(
             "mb-3 rounded-lg border px-3 py-2 text-xs",
             entryLock.locked
-              ? "border-brandRed-600/40 bg-brandRed-600/10 text-brandRed-600"
+              ? "border-brandRed-600/40 bg-brandRed-600/10 text-alert"
               : "border-amber-500/30 bg-amber-500/10 text-amber-400"
           )}
         >
@@ -735,11 +734,11 @@ function ResultEntrySection({
           <UploadCloud className="h-3.5 w-3.5" /> Tải Excel lên
         </button>
       </div>
-      {error && !showForm && <p className="mb-3 text-xs text-brandRed-600">{error}</p>}
+      {error && !showForm && <p className="mb-3 text-xs text-alert">{error}</p>}
 
       {showForm && (
         <div className="rounded-md border border-gray-200 bg-gray-50 p-3 mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {error && <p className="text-xs text-brandRed-600 sm:col-span-2">{error}</p>}
+          {error && <p className="text-xs text-alert sm:col-span-2">{error}</p>}
           <label className="text-xs text-muted-foreground flex flex-col gap-1">
             Ngày
             <input type="date" value={form.entryDate} onChange={(e) => setForm((f) => ({ ...f, entryDate: e.target.value }))} className="input" />
@@ -811,7 +810,7 @@ function ResultEntrySection({
                 <td className="px-2 py-1.5 text-muted-foreground">{e.productInterest ?? "—"}</td>
                 <td className="px-2 py-1.5 text-right">
                   {!lockedForUser && (
-                    <button onClick={() => handleDelete(e.id)} className="text-muted2 hover:text-brandRed-600">
+                    <button onClick={() => handleDelete(e.id)} className="text-muted2 hover:text-alert">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   )}
@@ -889,7 +888,7 @@ function UploadPanel({
         <div className="text-xs">
           <p className="text-ink">
             Đã thêm <span className="font-mono">{result.createdCount}</span> dòng
-            {result.errorCount > 0 && <span className="text-brandRed-600"> — {result.errorCount} dòng lỗi</span>}
+            {result.errorCount > 0 && <span className="text-alert"> — {result.errorCount} dòng lỗi</span>}
           </p>
           {!!result.swappedDateCount && (
             <p className="mt-1 text-amber-400">
@@ -898,7 +897,7 @@ function UploadPanel({
             </p>
           )}
           {result.errors.length > 0 && (
-            <ul className="mt-1 space-y-0.5 text-brandRed-600">
+            <ul className="mt-1 space-y-0.5 text-alert">
               {result.errors.slice(0, 10).map((e, i) => (
                 <li key={i}>Dòng {e.rowNumber}: {e.message}</li>
               ))}

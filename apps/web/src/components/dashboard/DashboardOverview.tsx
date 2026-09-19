@@ -89,9 +89,10 @@ interface SummaryResponse {
 const pct1 = (r: number | null) => (r == null ? "—" : `${(r * 100).toFixed(1)}%`);
 // Tỉ lệ nợ quá hạn càng thấp càng tốt; tỉ lệ thu hồi kế hoạch tuần càng cao càng tốt.
 const overdueRateColor = (r: number | null) =>
-  r == null ? "text-muted2" : r <= 0.15 ? "text-success-600" : r <= 0.3 ? "text-amber-400" : "text-brandRed-600";
+  r == null ? "text-muted2" : r <= 0.15 ? "text-success-600" : "text-alert";
+// Chưa đạt kế hoạch thu (< 100%) luôn đỏ tươi để nhắc nhở.
 const collectRateColor = (r: number | null) =>
-  r == null ? "text-muted2" : r >= 1 ? "text-success-600" : r >= 0.5 ? "text-amber-400" : "text-brandRed-600";
+  r == null ? "text-muted2" : r >= 1 ? "text-success-600" : "text-alert";
 
 /** Dòng nhỏ hiện xu hướng tăng/giảm so với tháng trước dưới mỗi số KPI. */
 function TrendLine({
@@ -107,7 +108,7 @@ function TrendLine({
   const isUp = delta > 0;
   const isGood = invert ? !isUp : isUp;
   const Icon = delta === 0 ? Minus : isUp ? TrendingUp : TrendingDown;
-  const color = delta === 0 ? "text-muted2" : isGood ? "text-success-600" : "text-brandRed-600";
+  const color = delta === 0 ? "text-muted2" : isGood ? "text-success-600" : "text-alert";
   const bgColor = delta === 0 ? "bg-gray-100" : isGood ? "bg-success-600/10 border-success-600/20" : "bg-brandRed-50 border-brandRed-600/20";
   return (
     <div className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium border mt-2", color, bgColor)}>
@@ -286,7 +287,7 @@ export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
               className={cn(
                 "flex h-9 w-9 items-center justify-center rounded-xl border group-hover:scale-110 transition-transform",
                 data && data.overdueOrderCount > 0
-                  ? "bg-brandRed-50 border-brandRed-600/30 text-brandRed-600 shadow-[0_0_12px_rgba(200,16,46,0.25)]"
+                  ? "bg-brandRed-50 border-brandRed-600/30 text-alert shadow-[0_0_12px_rgba(200,16,46,0.25)]"
                   : "bg-gray-100 border-gray-200 text-muted2"
               )}
             >
@@ -297,13 +298,13 @@ export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
             <span
               className={cn(
                 "font-mono text-2xl font-bold tracking-tight tabular-nums",
-                data && data.overdueOrderCount > 0 ? "text-brandRed-600" : "text-ink"
+                data && data.overdueOrderCount > 0 ? "text-alert" : "text-ink"
               )}
             >
               {isLoading ? "—" : data?.overdueOrderCount ?? 0}
             </span>
             {data && data.overdueOrderCount > 0 && (
-              <span className="inline-flex items-center rounded-full bg-brandRed-50 px-2 py-0.5 text-xs font-semibold text-brandRed-600 border border-brandRed-600/20 animate-pulse">
+              <span className="inline-flex items-center rounded-full bg-brandRed-50 px-2 py-0.5 text-xs font-semibold text-alert border border-brandRed-600/20 animate-pulse">
                 Cần giao ngay
               </span>
             )}
@@ -329,7 +330,7 @@ export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
                 className={cn(
                   "flex h-9 w-9 items-center justify-center rounded-xl border group-hover:scale-110 transition-transform",
                   data && (data.debtOverdue ?? 0) > 0
-                    ? "bg-brandRed-50 border-brandRed-600/30 text-brandRed-600 shadow-[0_0_12px_rgba(200,16,46,0.25)]"
+                    ? "bg-brandRed-50 border-brandRed-600/30 text-alert shadow-[0_0_12px_rgba(200,16,46,0.25)]"
                     : "bg-gray-100 border-gray-200 text-muted2"
                 )}
               >
@@ -340,7 +341,7 @@ export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
               <p
                 className={cn(
                   "font-mono text-2xl font-bold tracking-tight tabular-nums",
-                  data && (data.debtOverdue ?? 0) > 0 ? "text-brandRed-600" : "text-ink"
+                  data && (data.debtOverdue ?? 0) > 0 ? "text-alert" : "text-ink"
                 )}
               >
                 {isLoading ? "—" : formatCurrencyVND(data?.debtOverdue ?? 0)}
@@ -529,7 +530,7 @@ export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
         <div className="rounded-2xl border border-gray-200/80 bg-navy-900/60 p-6 shadow-card backdrop-blur-xl">
           <div className="flex items-center justify-between gap-2 mb-4">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-brandRed-50 border border-brandRed-600/30 text-brandRed-600 shadow-[0_0_10px_rgba(200,16,46,0.2)]">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-brandRed-50 border border-brandRed-600/30 text-alert shadow-[0_0_10px_rgba(200,16,46,0.2)]">
                 <AlertTriangle className="h-4 w-4" />
               </div>
               <div>
@@ -565,7 +566,7 @@ export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
                   <p className="text-ink font-medium truncate text-xs sm:text-sm">{o.customerName}</p>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-brandRed-600 font-mono font-bold text-sm">
+                  <p className="text-alert font-mono font-bold text-sm">
                     {formatCurrencyVND(o.remainingValue)}
                   </p>
                   <p className="text-muted-foreground text-xs mt-0.5">
@@ -610,8 +611,8 @@ export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
                   </p>
                 </div>
                 <div className="rounded-xl border border-brandRed-600/30 bg-brandRed-50/20 p-4">
-                  <p className="text-xs text-brandRed-600 uppercase font-semibold">Quá hạn</p>
-                  <p className="text-lg sm:text-xl font-bold text-brandRed-600 font-mono tabular-nums mt-1">
+                  <p className="text-xs text-alert uppercase font-semibold">Quá hạn</p>
+                  <p className="text-lg sm:text-xl font-bold text-alert font-mono tabular-nums mt-1">
                     {isLoading ? "—" : formatCurrencyVND(data?.debtOverdue ?? 0)}
                   </p>
                 </div>

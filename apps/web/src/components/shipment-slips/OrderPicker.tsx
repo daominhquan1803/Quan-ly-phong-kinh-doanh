@@ -59,7 +59,7 @@ export function OrderPicker({
             setSelectedLabel(null);
             setQuery("");
           }}
-          className="absolute right-2 top-2 text-xs text-muted-foreground hover:text-brandRed-600"
+          className="absolute right-2 top-2 text-xs text-muted-foreground hover:text-alert"
         >
           Bỏ chọn
         </button>

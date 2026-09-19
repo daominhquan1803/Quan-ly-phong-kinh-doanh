@@ -6,12 +6,12 @@ const STATUS_CONFIG: Record<
   { badge: string; dot: string; pulse?: boolean }
 > = {
   BAD_DEBT: {
-    badge: "bg-brandRed-500/15 text-brandRed-400 border-brandRed-500/30 shadow-[0_0_8px_rgba(200,16,46,0.2)]",
+    badge: "bg-brandRed-500/15 text-alert border-brandRed-500/30 shadow-[0_0_8px_rgba(200,16,46,0.2)]",
     dot: "bg-brandRed-500 shadow-[0_0_6px_#C8102E]",
     pulse: true,
   },
   OVERDUE: {
-    badge: "bg-brandRed-500/10 text-brandRed-400 border-brandRed-500/25",
+    badge: "bg-brandRed-500/10 text-alert border-brandRed-500/25",
     dot: "bg-brandRed-400 shadow-[0_0_5px_rgba(200,16,46,0.6)]",
   },
   DUE_SOON: {

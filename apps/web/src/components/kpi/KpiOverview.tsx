@@ -60,7 +60,7 @@ const GRADE_STYLE: Record<KpiRow["grade"], string> = {
   B: "bg-info-500/20 text-info-300 border border-info-500/40 shadow-[0_0_8px_rgba(91,141,239,0.2)] font-semibold",
   C: "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-[0_0_8px_rgba(224,163,39,0.2)] font-semibold",
   D: "bg-orange-500/20 text-orange-300 border border-orange-500/40 font-medium",
-  F: "bg-brandRed-500/25 text-brandRed-400 border border-brandRed-500/40 shadow-[0_0_8px_rgba(200,16,46,0.3)] font-bold",
+  F: "bg-brandRed-500/25 text-alert border border-brandRed-500/40 shadow-[0_0_8px_rgba(200,16,46,0.3)] font-bold",
 };
 
 function pct(n: number | null): string {
@@ -228,7 +228,7 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
                     <td className="px-2.5 py-2 text-right font-mono font-semibold text-ink">{r.scoreDebtOverdue}</td>
                     <td className="px-2.5 py-2 text-right font-mono text-muted2">{pctRaw(r.debtCollectionRatePct)}</td>
                     <td className="px-2.5 py-2 text-right font-mono font-semibold text-ink">{r.scoreDebtCollection}</td>
-                    <td className="px-2.5 py-2 text-right border-l border-white/5 font-mono text-brandRed-400">{r.violationCount}</td>
+                    <td className="px-2.5 py-2 text-right border-l border-white/5 font-mono text-alert">{r.violationCount}</td>
                     <td className="px-2.5 py-2 text-right font-mono font-semibold text-ink">{r.scoreAttitude}</td>
                     <td className="px-2.5 py-2 text-right border-l border-white/5 font-mono font-semibold text-amber-300">{r.scoreWeek}</td>
                     <td className="px-2.5 py-2 text-right border-l border-white/5 font-mono font-bold text-amber-400 text-sm">{r.totalScore}</td>
@@ -385,7 +385,7 @@ function KpiEditForm({
           <span>Sửa chỉ tiêu KPI:</span>
           <span className="text-amber-400">{row.employeeName}</span>
         </p>
-        <p className={cn("text-xs font-mono px-2.5 py-0.5 rounded-full border", weightSum === 70 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" : "bg-brandRed-500/10 text-brandRed-400 border-brandRed-500/30 font-bold")}>
+        <p className={cn("text-xs font-mono px-2.5 py-0.5 rounded-full border", weightSum === 70 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" : "bg-brandRed-500/10 text-alert border-brandRed-500/30 font-bold")}>
           Tổng 4 trọng số: {weightSum}/70
         </p>
       </div>
@@ -406,7 +406,7 @@ function KpiEditForm({
         Thực tế KH mới tự đếm từ đơn hàng. Công nợ quá hạn &amp; Tỷ lệ thu hồi nợ tự động lấy từ
         trang Công nợ.
       </p>
-      {error && <p className="text-xs text-brandRed-400 font-medium">{error}</p>}
+      {error && <p className="text-xs text-alert font-medium">{error}</p>}
       <div className="flex items-center gap-2 pt-1">
         <button
           onClick={handleSave}
@@ -522,7 +522,7 @@ function DefectsPanel({ year, month }: { year: number; month: number }) {
             onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
             className="input !text-xs !bg-black/50 !border-white/10 rounded-xl sm:col-span-2"
           />
-          {error && <p className="text-xs text-brandRed-400 sm:col-span-2">{error}</p>}
+          {error && <p className="text-xs text-alert sm:col-span-2">{error}</p>}
           <button
             onClick={handleCreate}
             disabled={saving}
@@ -561,7 +561,7 @@ function DefectsPanel({ year, month }: { year: number; month: number }) {
                 <td className="px-4 py-2 text-right">
                   <button
                     onClick={() => handleDelete(d.id)}
-                    className="p-1 rounded-lg text-muted2 hover:text-brandRed-400 hover:bg-white/5 transition-colors"
+                    className="p-1 rounded-lg text-muted2 hover:text-alert hover:bg-white/5 transition-colors"
                     title="Xoá biên bản"
                   >
                     <Trash2 className="h-3.5 w-3.5" />

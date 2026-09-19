@@ -37,7 +37,7 @@ const STATUS_LABEL: Record<TripRow["status"], string> = {
 const STATUS_STYLE: Record<TripRow["status"], string> = {
   PENDING: "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_8px_rgba(224,163,39,0.2)]",
   APPROVED: "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.2)]",
-  REJECTED: "bg-brandRed-500/15 text-brandRed-400 border border-brandRed-500/30 shadow-[0_0_8px_rgba(200,16,46,0.2)]",
+  REJECTED: "bg-brandRed-500/15 text-alert border border-brandRed-500/30 shadow-[0_0_8px_rgba(200,16,46,0.2)]",
 };
 
 export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
@@ -189,7 +189,7 @@ export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
                         </button>
                         <button
                           onClick={() => handleAction(t.id, "reject")}
-                          className="p-1.5 rounded-lg bg-brandRed-500/15 text-brandRed-400 hover:bg-brandRed-500/25 border border-brandRed-500/30 transition-colors"
+                          className="p-1.5 rounded-lg bg-brandRed-500/15 text-alert hover:bg-brandRed-500/25 border border-brandRed-500/30 transition-colors"
                           title="Từ chối"
                         >
                           <X className="h-4 w-4" />
@@ -215,7 +215,7 @@ export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
                         </button>
                         <button
                           onClick={() => handleAction(t.id, "cancel")}
-                          className="text-muted2 hover:text-brandRed-600"
+                          className="text-muted2 hover:text-alert"
                           title="Huỷ đăng ký"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -422,7 +422,7 @@ function TripForm({
                   type="button"
                   onClick={() => removeStop(i)}
                   disabled={stops.length <= 1}
-                  className="text-muted2 hover:text-brandRed-600 disabled:opacity-30"
+                  className="text-muted2 hover:text-alert disabled:opacity-30"
                   title="Xoá khách hàng này"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -479,7 +479,7 @@ function TripForm({
           ))}
         </div>
       </div>
-      {error && <p className="text-xs text-brandRed-600">{error}</p>}
+      {error && <p className="text-xs text-alert">{error}</p>}
       <div className="flex items-center gap-2">
         <button
           onClick={handleSubmit}

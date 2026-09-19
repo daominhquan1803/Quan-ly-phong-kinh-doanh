@@ -128,7 +128,7 @@ export function ManualPaymentModal({ invoice, onClose }: { invoice: ManualPaymen
             </div>
             <div className="rounded-lg bg-white/[0.04] p-2.5">
               <p className="text-muted2">Còn phải thu</p>
-              <p className="font-mono font-semibold text-brandRed-600">{formatCurrencyVND(data.remaining)}</p>
+              <p className="font-mono font-semibold text-alert">{formatCurrencyVND(data.remaining)}</p>
             </div>
           </div>
         )}
@@ -164,7 +164,7 @@ export function ManualPaymentModal({ invoice, onClose }: { invoice: ManualPaymen
               Điền đủ số còn phải thu ({formatCurrencyVND(data.remaining)})
             </button>
           )}
-          {error && <p className="text-xs text-brandRed-600">{error}</p>}
+          {error && <p className="text-xs text-alert">{error}</p>}
           <button
             onClick={handleSave}
             disabled={saving}
@@ -192,7 +192,7 @@ export function ManualPaymentModal({ invoice, onClose }: { invoice: ManualPaymen
                     {p.note && <p className="text-[11px] text-muted2">{p.note}</p>}
                   </div>
                   {p.isManual && (
-                    <button onClick={() => handleDelete(p.allocationId)} className="text-muted2 hover:text-brandRed-600" title="Xoá khoản nhập tay">
+                    <button onClick={() => handleDelete(p.allocationId)} className="text-muted2 hover:text-alert" title="Xoá khoản nhập tay">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   )}

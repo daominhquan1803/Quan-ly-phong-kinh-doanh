@@ -127,7 +127,7 @@ export function PickingSlipList() {
                     <button
                       onClick={() => handleDelete(s)}
                       disabled={deletingId === s.id}
-                      className="rounded-lg p-1.5 text-muted-foreground hover:bg-brandRed-50 hover:text-brandRed-600 transition-colors disabled:opacity-40"
+                      className="rounded-lg p-1.5 text-muted-foreground hover:bg-brandRed-50 hover:text-alert transition-colors disabled:opacity-40"
                       title="Xoá phiếu"
                     >
                       <Trash2 className="h-3.5 w-3.5" />

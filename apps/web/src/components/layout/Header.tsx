@@ -51,7 +51,7 @@ export function Header({ userName, role }: { userName?: string; role?: "ADMIN" |
         <form action="/api/auth/signout" method="post">
           <button
             type="submit"
-            className="flex items-center gap-1.5 rounded-xl border border-transparent px-2.5 py-1.5 text-sm text-muted-foreground hover:border-brandRed-600/30 hover:bg-brandRed-50/10 hover:text-brandRed-600 transition-all"
+            className="flex items-center gap-1.5 rounded-xl border border-transparent px-2.5 py-1.5 text-sm text-muted-foreground hover:border-brandRed-600/30 hover:bg-brandRed-50/10 hover:text-alert transition-all"
             aria-label="Đăng xuất"
           >
             <LogOut className="h-4 w-4" />
