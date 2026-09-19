@@ -4,6 +4,7 @@ import { prisma } from "@hoanggia/db";
 import { auth } from "@/lib/auth";
 import { OrderStatusBadge } from "@/components/orders/StatusBadge";
 import { CancelOrderButton } from "@/components/orders/CancelOrderButton";
+import { EditOrderDialog } from "@/components/orders/EditOrderDialog";
 import { formatCurrencyVND, formatDateVN } from "@/lib/utils";
 import { isOrderOverdue } from "@/lib/order-status";
 
@@ -45,6 +46,19 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <OrderStatusBadge status={order.status} overdue={overdue} />
+          {session.user.role === "ADMIN" && order.source === "MANUAL" && (
+            <EditOrderDialog
+              order={{
+                id: order.id,
+                customerName: order.customerName,
+                customerCode: order.customerCode,
+                poCode: order.poCode,
+                totalValue: Number(order.totalValue),
+                orderDate: order.orderDate,
+                expectedDeliveryDate: order.expectedDeliveryDate,
+              }}
+            />
+          )}
           {session.user.role === "ADMIN" && (
             <CancelOrderButton orderId={order.id} isCancelled={order.status === "CANCELLED"} />
           )}
