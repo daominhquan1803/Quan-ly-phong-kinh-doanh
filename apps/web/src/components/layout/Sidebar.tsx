@@ -17,6 +17,7 @@ import {
   ClipboardList,
   PackageCheck,
   Contact,
+  Sparkles,
 } from "lucide-react";
 
 export const NAV_ITEMS = [
@@ -39,19 +40,23 @@ export function Sidebar({ role }: { role?: "ADMIN" | "SALES" }) {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden md:flex md:w-64 md:flex-col bg-navy-900 text-white">
-      <div className="flex items-center gap-3 px-5 py-5 border-b border-white/10">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white p-1.5">
-          {/* eslint-disable-next-line @next/next/no-img-element -- SVG tĩnh, next/image
-              không tối ưu được vector nên dùng img thường cho gọn, khỏi bật dangerouslyAllowSVG */}
+    <aside className="hidden md:flex md:w-64 md:flex-col bg-[#0b1628]/95 backdrop-blur-2xl border-r border-gray-200/80 text-ink shadow-[4px_0_24px_rgba(0,0,0,0.35)] select-none">
+      {/* Brand Header */}
+      <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-200/70">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-white to-gray-200 p-1.5 shadow-[0_0_15px_rgba(255,255,255,0.2)]">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo/mark.svg" alt="Hoàng Gia PS" className="w-full h-auto" />
         </div>
         <div className="leading-tight">
-          <p className="font-semibold text-sm">HOÀNG GIA</p>
-          <p className="text-[11px] text-white/60">Quản lý phòng kinh doanh</p>
+          <div className="flex items-center gap-1.5">
+            <p className="font-bold text-sm tracking-wider text-ink">HOÀNG GIA</p>
+            <span className="flex h-1.5 w-1.5 rounded-full bg-amber-500 shadow-[0_0_6px_#E0A327]"></span>
+          </div>
+          <p className="text-[11px] font-medium text-amber-500/90">Quản lý phòng kinh doanh</p>
         </div>
       </div>
 
+      {/* Navigation List */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {NAV_ITEMS.filter((item) => !item.adminOnly || role === "ADMIN").map((item) => {
           const active = pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href));
@@ -61,31 +66,40 @@ export function Sidebar({ role }: { role?: "ADMIN" | "SALES" }) {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200",
                 active
-                  ? "bg-amber-500/10 text-amber-500 ring-1 ring-inset ring-amber-500/30"
-                  : "text-white/70 hover:bg-white/10 hover:text-white"
+                  ? "bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-transparent text-amber-400 font-semibold border-l-2 border-l-amber-500 shadow-[inset_0_1px_0_rgba(224,163,39,0.15)]"
+                  : "text-ink2/70 hover:bg-navy-50/70 hover:text-ink"
               )}
             >
-              <Icon className="h-4 w-4 shrink-0" />
-              {item.label}
+              <Icon
+                className={cn(
+                  "h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110",
+                  active ? "text-amber-400" : "text-muted2 group-hover:text-amber-400/80"
+                )}
+              />
+              <span className="truncate">{item.label}</span>
             </Link>
           );
         })}
       </nav>
 
-      {/* Ảnh thật từ website công ty (hoanggiaps.com) — nhắc thương hiệu ở chân sidebar. */}
-      <div className="mx-3 mb-3 overflow-hidden rounded-lg border border-white/10">
+      {/* Brand Mini Banner */}
+      <div className="mx-3 mb-3 overflow-hidden rounded-xl border border-gray-200/80 bg-navy-900/50 shadow-sm backdrop-blur-md">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/images/company-banner.webp" alt="Hoàng Gia PS" className="h-16 w-full object-cover" />
-        <div className="bg-white/5 px-3 py-2">
-          <p className="text-[11px] font-medium text-white/90">Hoàng Gia PS</p>
-          <p className="text-[10px] text-white/50">Giải pháp đóng gói trọn gói</p>
+        <img src="/images/company-banner.webp" alt="Hoàng Gia PS" className="h-14 w-full object-cover opacity-80" />
+        <div className="bg-navy-900/90 px-3 py-2 border-t border-gray-200/50">
+          <p className="text-[11px] font-semibold text-ink flex items-center gap-1">
+            Hoàng Gia PS <Sparkles className="h-2.5 w-2.5 text-amber-400 inline" />
+          </p>
+          <p className="text-[10px] text-muted2">Giải pháp đóng gói toàn diện</p>
         </div>
       </div>
 
-      <div className="px-5 py-4 border-t border-white/10 text-[11px] text-white/50">
-        © {new Date().getFullYear()} Công ty CP Giải pháp Đóng gói Hoàng Gia
+      {/* Footer Copyright */}
+      <div className="px-5 py-3.5 border-t border-gray-200/70 text-[11px] text-muted2 flex items-center justify-between">
+        <span>© {new Date().getFullYear()} Hoàng Gia PS</span>
+        <span className="text-[10px] font-mono text-muted2/60">v1.2</span>
       </div>
     </aside>
   );

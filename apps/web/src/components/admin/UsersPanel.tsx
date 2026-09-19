@@ -218,277 +218,367 @@ export function UsersPanel() {
   return (
     <div className="space-y-8">
       <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-medium text-ink">Danh sách nhân viên</h2>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+          <div>
+            <h2 className="text-base font-semibold text-white tracking-wide">Danh Sách Tài Khoản & Nhân Viên</h2>
+            <p className="text-xs text-gray-400">Thiết lập quyền hạn, mật khẩu và ánh xạ hệ thống dữ liệu</p>
+          </div>
           <button
             onClick={() => setShowForm((v) => !v)}
-            className="flex items-center gap-1.5 rounded-md bg-brandRed-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brandRed-700"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-gradient-to-r from-brandRed-600 to-amber-600 hover:from-brandRed-500 hover:to-amber-500 text-white shadow-[0_0_20px_rgba(225,29,72,0.25)] border border-brandRed-500/40 transition-all active:scale-[0.98]"
           >
-            <Plus className="h-4 w-4" /> Thêm nhân viên
+            <Plus className="h-4 w-4" /> {showForm ? "Đóng biểu mẫu" : "Thêm nhân viên"}
           </button>
         </div>
 
         {showForm && (
-          <div className="rounded-lg border border-gray-200 bg-card p-4 mb-4 space-y-3">
-            {error && <p className="text-sm text-brandRed-600">{error}</p>}
-            <div className="grid grid-cols-2 gap-3">
-              <input placeholder="Họ tên" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className="input" />
-              <input placeholder="Email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} className="input" />
-              <select value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as "ADMIN" | "SALES" }))} className="input">
-                <option value="SALES">Nhân viên kinh doanh</option>
-                <option value="ADMIN">Quản trị viên</option>
-              </select>
-              <input
-                placeholder="Mật khẩu tạm"
-                type="text"
-                value={form.password}
-                onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-                className="input"
-              />
+          <div className="glass-card border border-white/15 p-5 mb-5 rounded-2xl space-y-4 shadow-[0_8px_30px_rgb(0,0,0,0.4)] backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <span className="text-sm font-semibold text-white flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+                Thêm tài khoản nhân viên mới
+              </span>
+              <span className="text-xs text-gray-400">Điền thông tin và cấp mật khẩu ban đầu</span>
             </div>
-            <button onClick={handleCreateUser} className="rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-amber-foreground hover:bg-amber-400">
-              Tạo tài khoản
-            </button>
+            {error && (
+              <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
+                {error}
+              </div>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">Họ và tên *</label>
+                <input
+                  placeholder="vd: Nguyễn Văn A"
+                  value={form.name}
+                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                  className="w-full bg-white/[0.05] border border-white/15 rounded-xl px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/60"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">Email đăng nhập *</label>
+                <input
+                  placeholder="vd: anvh@hoanggia.com"
+                  value={form.email}
+                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                  className="w-full bg-white/[0.05] border border-white/15 rounded-xl px-3 py-2 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/60"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">Vai trò hệ thống</label>
+                <select
+                  value={form.role}
+                  onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as "ADMIN" | "SALES" }))}
+                  className="w-full bg-[#18181b] border border-white/15 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/60"
+                >
+                  <option value="SALES">Nhân viên kinh doanh</option>
+                  <option value="ADMIN">Quản trị viên (Admin)</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">Mật khẩu khởi tạo *</label>
+                <input
+                  placeholder="Tối thiểu 6 ký tự"
+                  type="text"
+                  value={form.password}
+                  onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+                  className="w-full bg-white/[0.05] border border-white/15 rounded-xl px-3 py-2 text-sm text-white font-mono placeholder:text-gray-500 focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/60"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={handleCreateUser}
+                className="px-5 py-2 rounded-xl text-sm font-semibold bg-amber-500 hover:bg-amber-400 text-gray-950 shadow-[0_0_15px_rgba(245,158,11,0.3)] transition-all font-medium"
+              >
+                Tạo tài khoản ngay
+              </button>
+            </div>
           </div>
         )}
 
-        {error && !showForm && <p className="text-sm text-brandRed-600 mb-3">{error}</p>}
+        {error && !showForm && (
+          <div className="p-3 mb-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
+            {error}
+          </div>
+        )}
 
-        <div className="rounded-lg border border-gray-200 bg-card overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 text-muted-foreground">
-              <tr>
-                <th className="text-left font-medium px-4 py-2.5">Tên</th>
-                <th className="text-left font-medium px-4 py-2.5">Email</th>
-                <th className="text-left font-medium px-4 py-2.5">Vai trò</th>
-                <th className="text-left font-medium px-4 py-2.5">Trạng thái</th>
-                <th className="text-left font-medium px-4 py-2.5">Mã nhân viên AMIS</th>
-                <th className="text-left font-medium px-4 py-2.5">Mã Báo giá</th>
-                <th className="text-left font-medium px-4 py-2.5">Email nhận thông báo</th>
-                <th className="text-left font-medium px-4 py-2.5">Số điện thoại</th>
-                <th className="text-left font-medium px-4 py-2.5">Thống kê doanh số</th>
-                <th className="text-left font-medium px-4 py-2.5">Mật khẩu</th>
-                <th className="text-left font-medium px-4 py-2.5"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {usersData?.users.map((u) => (
-                <tr key={u.id} className={u.active ? "" : "opacity-50"}>
-                  <td className="px-4 py-2.5 font-medium text-ink">{u.name}</td>
-                  <td className="px-4 py-2.5 text-muted-foreground">{u.email}</td>
-                  <td className="px-4 py-2.5">
-                    <select
-                      value={u.role}
-                      disabled={rowBusy === u.id}
-                      onChange={(e) => handleRoleChange(u.id, e.target.value as "ADMIN" | "SALES")}
-                      className="text-sm bg-card text-ink rounded-md border border-gray-200 py-1 px-2 disabled:opacity-40"
-                    >
-                      <option value="SALES">Nhân viên kinh doanh</option>
-                      <option value="ADMIN">Quản trị viên</option>
-                    </select>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <button
-                      onClick={() => handleToggleActive(u.id, !u.active)}
-                      disabled={rowBusy === u.id}
-                      className={`rounded-full px-2.5 py-1 text-xs font-medium disabled:opacity-40 ${
-                        u.active ? "bg-success-600/10 text-success-600" : "bg-gray-200 text-muted-foreground"
-                      }`}
-                    >
-                      {u.active ? "Đang hoạt động" : "Đã khoá"}
-                    </button>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <div className="flex items-center gap-2">
-                      <input
-                        placeholder="vd: DANGTAN"
-                        defaultValue={u.amisEmployeeCode ?? ""}
-                        onChange={(e) => setAmisCodeEdits((prev) => ({ ...prev, [u.id]: e.target.value }))}
-                        className="w-32 text-sm bg-card text-ink rounded-md border border-gray-200 py-1 px-2"
-                      />
-                      {amisCodeEdits[u.id] !== undefined && (
-                        <button
-                          onClick={() => handleSaveAmisCode(u.id)}
-                          disabled={savingAmisCode === u.id}
-                          className="text-xs font-medium text-ink hover:underline disabled:opacity-40"
-                        >
-                          Lưu
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <div className="flex items-center gap-2">
-                      <input
-                        placeholder="vd: TAN.DV"
-                        defaultValue={u.quoteAssigneeCode ?? ""}
-                        onChange={(e) => setQuoteCodeEdits((prev) => ({ ...prev, [u.id]: e.target.value }))}
-                        className="w-24 text-sm bg-card text-ink rounded-md border border-gray-200 py-1 px-2"
-                      />
-                      {quoteCodeEdits[u.id] !== undefined && (
-                        <button
-                          onClick={() => handleSaveQuoteCode(u.id)}
-                          disabled={savingQuoteCode === u.id}
-                          className="text-xs font-medium text-ink hover:underline disabled:opacity-40"
-                        >
-                          Lưu
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <div className="flex items-center gap-2">
-                      <input
-                        placeholder="vd: tung.nguyen@gmail.com"
-                        defaultValue={u.notifyEmail ?? ""}
-                        onChange={(e) => setNotifyEmailEdits((prev) => ({ ...prev, [u.id]: e.target.value }))}
-                        className="w-44 text-sm bg-card text-ink rounded-md border border-gray-200 py-1 px-2"
-                      />
-                      {notifyEmailEdits[u.id] !== undefined && (
-                        <button
-                          onClick={() => handleSaveNotifyEmail(u.id)}
-                          disabled={savingNotifyEmail === u.id}
-                          className="text-xs font-medium text-ink hover:underline disabled:opacity-40"
-                        >
-                          Lưu
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <div className="flex items-center gap-2">
-                      <input
-                        placeholder="vd: 0973786111"
-                        defaultValue={u.phone ?? ""}
-                        onChange={(e) => setPhoneEdits((prev) => ({ ...prev, [u.id]: e.target.value }))}
-                        className="w-32 text-sm bg-card text-ink rounded-md border border-gray-200 py-1 px-2"
-                      />
-                      {phoneEdits[u.id] !== undefined && (
-                        <button
-                          onClick={() => handleSavePhone(u.id)}
-                          disabled={savingPhone === u.id}
-                          className="text-xs font-medium text-ink hover:underline disabled:opacity-40"
-                        >
-                          Lưu
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <button
-                      onClick={() => handleToggleIncludeInStats(u.id, !u.includeInSalesStats)}
-                      disabled={rowBusy === u.id || !u.amisEmployeeCode}
-                      title={!u.amisEmployeeCode ? "Chưa gán mã AMIS nên không tính vào thống kê" : undefined}
-                      className={`rounded-full px-2.5 py-1 text-xs font-medium disabled:opacity-40 ${
-                        u.includeInSalesStats ? "bg-success-600/10 text-success-600" : "bg-gray-200 text-muted-foreground"
-                      }`}
-                    >
-                      {u.includeInSalesStats ? "Có tính" : "Không tính"}
-                    </button>
-                  </td>
-                  <td className="px-4 py-2.5">
-                    {resetPasswordFor === u.id ? (
+        <div className="glass-card border border-white/10 rounded-2xl overflow-hidden shadow-[0_12px_40px_rgb(0,0,0,0.5)] backdrop-blur-xl">
+          <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-white/10">
+            <table className="min-w-full text-xs">
+              <thead className="bg-white/[0.04] border-b border-white/10 text-gray-400 uppercase tracking-wider font-semibold">
+                <tr>
+                  <th className="text-left py-3.5 px-4">Tên</th>
+                  <th className="text-left py-3.5 px-4">Email</th>
+                  <th className="text-left py-3.5 px-4">Vai trò</th>
+                  <th className="text-left py-3.5 px-4">Trạng thái</th>
+                  <th className="text-left py-3.5 px-4">Mã AMIS</th>
+                  <th className="text-left py-3.5 px-4">Mã Báo giá</th>
+                  <th className="text-left py-3.5 px-4">Email nhận TB</th>
+                  <th className="text-left py-3.5 px-4">Số điện thoại</th>
+                  <th className="text-left py-3.5 px-4">Thống kê DS</th>
+                  <th className="text-left py-3.5 px-4">Mật khẩu</th>
+                  <th className="text-right py-3.5 px-4">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {usersData?.users.map((u) => (
+                  <tr
+                    key={u.id}
+                    className={`transition-colors hover:bg-white/[0.03] ${u.active ? "" : "opacity-45 bg-black/20"}`}
+                  >
+                    <td className="py-3 px-4 font-semibold text-white whitespace-nowrap">
                       <div className="flex items-center gap-2">
+                        <div className="h-7 w-7 rounded-lg bg-gradient-to-tr from-brandRed-600/30 to-amber-500/30 border border-white/10 flex items-center justify-center font-bold text-white text-xs">
+                          {u.name.slice(0, 1).toUpperCase()}
+                        </div>
+                        <span>{u.name}</span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 text-gray-300 font-mono whitespace-nowrap">{u.email}</td>
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <select
+                        value={u.role}
+                        disabled={rowBusy === u.id}
+                        onChange={(e) => handleRoleChange(u.id, e.target.value as "ADMIN" | "SALES")}
+                        className={`text-xs rounded-lg border py-1 px-2.5 font-medium transition-colors cursor-pointer disabled:opacity-40 ${
+                          u.role === "ADMIN"
+                            ? "bg-purple-500/10 text-purple-300 border-purple-500/30"
+                            : "bg-blue-500/10 text-blue-300 border-blue-500/30"
+                        }`}
+                      >
+                        <option value="SALES" className="bg-[#18181b] text-white">Nhân viên kinh doanh</option>
+                        <option value="ADMIN" className="bg-[#18181b] text-white">Quản trị viên (Admin)</option>
+                      </select>
+                    </td>
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <button
+                        onClick={() => handleToggleActive(u.id, !u.active)}
+                        disabled={rowBusy === u.id}
+                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all disabled:opacity-40 ${
+                          u.active
+                            ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.15)]"
+                            : "bg-gray-500/15 text-gray-400 border border-gray-500/30"
+                        }`}
+                      >
+                        <span className={`h-1.5 w-1.5 rounded-full ${u.active ? "bg-emerald-400 animate-pulse" : "bg-gray-400"}`} />
+                        {u.active ? "Đang hoạt động" : "Đã khoá"}
+                      </button>
+                    </td>
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
                         <input
-                          type="text"
-                          placeholder="Mật khẩu mới"
-                          value={resetPasswordValue}
-                          onChange={(e) => setResetPasswordValue(e.target.value)}
-                          className="w-32 text-sm bg-card text-ink rounded-md border border-gray-200 py-1 px-2"
-                          autoFocus
+                          placeholder="vd: DANGTAN"
+                          defaultValue={u.amisEmployeeCode ?? ""}
+                          onChange={(e) => setAmisCodeEdits((prev) => ({ ...prev, [u.id]: e.target.value }))}
+                          className="w-28 text-xs bg-white/[0.05] text-white placeholder:text-gray-600 rounded-lg border border-white/15 py-1 px-2 font-mono focus:outline-none focus:border-amber-500/50"
                         />
-                        <button
-                          onClick={() => handleSubmitResetPassword(u.id)}
-                          disabled={rowBusy === u.id}
-                          className="text-xs font-medium text-ink hover:underline disabled:opacity-40"
-                        >
-                          Lưu
-                        </button>
+                        {amisCodeEdits[u.id] !== undefined && (
+                          <button
+                            onClick={() => handleSaveAmisCode(u.id)}
+                            disabled={savingAmisCode === u.id}
+                            className="text-[11px] font-semibold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 rounded transition-colors disabled:opacity-40"
+                          >
+                            Lưu
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          placeholder="vd: TAN.DV"
+                          defaultValue={u.quoteAssigneeCode ?? ""}
+                          onChange={(e) => setQuoteCodeEdits((prev) => ({ ...prev, [u.id]: e.target.value }))}
+                          className="w-24 text-xs bg-white/[0.05] text-white placeholder:text-gray-600 rounded-lg border border-white/15 py-1 px-2 font-mono focus:outline-none focus:border-amber-500/50"
+                        />
+                        {quoteCodeEdits[u.id] !== undefined && (
+                          <button
+                            onClick={() => handleSaveQuoteCode(u.id)}
+                            disabled={savingQuoteCode === u.id}
+                            className="text-[11px] font-semibold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 rounded transition-colors disabled:opacity-40"
+                          >
+                            Lưu
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          placeholder="Email nhận thông báo"
+                          defaultValue={u.notifyEmail ?? ""}
+                          onChange={(e) => setNotifyEmailEdits((prev) => ({ ...prev, [u.id]: e.target.value }))}
+                          className="w-40 text-xs bg-white/[0.05] text-white placeholder:text-gray-600 rounded-lg border border-white/15 py-1 px-2 font-mono focus:outline-none focus:border-amber-500/50"
+                        />
+                        {notifyEmailEdits[u.id] !== undefined && (
+                          <button
+                            onClick={() => handleSaveNotifyEmail(u.id)}
+                            disabled={savingNotifyEmail === u.id}
+                            className="text-[11px] font-semibold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 rounded transition-colors disabled:opacity-40"
+                          >
+                            Lưu
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          placeholder="Số điện thoại"
+                          defaultValue={u.phone ?? ""}
+                          onChange={(e) => setPhoneEdits((prev) => ({ ...prev, [u.id]: e.target.value }))}
+                          className="w-28 text-xs bg-white/[0.05] text-white placeholder:text-gray-600 rounded-lg border border-white/15 py-1 px-2 font-mono focus:outline-none focus:border-amber-500/50"
+                        />
+                        {phoneEdits[u.id] !== undefined && (
+                          <button
+                            onClick={() => handleSavePhone(u.id)}
+                            disabled={savingPhone === u.id}
+                            className="text-[11px] font-semibold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 rounded transition-colors disabled:opacity-40"
+                          >
+                            Lưu
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <button
+                        onClick={() => handleToggleIncludeInStats(u.id, !u.includeInSalesStats)}
+                        disabled={rowBusy === u.id || !u.amisEmployeeCode}
+                        title={!u.amisEmployeeCode ? "Chưa gán mã AMIS nên không tính vào thống kê" : undefined}
+                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all disabled:opacity-40 ${
+                          u.includeInSalesStats
+                            ? "bg-amber-500/15 text-amber-400 border border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.15)]"
+                            : "bg-gray-500/15 text-gray-400 border border-gray-500/30"
+                        }`}
+                      >
+                        <span className={`h-1.5 w-1.5 rounded-full ${u.includeInSalesStats ? "bg-amber-400" : "bg-gray-500"}`} />
+                        {u.includeInSalesStats ? "Có tính" : "Không tính"}
+                      </button>
+                    </td>
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      {resetPasswordFor === u.id ? (
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="text"
+                            placeholder="Mật khẩu mới"
+                            value={resetPasswordValue}
+                            onChange={(e) => setResetPasswordValue(e.target.value)}
+                            className="w-28 text-xs bg-white/[0.08] text-white placeholder:text-gray-500 rounded-lg border border-amber-500/50 py-1 px-2 font-mono focus:outline-none"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => handleSubmitResetPassword(u.id)}
+                            disabled={rowBusy === u.id}
+                            className="text-[11px] font-semibold text-emerald-400 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 px-2 py-0.5 rounded transition-colors disabled:opacity-40"
+                          >
+                            Lưu
+                          </button>
+                          <button
+                            onClick={() => {
+                              setResetPasswordFor(null);
+                              setResetPasswordValue("");
+                            }}
+                            className="text-[11px] text-gray-400 hover:text-white px-1.5 py-0.5"
+                          >
+                            Huỷ
+                          </button>
+                        </div>
+                      ) : (
                         <button
                           onClick={() => {
-                            setResetPasswordFor(null);
+                            setResetPasswordFor(u.id);
                             setResetPasswordValue("");
                           }}
-                          className="text-xs text-muted-foreground hover:underline"
+                          className="inline-flex items-center gap-1 text-xs font-medium text-gray-400 hover:text-amber-400 bg-white/[0.03] hover:bg-white/[0.07] border border-white/10 px-2 py-1 rounded-lg transition-colors"
                         >
-                          Huỷ
+                          <KeyRound className="h-3 w-3" /> Đặt lại
                         </button>
-                      </div>
-                    ) : (
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-right whitespace-nowrap">
                       <button
-                        onClick={() => {
-                          setResetPasswordFor(u.id);
-                          setResetPasswordValue("");
-                        }}
-                        className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-ink"
+                        onClick={() => handleDeleteUser(u.id, u.name)}
+                        disabled={rowBusy === u.id}
+                        className="inline-flex items-center gap-1 text-xs font-medium text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 px-2 py-1 rounded-lg transition-colors disabled:opacity-40"
                       >
-                        <KeyRound className="h-3.5 w-3.5" /> Đặt lại
+                        <Trash2 className="h-3.5 w-3.5" /> Xoá
                       </button>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <button
-                      onClick={() => handleDeleteUser(u.id, u.name)}
-                      disabled={rowBusy === u.id}
-                      className="flex items-center gap-1 text-xs font-medium text-brandRed-600 hover:underline disabled:opacity-40"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" /> Xoá
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-        <p className="text-xs text-muted-foreground mt-2">
-          Mã nhân viên AMIS (vd DANGTAN) dùng để đồng bộ đơn hàng tự động khớp đúng người phụ trách — xem tại
+        <p className="text-[11px] text-gray-400/80 mt-3 leading-relaxed">
+          💡 <span className="text-amber-400 font-medium">Lưu ý:</span> Mã nhân viên AMIS (vd DANGTAN) dùng để đồng bộ đơn hàng tự động khớp đúng người phụ trách — xem tại
           AMIS CRM, thông tin nhân viên. Đổi vai trò/khoá tài khoản áp dụng ngay lập tức; hệ thống luôn giữ lại
           ít nhất 1 quản trị viên đang hoạt động. Cột &quot;Thống kê doanh số&quot;: bật cho tài khoản nào thì doanh số
-          của mã AMIS đó mới cộng vào Kế hoạch kinh doanh/Tổng quan — tắt đi nếu mã AMIS này không phải nhân
-          viên kinh doanh thật (đơn hàng vẫn đồng bộ về bình thường, chỉ không tính vào thống kê).
-          Cột &quot;Email nhận thông báo&quot; là email THẬT (Gmail/Outlook...) — khác với email đăng
-          nhập ở cột đầu (thường là địa chỉ nội bộ không nhận được thư) — dùng để gửi nhắc việc khi
-          Kế hoạch tuần/KPI tháng sắp đến hạn. Để trống thì chỉ nhận thông báo trong app. Cột
-          &quot;Số điện thoại&quot; hiển thị ở mục &quot;Phụ trách đơn hàng&quot; trên Phiếu soạn hàng.
+          của mã AMIS đó mới cộng vào Kế hoạch kinh doanh/Tổng quan. Cột &quot;Email nhận thông báo&quot; dùng để gửi nhắc việc khi
+          Kế hoạch tuần/KPI tháng sắp đến hạn.
         </p>
       </div>
 
-      <div>
-        <h2 className="font-medium text-ink mb-3">
-          Ánh xạ tên (alias) — khi Excel AMIS ghi tên nhân viên khác với tài khoản hệ thống
-        </h2>
-        <div className="rounded-lg border border-gray-200 bg-card p-4 space-y-3">
-          <div className="flex items-center gap-2">
+      <div className="glass-card border border-white/10 rounded-2xl p-5 shadow-[0_8px_30px_rgb(0,0,0,0.3)]">
+        <div className="mb-3">
+          <h2 className="text-base font-semibold text-white">
+            Ánh Xạ Tên (Alias) — Đồng Bộ Tên Khác Biệt Giữa Excel AMIS & Hệ Thống
+          </h2>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Dành cho trường hợp file Excel AMIS ghi tên nhân viên khác với tài khoản thực tế trên CRM
+          </p>
+        </div>
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row items-center gap-2">
             <input
               placeholder="Tên trong file Excel (vd: Tấn - KD1)"
               value={aliasForm.aliasName}
               onChange={(e) => setAliasForm((f) => ({ ...f, aliasName: e.target.value }))}
-              className="input"
+              className="w-full sm:w-80 bg-white/[0.05] border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder:text-gray-500 focus:outline-none focus:border-amber-500/60"
             />
             <select
               value={aliasForm.employeeId}
               onChange={(e) => setAliasForm((f) => ({ ...f, employeeId: e.target.value }))}
-              className="input"
+              className="w-full sm:w-64 bg-[#18181b] border border-white/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500/60"
             >
-              <option value="">— Chọn nhân viên —</option>
+              <option value="">— Chọn nhân viên đích —</option>
               {salesUsers.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.name}
                 </option>
               ))}
             </select>
-            <button onClick={handleCreateAlias} className="shrink-0 rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-amber-foreground hover:bg-amber-400">
-              Lưu
+            <button
+              onClick={handleCreateAlias}
+              className="w-full sm:w-auto shrink-0 px-4 py-2 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-gray-950 shadow-[0_0_15px_rgba(245,158,11,0.25)] transition-all font-medium"
+            >
+              Lưu Ánh Xạ
             </button>
           </div>
-          <ul className="text-sm text-ink2 divide-y divide-gray-100">
-            {aliasData?.aliases.map((a) => (
-              <li key={a.aliasName} className="py-1.5 flex items-center justify-between">
-                <span>{a.aliasName}</span>
-                <span className="text-muted-foreground">→ {a.employee.name}</span>
-              </li>
-            ))}
-          </ul>
+
+          <div className="border-t border-white/5 pt-3">
+            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">
+              Danh sách ánh xạ hiện hữu:
+            </span>
+            <ul className="text-xs text-gray-300 divide-y divide-white/5 max-h-52 overflow-y-auto pr-2">
+              {aliasData?.aliases && aliasData.aliases.length > 0 ? (
+                aliasData.aliases.map((a) => (
+                  <li key={a.aliasName} className="py-2 flex items-center justify-between">
+                    <span className="font-mono text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                      {a.aliasName}
+                    </span>
+                    <span className="text-gray-400 flex items-center gap-2">
+                      <span className="text-gray-600">chuyển thành</span>
+                      <strong className="text-white font-medium">{a.employee.name}</strong>
+                    </span>
+                  </li>
+                ))
+              ) : (
+                <li className="py-2 text-gray-500 italic">Chưa có ánh xạ tên nào được tạo</li>
+              )}
+            </ul>
+          </div>
         </div>
       </div>
     </div>

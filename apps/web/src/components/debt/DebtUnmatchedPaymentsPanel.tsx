@@ -36,33 +36,44 @@ export function DebtUnmatchedPaymentsPanel() {
   const total = payments.reduce((s, p) => s + p.unallocatedAmount, 0);
 
   return (
-    <div className="rounded-lg border border-warning-500/40 bg-card p-4 space-y-3">
-      <div className="flex items-center gap-2">
-        <AlertTriangle className="h-4 w-4 text-warning-500" />
-        <p className="font-medium text-ink text-sm">
-          Tiền về ngoài kế hoạch / chưa khớp công nợ{!isLoading && ` — ${payments.length} giao dịch, ${formatCurrencyVND(total)}`}
-        </p>
+    <div className="glass-card border border-amber-500/30 bg-amber-500/[0.03] p-4 space-y-3 relative overflow-hidden shadow-[0_0_20px_rgba(224,163,39,0.06)]">
+      <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
+      <div className="flex items-center gap-2.5">
+        <div className="p-1.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400 shadow-[0_0_10px_rgba(224,163,39,0.25)]">
+          <AlertTriangle className="h-4 w-4" />
+        </div>
+        <div>
+          <p className="font-semibold text-ink text-sm flex items-center gap-2">
+            Tiền về ngoài kế hoạch / chưa khớp công nợ
+            {!isLoading && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 font-mono">
+                {payments.length} giao dịch · {formatCurrencyVND(total)}
+              </span>
+            )}
+          </p>
+          <p className="text-xs text-muted2 mt-0.5">Tiền đã về tài khoản nhưng chưa khớp hết vào các hoá đơn cụ thể</p>
+        </div>
       </div>
       {!isLoading && (
-        <div className="rounded-lg border border-gray-200 overflow-x-auto max-h-72">
+        <div className="rounded-xl border border-white/5 bg-black/30 overflow-x-auto max-h-72">
           <table className="min-w-full text-xs">
-            <thead className="bg-gray-50 text-muted-foreground sticky top-0">
+            <thead className="bg-white/[0.04] text-muted-foreground sticky top-0 backdrop-blur-md border-b border-white/5">
               <tr>
-                <th className="text-left font-medium px-3 py-2">Ngày</th>
-                <th className="text-left font-medium px-3 py-2">Khách hàng</th>
-                <th className="text-left font-medium px-3 py-2">Mô tả</th>
-                <th className="text-right font-medium px-3 py-2">Chưa khớp</th>
+                <th className="text-left font-medium px-3.5 py-2.5">Ngày</th>
+                <th className="text-left font-medium px-3.5 py-2.5">Khách hàng</th>
+                <th className="text-left font-medium px-3.5 py-2.5">Mô tả</th>
+                <th className="text-right font-medium px-3.5 py-2.5">Chưa khớp</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-white/5">
               {payments.map((p) => (
-                <tr key={p.id}>
-                  <td className="px-3 py-1.5">{formatDateVN(p.paymentDate)}</td>
-                  <td className="px-3 py-1.5">{p.customerName ?? p.customerCode ?? "—"}</td>
-                  <td className="px-3 py-1.5 text-ink2 max-w-xs truncate" title={p.rawDescription ?? ""}>
+                <tr key={p.id} className="hover:bg-white/[0.03] transition-colors">
+                  <td className="px-3.5 py-2 text-muted2 font-mono">{formatDateVN(p.paymentDate)}</td>
+                  <td className="px-3.5 py-2 font-medium text-ink">{p.customerName ?? p.customerCode ?? "—"}</td>
+                  <td className="px-3.5 py-2 text-muted-foreground max-w-xs truncate" title={p.rawDescription ?? ""}>
                     {p.rawDescription ?? "—"}
                   </td>
-                  <td className="px-3 py-1.5 text-right text-brandRed-600 font-medium">
+                  <td className="px-3.5 py-2 text-right text-brandRed-400 font-mono font-semibold">
                     {formatCurrencyVND(p.unallocatedAmount)}
                   </td>
                 </tr>

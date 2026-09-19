@@ -33,9 +33,9 @@ const STATUS_LABEL: Record<TripRow["status"], string> = {
   REJECTED: "Từ chối",
 };
 const STATUS_STYLE: Record<TripRow["status"], string> = {
-  PENDING: "bg-warning-500/10 text-warning-500",
-  APPROVED: "bg-success-600/10 text-success-600",
-  REJECTED: "bg-brandRed-50 text-brandRed-600",
+  PENDING: "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_8px_rgba(224,163,39,0.2)]",
+  APPROVED: "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.2)]",
+  REJECTED: "bg-brandRed-500/15 text-brandRed-400 border border-brandRed-500/30 shadow-[0_0_8px_rgba(200,16,46,0.2)]",
 };
 
 export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
@@ -88,7 +88,7 @@ export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
             setEditingTrip(null);
             setShowForm((v) => !v);
           }}
-          className="rounded-md bg-brandRed-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brandRed-700"
+          className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-brandRed-600 to-brandRed-700 hover:from-brandRed-500 hover:to-brandRed-600 px-4 py-2 text-xs font-semibold text-white shadow-[0_0_15px_rgba(200,16,46,0.3)] transition-all"
         >
           {showForm ? "Đóng" : "+ Đăng ký đi công tác"}
         </button>
@@ -106,9 +106,9 @@ export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
         />
       )}
 
-      <div className="rounded-lg border border-gray-200 bg-card overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-muted-foreground">
+      <div className="glass-card border border-white/10 rounded-2xl overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
+        <table className="min-w-full text-xs">
+          <thead className="bg-white/[0.04] text-muted-foreground border-b border-white/5 backdrop-blur-md">
             <tr>
               <th className="text-left font-medium px-4 py-2.5">Ngày đi</th>
               {isAdmin && <th className="text-left font-medium px-4 py-2.5">Nhân viên</th>}
@@ -136,7 +136,7 @@ export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
             {data?.trips.map((t) => {
               const mapsUrl = buildGoogleMapsMultiStopUrl(t.stops.map((s) => s.address));
               return (
-                <tr key={t.id} className="hover:bg-gray-50 align-top">
+                <tr key={t.id} className="hover:bg-white/[0.02] align-top transition-colors">
                   <td className="px-4 py-2.5 font-medium text-ink whitespace-nowrap">{formatDateVN(t.visitDate)}</td>
                   {isAdmin && <td className="px-4 py-2.5 whitespace-nowrap">{t.employee.name}</td>}
                   <td className="px-4 py-2.5">
@@ -159,7 +159,7 @@ export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
                         href={mapsUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="mt-1.5 inline-flex items-center gap-1 text-xs font-medium text-amber-500 hover:underline"
+                        className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-amber-400 hover:text-amber-300 transition-colors"
                       >
                         <MapPin className="h-3.5 w-3.5" /> Mở lộ trình trên Google Maps
                       </a>
@@ -179,14 +179,14 @@ export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
                       <span className="inline-flex items-center gap-2">
                         <button
                           onClick={() => handleAction(t.id, "approve")}
-                          className="text-success-600 hover:text-success-600/80"
+                          className="p-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/30 transition-colors"
                           title="Duyệt"
                         >
                           <Check className="h-4 w-4" />
                         </button>
                         <button
                           onClick={() => handleAction(t.id, "reject")}
-                          className="text-brandRed-600 hover:text-brandRed-700"
+                          className="p-1.5 rounded-lg bg-brandRed-500/15 text-brandRed-400 hover:bg-brandRed-500/25 border border-brandRed-500/30 transition-colors"
                           title="Từ chối"
                         >
                           <X className="h-4 w-4" />
@@ -345,7 +345,7 @@ function TripForm({
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-4">
+    <div className="glass-card border border-white/10 p-5 rounded-2xl space-y-4 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
       {editingTrip && <p className="text-sm font-medium text-ink">Sửa đăng ký ngày {formatDateVN(editingTrip.visitDate)}</p>}
       <label className="flex flex-col gap-1 text-xs text-muted-foreground max-w-xs">
         Ngày đi
@@ -358,7 +358,7 @@ function TripForm({
           kiến ghé để link Google Maps mở đúng lộ trình (có thể tự kéo-thả sắp lại trong Maps).
         </p>
         {stops.map((s, i) => (
-          <div key={i} className="rounded-md border border-gray-200 bg-card p-3 space-y-2">
+          <div key={i} className="glass-card border border-white/5 bg-white/[0.02] p-4 rounded-xl space-y-2.5 hover:border-white/15 transition-all">
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold text-ink">Khách hàng {i + 1}</p>
               <div className="flex items-center gap-2">

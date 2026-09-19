@@ -126,9 +126,9 @@ function barColor(p: number): string {
   return "bg-brandRed-600";
 }
 function gradeBadge(g: 0 | 1 | 2): { label: string; cls: string } {
-  if (g === 2) return { label: "Đạt", cls: "bg-success-600/10 text-success-600" };
-  if (g === 1) return { label: "Cần cố gắng", cls: "bg-warning-500/10 text-warning-500" };
-  return { label: "Không hoàn thành", cls: "bg-brandRed-50 text-brandRed-600" };
+  if (g === 2) return { label: "Đạt chuẩn", cls: "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-[0_0_8px_rgba(16,185,129,0.25)] font-bold" };
+  if (g === 1) return { label: "Cần cố gắng", cls: "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-[0_0_8px_rgba(224,163,39,0.2)] font-semibold" };
+  return { label: "Chưa đạt", cls: "bg-brandRed-500/25 text-brandRed-400 border border-brandRed-500/40 shadow-[0_0_8px_rgba(200,16,46,0.3)] font-bold" };
 }
 
 export function WeekPlanOverview({ isAdmin }: { isAdmin: boolean }) {
@@ -199,20 +199,21 @@ function WeekNav({ weekStart, onChange }: { weekStart: Date; onChange: (d: Date)
   const isCurrent = toISODate(weekStart) === toISODate(startOfCurrentMonthWeek(new Date()));
   return (
     <div className="flex items-center justify-between flex-wrap gap-3">
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-2">
         <button
           onClick={() => onChange(adjacentWeekStart(weekStart, -1))}
-          className="rounded-md border border-gray-200 p-1.5 text-ink2 hover:bg-gray-50"
+          className="p-2 rounded-xl border border-white/10 bg-white/[0.03] text-muted-foreground hover:text-ink hover:bg-white/[0.08] transition-all"
           aria-label="Tuần trước"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
-        <div className="rounded-md border border-gray-200 bg-card px-4 py-1.5 text-sm font-semibold text-ink min-w-[260px] text-center">
+        <div className="glass-card border border-white/10 px-5 py-2 text-sm font-bold text-ink min-w-[280px] text-center shadow-[0_0_15px_rgba(0,0,0,0.3)]">
+          <span className="text-amber-400 font-mono mr-2">●</span>
           {weekLabel(weekStart)}
         </div>
         <button
           onClick={() => onChange(adjacentWeekStart(weekStart, 1))}
-          className="rounded-md border border-gray-200 p-1.5 text-ink2 hover:bg-gray-50"
+          className="p-2 rounded-xl border border-white/10 bg-white/[0.03] text-muted-foreground hover:text-ink hover:bg-white/[0.08] transition-all"
           aria-label="Tuần sau"
         >
           <ChevronRight className="h-4 w-4" />
@@ -221,9 +222,9 @@ function WeekNav({ weekStart, onChange }: { weekStart: Date; onChange: (d: Date)
       {!isCurrent && (
         <button
           onClick={() => onChange(startOfCurrentMonthWeek(new Date()))}
-          className="text-xs font-medium text-amber-500 hover:underline"
+          className="text-xs font-semibold text-amber-400 hover:text-amber-300 px-3 py-1.5 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 transition-all"
         >
-          Về tuần hiện tại
+          ← Về tuần hiện tại
         </button>
       )}
     </div>
@@ -304,13 +305,13 @@ function TargetGrid({
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-card p-5">
+    <div className="glass-card border border-white/10 p-5 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
       <div className="flex items-center justify-between gap-3 mb-1">
-        <h2 className="font-medium text-ink">Giao chỉ tiêu &amp; trọng số tuần</h2>
+        <h2 className="font-semibold text-ink text-sm tracking-wide">Giao chỉ tiêu &amp; trọng số tuần</h2>
         <button
           onClick={handleSave}
           disabled={saving || (Object.keys(targetEdits).length === 0 && Object.keys(weightEdits).length === 0)}
-          className="flex items-center gap-1.5 rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-amber-foreground hover:bg-amber-400 disabled:opacity-40"
+          className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 px-4 py-2 text-xs font-semibold text-black shadow-[0_0_15px_rgba(224,163,39,0.3)] disabled:opacity-40 transition-all"
         >
           <Save className="h-3.5 w-3.5" /> Lưu chỉ tiêu
         </button>
@@ -363,7 +364,7 @@ function TargetGrid({
                             onChange={(e) =>
                               setTargetEdits((prev) => ({ ...prev, [`${r.employeeId}:${m}`]: Number(e.target.value) }))
                             }
-                            className="w-14 text-center text-sm bg-card text-ink rounded-md border border-gray-200 py-1 px-1 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                            className="w-14 text-center text-xs font-mono bg-black/50 text-ink rounded-lg border border-white/10 py-1 px-1 focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/50"
                           />
                         </td>
                         <td className="px-2 py-2 text-center">
@@ -375,7 +376,7 @@ function TargetGrid({
                             onChange={(e) =>
                               setWeightEdits((prev) => ({ ...prev, [`${r.employeeId}:${m}`]: Number(e.target.value) }))
                             }
-                            className="w-14 text-center text-sm bg-card text-ink rounded-md border border-gray-200 py-1 px-1 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                            className="w-14 text-center text-xs font-mono bg-black/50 text-ink rounded-lg border border-white/10 py-1 px-1 focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/50"
                           />
                         </td>
                       </Fragment2>
@@ -404,10 +405,10 @@ function Fragment2({ children }: { children: React.ReactNode }) {
 
 function ProgressReport({ rows, isLoading, isAdmin }: { rows: ReportRow[]; isLoading: boolean; isAdmin: boolean }) {
   return (
-    <div className="rounded-lg border border-gray-200 bg-card p-5">
+    <div className="glass-card border border-white/10 p-5 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
       <div className="flex items-center justify-between mb-1">
-        <h2 className="font-medium text-ink">Báo cáo tiến độ tuần</h2>
-        <span className="text-xs text-muted2">Cập nhật theo thời gian thực</span>
+        <h2 className="font-semibold text-ink text-sm tracking-wide">Báo cáo tiến độ tuần</h2>
+        <span className="text-xs text-amber-400 font-mono">● Real-time sync</span>
       </div>
       <p className="text-xs text-muted2 mb-4">
         Điểm từng mục = tỉ lệ hoàn thành × trọng số. Tổng điểm tuần quy về Điểm tuần 0/1/2 (80-100 → Đạt, 60-79 → Cần
@@ -437,7 +438,7 @@ function ProgressReport({ rows, isLoading, isAdmin }: { rows: ReportRow[]; isLoa
                     const cell = r.metrics[m];
                     const p = pct(cell.actual, cell.target);
                     return (
-                      <div key={m} className="rounded-md border border-gray-200 px-3 py-2.5">
+                      <div key={m} className="glass-card border border-white/5 bg-white/[0.02] px-3.5 py-3 rounded-xl hover:border-white/15 transition-all">
                         <div className="flex items-center justify-between gap-2 mb-1">
                           <span className="text-xs text-muted-foreground truncate" title={METRIC_NOTE[m]}>
                             {METRIC_LABEL[m]}
@@ -446,7 +447,7 @@ function ProgressReport({ rows, isLoading, isAdmin }: { rows: ReportRow[]; isLoa
                             {cell.actual}/{cell.target}
                           </span>
                         </div>
-                        <div className="h-1.5 rounded-full bg-gray-200 overflow-hidden mb-1">
+                        <div className="h-1.5 rounded-full bg-white/10 overflow-hidden mb-1">
                           <div className={cn("h-full rounded-full", barColor(p))} style={{ width: `${Math.min(p, 100)}%` }} />
                         </div>
                         <p className="text-[11px] text-muted2 text-right">
@@ -547,9 +548,9 @@ function ResultEntrySection({
   }
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-card p-5">
+    <div className="glass-card border border-white/10 p-5 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
       <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
-        <h2 className="font-medium text-ink">Nhập kết quả — khách hàng đã liên hệ/gặp</h2>
+        <h2 className="font-semibold text-ink text-sm tracking-wide">Nhập kết quả — Khách hàng đã liên hệ / gặp</h2>
         {isAdmin && employees.length > 0 && (
           <select
             value={entryEmployeeId}
@@ -587,13 +588,13 @@ function ResultEntrySection({
       <div className="flex items-center gap-2 mb-3">
         <button
           onClick={() => { setShowForm((v) => !v); setShowUpload(false); }}
-          className="flex items-center gap-1.5 rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-ink2 hover:bg-gray-50"
+          className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2 text-xs font-semibold text-ink hover:bg-white/[0.08] transition-all"
         >
           <Plus className="h-3.5 w-3.5" /> Thêm dòng
         </button>
         <button
           onClick={() => { setShowUpload((v) => !v); setShowForm(false); }}
-          className="flex items-center gap-1.5 rounded-md border border-gray-200 px-3 py-1.5 text-xs font-medium text-ink2 hover:bg-gray-50"
+          className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2 text-xs font-semibold text-ink hover:bg-white/[0.08] transition-all"
         >
           <UploadCloud className="h-3.5 w-3.5" /> Tải Excel lên
         </button>

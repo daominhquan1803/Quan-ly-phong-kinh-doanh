@@ -175,14 +175,19 @@ export function ManualOrderWizard({ isAdmin }: { isAdmin: boolean }) {
   return (
     <div className="space-y-6">
       {!hasParsed && (
-        <div className="rounded-lg border-2 border-dashed border-gray-300 bg-card p-10 text-center">
-          <Upload className="mx-auto h-8 w-8 text-muted2" />
-          <p className="mt-2 text-sm text-muted-foreground">
-            Chọn file Excel &quot;Đơn đặt hàng&quot; (1 file = 1 đơn) để đọc thử — anh sẽ xem/sửa lại trước khi lưu.
+        <div className="rounded-3xl border-2 border-dashed border-white/20 bg-white/[0.02] hover:bg-white/[0.05] hover:border-amber-400/50 p-12 text-center transition-all shadow-[0_8px_30px_rgb(0,0,0,0.3)]">
+          <div className="mx-auto w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center shadow-[0_0_20px_rgba(245,158,11,0.2)] mb-4">
+            <Upload className="h-7 w-7" />
+          </div>
+          <p className="text-sm font-semibold text-white">
+            Chọn file Excel &quot;Đơn đặt hàng&quot; (1 file = 1 đơn)
           </p>
-          <label className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-md bg-brandRed-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brandRed-700">
+          <p className="mt-1 text-xs text-gray-400 max-w-md mx-auto">
+            Hệ thống sẽ tự động đọc mã PO, khách hàng và danh sách sản phẩm. Bạn hoàn toàn có thể kiểm tra và chỉnh sửa lại trước khi lưu.
+          </p>
+          <label className="mt-5 inline-flex cursor-pointer items-center gap-2 rounded-xl bg-gradient-to-r from-brandRed-600 to-amber-600 hover:from-brandRed-500 hover:to-amber-500 px-5 py-2.5 text-xs font-semibold text-white shadow-[0_0_20px_rgba(225,29,72,0.3)] border border-brandRed-500/40 transition-all active:scale-[0.98]">
             <Upload className="h-4 w-4" />
-            {previewLoading ? "Đang đọc file..." : "Chọn file Excel"}
+            {previewLoading ? "Đang đọc dữ liệu file..." : "Chọn file Excel từ máy tính"}
             <input
               ref={fileInputRef}
               type="file"
@@ -192,129 +197,177 @@ export function ManualOrderWizard({ isAdmin }: { isAdmin: boolean }) {
               onChange={handleFileChange}
             />
           </label>
-          {previewError && <p className="mt-3 text-sm text-brandRed-600">{previewError}</p>}
+          {previewError && (
+            <div className="mt-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300 max-w-md mx-auto">
+              {previewError}
+            </div>
+          )}
         </div>
       )}
 
       {hasParsed && (
         <div className="space-y-6">
-          {fileName && <p className="text-xs text-muted-foreground">File: {fileName}</p>}
+          {fileName && (
+            <div className="flex items-center gap-2 text-xs text-gray-400 font-mono">
+              <span className="text-amber-400">📄 File đang đọc:</span> {fileName}
+            </div>
+          )}
 
           {duplicateOrderId && (
-            <div className="flex items-start gap-2 rounded-md bg-warning-500/10 px-4 py-3 text-sm text-warning-500">
+            <div className="flex items-start gap-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 px-4 py-3 text-xs text-amber-300">
               <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
               <div>
-                Đơn hàng <strong>{orderCode}</strong> đã tồn tại trong hệ thống — không thể tạo trùng.{" "}
-                <a href={`/orders/${duplicateOrderId}`} className="underline">
-                  Vào sửa đơn đã có
+                Đơn hàng <strong className="font-mono text-white">{orderCode}</strong> đã tồn tại trong hệ thống — không thể tạo trùng.{" "}
+                <a href={`/orders/${duplicateOrderId}`} className="underline text-amber-400 font-semibold hover:text-amber-300">
+                  Vào xem hoặc sửa đơn đã có
                 </a>{" "}
                 thay vì tạo mới.
               </div>
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg border border-gray-200 bg-card p-4">
-            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-              Số PO / Mã đơn hàng
-              <input value={orderCode} onChange={(e) => setOrderCode(e.target.value)} className="input" />
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-              Tên khách hàng
-              <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="input" />
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-              Ngày đặt hàng
-              <input type="date" value={orderDate} onChange={(e) => setOrderDate(e.target.value)} className="input" />
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-              Ngày giao hàng dự kiến
-              <input
-                type="date"
-                value={expectedDeliveryDate}
-                onChange={(e) => setExpectedDeliveryDate(e.target.value)}
-                className="input"
-              />
-            </label>
-            {isAdmin && (
-              <label className="flex flex-col gap-1 text-xs text-muted-foreground sm:col-span-2">
-                Nhân viên phụ trách
-                <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} className="input">
-                  <option value="">— Chọn nhân viên —</option>
-                  {employeeOptions.map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.name}
-                    </option>
-                  ))}
-                </select>
+          <div className="glass-card border border-white/10 rounded-2xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.3)]">
+            <h3 className="text-sm font-semibold text-white uppercase tracking-wider mb-4 border-b border-white/10 pb-2">
+              Thông Tin Cơ Bản Đơn Hàng
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <label className="flex flex-col gap-1 text-xs text-gray-300">
+                Số PO / Mã đơn hàng *
+                <input
+                  value={orderCode}
+                  onChange={(e) => setOrderCode(e.target.value)}
+                  className="bg-white/[0.05] border border-white/15 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500/60"
+                />
               </label>
-            )}
+              <label className="flex flex-col gap-1 text-xs text-gray-300">
+                Tên khách hàng *
+                <input
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  className="bg-white/[0.05] border border-white/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500/60"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-gray-300">
+                Ngày đặt hàng
+                <input
+                  type="date"
+                  value={orderDate}
+                  onChange={(e) => setOrderDate(e.target.value)}
+                  className="bg-white/[0.05] border border-white/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500/60"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-gray-300">
+                Ngày giao hàng dự kiến
+                <input
+                  type="date"
+                  value={expectedDeliveryDate}
+                  onChange={(e) => setExpectedDeliveryDate(e.target.value)}
+                  className="bg-white/[0.05] border border-white/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500/60"
+                />
+              </label>
+              {isAdmin && (
+                <label className="flex flex-col gap-1 text-xs text-gray-300 sm:col-span-2">
+                  Nhân viên kinh doanh phụ trách *
+                  <select
+                    value={employeeId}
+                    onChange={(e) => setEmployeeId(e.target.value)}
+                    className="bg-[#18181b] border border-white/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500/60"
+                  >
+                    <option value="">— Chọn nhân viên phụ trách —</option>
+                    {employeeOptions.map((e) => (
+                      <option key={e.id} value={e.id}>
+                        {e.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <p className="text-sm font-medium text-ink">Mã hàng ({items.length} dòng)</p>
-            <div className="overflow-x-auto rounded-lg border border-gray-200 bg-card">
-              <table className="min-w-full text-sm">
-                <thead className="bg-gray-50 text-muted-foreground">
+          <div className="glass-card border border-white/10 rounded-2xl p-6 space-y-3 shadow-[0_8px_30px_rgb(0,0,0,0.3)]">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-white uppercase tracking-wider">
+                Chi Tiết Mặt Hàng ({items.length} dòng)
+              </h3>
+              <button
+                onClick={addItem}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                <Plus className="h-3.5 w-3.5" /> Thêm dòng
+              </button>
+            </div>
+            
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-xs">
+                <thead className="bg-white/[0.03] border-b border-white/10 text-gray-400 uppercase tracking-wider font-semibold">
                   <tr>
-                    <th className="text-left font-medium px-3 py-2">Mã hàng</th>
-                    <th className="text-left font-medium px-3 py-2">Tên hàng</th>
-                    <th className="text-left font-medium px-3 py-2">Đvt</th>
-                    <th className="text-right font-medium px-3 py-2">Số lượng</th>
-                    <th className="text-right font-medium px-3 py-2">Đơn giá</th>
-                    <th className="text-right font-medium px-3 py-2">Thành tiền</th>
-                    <th className="px-3 py-2"></th>
+                    <th className="text-left py-2.5 px-2.5">Mã hàng</th>
+                    <th className="text-left py-2.5 px-2.5">Tên hàng *</th>
+                    <th className="text-left py-2.5 px-2.5">ĐVT</th>
+                    <th className="text-right py-2.5 px-2.5">Số lượng</th>
+                    <th className="text-right py-2.5 px-2.5">Đơn giá</th>
+                    <th className="text-right py-2.5 px-2.5">Thành tiền</th>
+                    <th className="py-2.5 px-2"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-white/5">
                   {items.map((it, i) => (
-                    <tr key={i}>
-                      <td className="px-3 py-1.5">
+                    <tr key={i} className="hover:bg-white/[0.02]">
+                      <td className="py-2 px-2.5">
                         <input
                           value={it.itemCode ?? ""}
                           onChange={(e) => updateItem(i, { itemCode: e.target.value })}
-                          className="input w-28"
+                          className="w-24 bg-white/[0.05] border border-white/15 rounded-lg px-2 py-1 text-xs text-amber-400 font-mono focus:outline-none focus:border-amber-500/60"
+                          placeholder="Mã"
                         />
                       </td>
-                      <td className="px-3 py-1.5">
+                      <td className="py-2 px-2.5">
                         <input
                           value={it.itemName}
                           onChange={(e) => updateItem(i, { itemName: e.target.value })}
-                          className="input w-56"
+                          className="w-48 sm:w-60 bg-white/[0.05] border border-white/15 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-amber-500/60"
+                          placeholder="Tên hàng hóa"
                         />
                       </td>
-                      <td className="px-3 py-1.5">
+                      <td className="py-2 px-2.5">
                         <input
                           value={it.unit ?? ""}
                           onChange={(e) => updateItem(i, { unit: e.target.value })}
-                          className="input w-16"
+                          className="w-16 bg-white/[0.05] border border-white/15 rounded-lg px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-amber-500/60"
+                          placeholder="Cái"
                         />
                       </td>
-                      <td className="px-3 py-1.5">
+                      <td className="py-2 px-2.5">
                         <input
                           type="number"
                           value={it.quantity}
                           onChange={(e) => updateItem(i, { quantity: Number(e.target.value) })}
-                          className="input w-24 text-right"
+                          className="w-24 bg-white/[0.05] border border-white/15 rounded-lg px-2 py-1 text-xs text-white font-mono text-right focus:outline-none focus:border-amber-500/60"
                         />
                       </td>
-                      <td className="px-3 py-1.5">
+                      <td className="py-2 px-2.5">
                         <input
                           type="number"
                           value={it.unitPrice}
                           onChange={(e) => updateItem(i, { unitPrice: Number(e.target.value) })}
-                          className="input w-24 text-right"
+                          className="w-24 bg-white/[0.05] border border-white/15 rounded-lg px-2 py-1 text-xs text-gray-300 font-mono text-right focus:outline-none focus:border-amber-500/60"
                         />
                       </td>
-                      <td className="px-3 py-1.5">
+                      <td className="py-2 px-2.5">
                         <input
                           type="number"
                           value={it.totalPrice}
                           onChange={(e) => updateItem(i, { totalPrice: Number(e.target.value) })}
-                          className="input w-28 text-right"
+                          className="w-28 bg-white/[0.05] border border-white/15 rounded-lg px-2 py-1 text-xs text-emerald-400 font-mono font-semibold text-right focus:outline-none focus:border-amber-500/60"
                         />
                       </td>
-                      <td className="px-3 py-1.5 text-right">
-                        <button onClick={() => removeItem(i)} className="text-muted2 hover:text-brandRed-600" title="Xoá dòng">
+                      <td className="py-2 px-2 text-right">
+                        <button
+                          onClick={() => removeItem(i)}
+                          className="p-1 rounded text-gray-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                          title="Xoá dòng"
+                        >
                           <Trash2 className="h-4 w-4" />
                         </button>
                       </td>
@@ -322,44 +375,49 @@ export function ManualOrderWizard({ isAdmin }: { isAdmin: boolean }) {
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t border-gray-200 font-semibold text-ink">
-                    <td colSpan={5} className="px-3 py-2 text-right">
-                      Tổng cộng
+                  <tr className="border-t border-white/10 font-semibold text-white bg-white/[0.02]">
+                    <td colSpan={5} className="py-3 px-3 text-right uppercase text-gray-400 text-xs">
+                      Tổng giá trị đơn hàng
                     </td>
-                    <td className="px-3 py-2 text-right">{formatCurrencyVND(totalValue)}</td>
+                    <td className="py-3 px-3 text-right font-mono font-bold text-amber-400 text-sm">
+                      {formatCurrencyVND(totalValue)}
+                    </td>
                     <td />
                   </tr>
                 </tfoot>
               </table>
             </div>
-            <button onClick={addItem} className="flex items-center gap-1.5 text-xs font-medium text-amber-500 hover:underline">
-              <Plus className="h-3.5 w-3.5" /> Thêm dòng mã hàng
-            </button>
           </div>
 
           {Object.keys(extra).length > 0 && (
-            <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-              <p className="text-sm font-medium text-ink mb-2">Thông tin khác đọc được từ file (chỉ để tham khảo)</p>
-              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+            <div className="glass-card border border-white/10 rounded-2xl p-5 shadow-[0_8px_30px_rgb(0,0,0,0.3)]">
+              <p className="text-xs uppercase font-semibold text-gray-400 tracking-wider mb-2">
+                Thông tin bổ trợ trích xuất từ file (tham khảo):
+              </p>
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs">
                 {Object.entries(extra).map(([key, value]) => (
-                  <div key={key} className="flex gap-2">
-                    <dt className="shrink-0 text-muted-foreground">{EXTRA_LABELS[key] ?? key}:</dt>
-                    <dd className="text-ink2">{value}</dd>
+                  <div key={key} className="flex items-start gap-2">
+                    <dt className="shrink-0 text-gray-400">{EXTRA_LABELS[key] ?? key}:</dt>
+                    <dd className="text-gray-200 font-medium">{value}</dd>
                   </div>
                 ))}
               </dl>
             </div>
           )}
 
-          {saveError && <div className="rounded-md bg-brandRed-50 text-brandRed-600 text-sm px-4 py-2.5">{saveError}</div>}
+          {saveError && (
+            <div className="rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs px-4 py-3">
+              {saveError}
+            </div>
+          )}
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 pt-2">
             <button
               onClick={handleSave}
               disabled={!canSave}
-              className="rounded-md bg-brandRed-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brandRed-700 disabled:opacity-50"
+              className="rounded-xl bg-gradient-to-r from-brandRed-600 to-amber-600 hover:from-brandRed-500 hover:to-amber-500 px-6 py-2.5 text-xs font-semibold text-white shadow-[0_0_20px_rgba(225,29,72,0.3)] border border-brandRed-500/40 disabled:opacity-50 transition-all"
             >
-              {saving ? "Đang lưu..." : "Lưu đơn hàng"}
+              {saving ? "Đang lưu đơn hàng..." : "Hoàn Tất & Lưu Đơn Hàng"}
             </button>
             <button
               onClick={() => {
@@ -373,7 +431,7 @@ export function ManualOrderWizard({ isAdmin }: { isAdmin: boolean }) {
                 setDuplicateOrderId(null);
                 setSaveError(null);
               }}
-              className="text-sm text-muted-foreground hover:text-ink"
+              className="rounded-xl border border-white/15 bg-white/[0.03] hover:bg-white/[0.08] px-4 py-2 text-xs font-medium text-gray-400 hover:text-white transition-colors"
             >
               Chọn file khác
             </button>

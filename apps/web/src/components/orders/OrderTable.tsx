@@ -10,7 +10,7 @@ import { ORDER_STATUS_LABEL } from "@/lib/order-status";
 import { EmployeeFilterSelect } from "@/components/shared/EmployeeFilterSelect";
 import { FilterInput, SortableTh, toggleSort, type SortState } from "@/components/shared/SortableFilterableTable";
 import { CustomerRiskPanel } from "@/components/orders/CustomerRiskPanel";
-import { Upload, RefreshCw, CheckCircle2, XCircle, X, FilePlus2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Upload, RefreshCw, CheckCircle2, XCircle, X, FilePlus2, ChevronLeft, ChevronRight, ShoppingCart, Filter } from "lucide-react";
 
 interface SyncLog {
   status: "RUNNING" | "SUCCESS" | "FAILED";
@@ -51,17 +51,13 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
   const [filterOrderCode, setFilterOrderCode] = useState("");
   const [filterCustomer, setFilterCustomer] = useState("");
   const [filterEmployeeName, setFilterEmployeeName] = useState("");
-  // Mặc định xếp đơn MỚI NHẤT lên đầu. Cố tình sắp ở client thay vì để nguyên thứ tự server trả
-  // về: PostgreSQL khi ORDER BY orderDate DESC sẽ đưa đơn KHÔNG có ngày đặt lên trước tiên
-  // (NULLS FIRST là mặc định của Postgres cho DESC), khiến dòng đầu bảng là đơn thiếu ngày chứ
-  // không phải đơn gần nhất — xem cách xử lý null trong hàm sắp xếp bên dưới.
   const [sort, setSort] = useState<SortState<SortField>>({ field: "orderDate", dir: "desc" });
   const [page, setPage] = useState(1);
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
-  const PAGE_SIZE = 10;
+  const PAGE_SIZE = 15;
 
   const { data, isLoading } = useQuery({
     queryKey: ["orders", status, overdueOnly, employeeId],
@@ -131,9 +127,6 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
       list = [...list].sort((a, b) => {
         const av = valueOf(a);
         const bv = valueOf(b);
-        // Đơn thiếu ngày LUÔN xuống cuối, không phụ thuộc chiều sắp xếp — nếu để chúng tham gia
-        // so sánh như giá trị nhỏ nhất thì khi sắp giảm dần chúng nhảy lên đầu bảng, che mất đơn
-        // mới nhất (đúng lỗi PostgreSQL cũng mắc: ORDER BY ... DESC mặc định cho NULL lên trước).
         if (av === null && bv === null) return 0;
         if (av === null) return 1;
         if (bv === null) return -1;
@@ -143,14 +136,10 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
     return list;
   }, [data, filterOrderCode, filterCustomer, filterEmployeeName, sort]);
 
-  // Số trang tính lại theo danh sách ĐÃ lọc/sắp xếp. currentPage được kẹp lại thay vì lưu thẳng
-  // vào state, để khi lọc làm danh sách ngắn đi thì không bị đứng ở 1 trang trống.
   const totalPages = Math.max(1, Math.ceil(visibleOrders.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const pagedOrders = visibleOrders.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  // Mọi thao tác đổi tập dữ liệu (lọc, sắp xếp, đổi nhân viên/trạng thái) đều đưa về trang 1 —
-  // giữ nguyên trang cũ dễ khiến người dùng tưởng "không có kết quả" khi đang ở trang cuối.
   useEffect(() => {
     setPage(1);
   }, [status, overdueOnly, employeeId, filterOrderCode, filterCustomer, filterEmployeeName, sort]);
@@ -166,17 +155,17 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Cảnh báo khách có nguy cơ mất — đặt trên cùng vì đây là việc cần hành động, khác với
-          bảng đơn hàng bên dưới chỉ để tra cứu. Tự ẩn khi không có cảnh báo nào. */}
+    <div className="space-y-5">
+      {/* Cảnh báo khách có nguy cơ mất */}
       <CustomerRiskPanel employeeId={isAdmin ? employeeId : ""} />
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 flex-wrap">
+      {/* Thanh Điều Khiển Toolbar Glassmorphism */}
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-gray-200/80 bg-navy-900/60 p-4 shadow-card backdrop-blur-xl">
+        <div className="flex items-center gap-3 flex-wrap">
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value)}
-            className="text-sm bg-card text-ink rounded-md border border-gray-200 py-2 px-2 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="text-xs bg-navy-50/80 text-ink rounded-xl border border-gray-200/90 py-2.5 px-3 focus:outline-none focus:border-amber-500"
           >
             <option value="">Tất cả trạng thái</option>
             {Object.entries(ORDER_STATUS_LABEL).map(([k, v]) => (
@@ -185,57 +174,70 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
               </option>
             ))}
           </select>
-          <label className="flex items-center gap-1.5 text-sm text-ink2">
-            <input type="checkbox" checked={overdueOnly} onChange={(e) => setOverdueOnly(e.target.checked)} />
-            Chỉ đơn quá hạn
+
+          <label className="flex items-center gap-2 text-xs font-medium text-ink cursor-pointer rounded-xl border border-gray-200/80 bg-navy-50/80 px-3 py-2 hover:border-amber-500/40 transition-colors">
+            <input
+              type="checkbox"
+              checked={overdueOnly}
+              onChange={(e) => setOverdueOnly(e.target.checked)}
+              className="rounded accent-amber-500"
+            />
+            <span>Chỉ đơn quá hạn</span>
           </label>
+
           {isAdmin && <EmployeeFilterSelect value={employeeId} onChange={setEmployeeId} />}
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+
+        <div className="flex items-center gap-2.5 flex-wrap">
           {isAdmin && (
             <>
               <button
                 onClick={handleSyncAmis}
                 disabled={syncing}
-                className="flex items-center gap-1.5 rounded-md bg-amber-500 px-3 py-2 text-sm font-semibold text-amber-foreground hover:bg-amber-400 disabled:opacity-60"
+                className="flex items-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2 text-xs font-bold text-amber-foreground shadow-[0_0_15px_rgba(224,163,39,0.25)] hover:bg-amber-400 disabled:opacity-50 transition-all"
               >
-                <RefreshCw className={cn("h-4 w-4", syncing && "animate-spin")} />
+                <RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} />
                 {syncing ? "Đang đồng bộ..." : "Đồng bộ AMIS"}
               </button>
               <Link
                 href="/orders/import"
-                className="flex items-center gap-1.5 rounded-md bg-brandRed-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brandRed-700"
+                className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-brandRed-600 to-brandRed-700 px-4 py-2 text-xs font-bold text-white shadow-[0_0_20px_rgba(200,16,46,0.35)] hover:from-brandRed-700 hover:to-brandRed-800 transition-all"
               >
-                <Upload className="h-4 w-4" />
-                Nhập Excel từ AMIS
+                <Upload className="h-3.5 w-3.5" />
+                Nhập Excel AMIS
               </Link>
             </>
           )}
-          {/* Thêm đơn thủ công (upload 1 file "Đơn đặt hàng") — cả NVKD lẫn Quản trị viên đều
-              dùng được, khác với 2 nút trên (chỉ Quản trị viên, dùng cho nhập/đồng bộ hàng loạt). */}
           <Link
             href="/orders/manual"
-            className="flex items-center gap-1.5 rounded-md border border-brandRed-600 px-3 py-2 text-sm font-semibold text-brandRed-600 hover:bg-brandRed-50"
+            className="flex items-center gap-1.5 rounded-xl border border-gray-200/90 bg-navy-50/70 px-4 py-2 text-xs font-medium text-ink hover:border-gray-300 hover:bg-navy-50 transition-all shadow-sm"
           >
-            <FilePlus2 className="h-4 w-4" />
+            <FilePlus2 className="h-3.5 w-3.5 text-info-500" />
             Thêm đơn thủ công
           </Link>
         </div>
       </div>
 
-      {syncError && <div className="rounded-md bg-brandRed-50 text-brandRed-600 text-sm px-4 py-2.5">{syncError}</div>}
+      {syncError && (
+        <div className="rounded-xl border border-brandRed-600/40 bg-brandRed-50/20 p-4 text-xs font-medium text-brandRed-600 backdrop-blur-md flex items-center gap-2">
+          <XCircle className="h-4 w-4 shrink-0" />
+          <span>{syncError}</span>
+        </div>
+      )}
 
       {syncData?.lastSync && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 rounded-xl border border-gray-200/60 bg-navy-900/40 px-4 py-2 text-xs text-muted-foreground backdrop-blur-sm">
           {syncData.lastSync.status === "SUCCESS" ? (
             <CheckCircle2 className="h-4 w-4 text-success-600" />
           ) : syncData.lastSync.status === "FAILED" ? (
             <XCircle className="h-4 w-4 text-brandRed-600" />
           ) : (
-            <RefreshCw className="h-4 w-4 animate-spin" />
+            <RefreshCw className="h-4 w-4 animate-spin text-amber-500" />
           )}
-          Đồng bộ AMIS gần nhất: {formatDateVN(syncData.lastSync.startedAt)}
-          {syncData.lastSync.recordsSynced != null && ` — ${syncData.lastSync.recordsSynced} đơn`}
+          <span>Đồng bộ AMIS gần nhất: <strong className="text-ink">{formatDateVN(syncData.lastSync.startedAt)}</strong></span>
+          {syncData.lastSync.recordsSynced != null && (
+            <span className="font-mono text-ink"> — {syncData.lastSync.recordsSynced} đơn</span>
+          )}
           {syncData.lastSync.status === "FAILED" && syncData.lastSync.message && (
             <span className="text-brandRed-600">— {syncData.lastSync.message}</span>
           )}
@@ -245,105 +247,135 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
         </div>
       )}
 
-      <div className="rounded-lg border border-gray-200 bg-card overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-muted-foreground">
-            <tr>
-              <th className="text-left font-medium px-4 py-2.5">Mã đơn</th>
-              <th className="text-left font-medium px-4 py-2.5">Khách hàng</th>
-              <th className="text-left font-medium px-4 py-2.5">NVKD</th>
-              <SortableTh field="orderDate" sort={sort} onSort={handleSort}>
-                Ngày đặt
-              </SortableTh>
-              <SortableTh field="expectedDeliveryDate" sort={sort} onSort={handleSort}>
-                Giao dự kiến
-              </SortableTh>
-              <th className="text-left font-medium px-4 py-2.5">Trạng thái</th>
-              <SortableTh field="totalValue" sort={sort} onSort={handleSort} align="right">
-                Giá trị
-              </SortableTh>
-            </tr>
-            <tr className="bg-card border-t border-gray-100">
-              <th className="px-4 py-2 font-normal">
-                <FilterInput value={filterOrderCode} onChange={setFilterOrderCode} placeholder="Tìm mã đơn..." />
-              </th>
-              <th className="px-4 py-2 font-normal">
-                <FilterInput value={filterCustomer} onChange={setFilterCustomer} placeholder="Tìm khách hàng..." />
-              </th>
-              <th className="px-4 py-2 font-normal">
-                <FilterInput value={filterEmployeeName} onChange={setFilterEmployeeName} placeholder="Tìm NVKD..." />
-              </th>
-              <th colSpan={4} className="px-4 py-2 text-right">
-                {hasActiveFilter && (
-                  <button
-                    onClick={clearFilters}
-                    className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-brandRed-600"
-                  >
-                    <X className="h-3 w-3" /> Xoá lọc
-                  </button>
-                )}
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {isLoading && (
-              <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-muted-foreground">
-                  Đang tải...
-                </td>
+      {/* Bảng Dữ Liệu Đơn Hàng Glassmorphism */}
+      <div className="overflow-hidden rounded-2xl border border-gray-200/80 bg-navy-900/50 shadow-card backdrop-blur-xl">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200/80 bg-gray-50/90 text-xs font-semibold uppercase tracking-wider text-ink2/70">
+                <th className="px-5 py-3.5 text-left w-36">Mã đơn</th>
+                <th className="px-5 py-3.5 text-left min-w-[240px]">Khách hàng</th>
+                <th className="px-5 py-3.5 text-left w-48">NVKD</th>
+                <SortableTh field="orderDate" sort={sort} onSort={handleSort}>
+                  Ngày đặt
+                </SortableTh>
+                <SortableTh field="expectedDeliveryDate" sort={sort} onSort={handleSort}>
+                  Giao dự kiến
+                </SortableTh>
+                <th className="px-5 py-3.5 text-left w-40">Trạng thái</th>
+                <SortableTh field="totalValue" sort={sort} onSort={handleSort} align="right">
+                  Giá trị đơn
+                </SortableTh>
               </tr>
-            )}
-            {!isLoading && visibleOrders.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-muted-foreground">
-                  {hasActiveFilter ? "Không tìm thấy đơn phù hợp" : "Chưa có đơn hàng nào."}
-                </td>
+              {/* Hàng Tìm Kiếm Nhanh */}
+              <tr className="bg-navy-900/80 border-b border-gray-200/60">
+                <th className="px-5 py-2 font-normal">
+                  <FilterInput value={filterOrderCode} onChange={setFilterOrderCode} placeholder="Lọc mã đơn..." />
+                </th>
+                <th className="px-5 py-2 font-normal">
+                  <FilterInput value={filterCustomer} onChange={setFilterCustomer} placeholder="Lọc khách hàng..." />
+                </th>
+                <th className="px-5 py-2 font-normal">
+                  <FilterInput value={filterEmployeeName} onChange={setFilterEmployeeName} placeholder="Lọc NVKD..." />
+                </th>
+                <th colSpan={4} className="px-5 py-2 text-right">
+                  {hasActiveFilter && (
+                    <button
+                      onClick={clearFilters}
+                      className="inline-flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300 font-medium px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/20"
+                    >
+                      <X className="h-3 w-3" /> Xoá bộ lọc
+                    </button>
+                  )}
+                </th>
               </tr>
-            )}
-            {pagedOrders.map((o) => (
-              <tr key={o.id} className="hover:bg-gray-50">
-                <td className="px-4 py-2.5 font-medium text-ink">
-                  <Link href={`/orders/${o.id}`}>{o.orderCode}</Link>
-                </td>
-                <td className="px-4 py-2.5">{o.customerName}</td>
-                <td className="px-4 py-2.5">{employeeDisplayName(o) || "—"}</td>
-                <td className="px-4 py-2.5">{formatDateVN(o.orderDate)}</td>
-                <td className="px-4 py-2.5">{formatDateVN(o.expectedDeliveryDate)}</td>
-                <td className="px-4 py-2.5">
-                  <OrderStatusBadge status={o.status} overdue={isOverdue(o)} />
-                </td>
-                <td className="px-4 py-2.5 text-right">{formatCurrencyVND(o.totalValue)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {!isLoading && visibleOrders.length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-          <span>
-            Tổng {visibleOrders.length} đơn
-            {hasActiveFilter && ` (lọc từ ${data?.orders.length ?? 0} đơn)`} — trang {currentPage}/{totalPages}
-          </span>
-          {totalPages > 1 && (
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={currentPage <= 1}
-                className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 hover:bg-gray-50 disabled:opacity-40"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" /> Trước
-              </button>
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={currentPage >= totalPages}
-                className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 hover:bg-gray-50 disabled:opacity-40"
-              >
-                Sau <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          )}
+            </thead>
+            <tbody className="divide-y divide-gray-200/40 text-sm">
+              {isLoading && (
+                <tr>
+                  <td colSpan={7} className="px-5 py-12 text-center text-muted-foreground">
+                    Đang tải dữ liệu đơn hàng...
+                  </td>
+                </tr>
+              )}
+              {!isLoading && visibleOrders.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-5 py-12 text-center text-muted-foreground">
+                    <ShoppingCart className="h-8 w-8 text-muted2 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm font-medium text-ink">
+                      {hasActiveFilter ? "Không tìm thấy đơn hàng phù hợp bộ lọc" : "Chưa có đơn hàng nào trong hệ thống."}
+                    </p>
+                  </td>
+                </tr>
+              )}
+              {pagedOrders.map((o) => (
+                <tr key={o.id} className="hover:bg-navy-50/50 transition-colors group">
+                  <td className="px-5 py-3.5 align-middle">
+                    <Link
+                      href={`/orders/${o.id}`}
+                      className="font-mono text-xs font-semibold px-2.5 py-1 rounded-lg bg-navy-100/90 border border-gray-300 text-amber-400/95 tracking-wide shadow-sm inline-flex items-center gap-1 group-hover:border-amber-500/40"
+                    >
+                      {o.orderCode}
+                    </Link>
+                  </td>
+                  <td className="px-5 py-3.5 align-middle font-medium text-ink">
+                    <Link href={`/orders/${o.id}`} className="hover:text-amber-400 transition-colors">
+                      {o.customerName}
+                    </Link>
+                  </td>
+                  <td className="px-5 py-3.5 align-middle text-xs text-ink2">
+                    {employeeDisplayName(o) || <span className="text-muted2">—</span>}
+                  </td>
+                  <td className="px-5 py-3.5 align-middle text-xs text-ink2 font-mono">
+                    {formatDateVN(o.orderDate)}
+                  </td>
+                  <td className="px-5 py-3.5 align-middle text-xs text-ink2 font-mono">
+                    {formatDateVN(o.expectedDeliveryDate)}
+                  </td>
+                  <td className="px-5 py-3.5 align-middle">
+                    <OrderStatusBadge status={o.status} overdue={isOverdue(o)} />
+                  </td>
+                  <td className="px-5 py-3.5 align-middle text-right font-mono font-bold text-ink">
+                    {formatCurrencyVND(o.totalValue)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      )}
+
+        {/* Phân Trang */}
+        {!isLoading && visibleOrders.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200/80 bg-gray-50/80 px-5 py-3 text-xs text-muted-foreground">
+            <span>
+              Tổng <strong className="font-mono text-ink">{visibleOrders.length}</strong> đơn hàng
+              {hasActiveFilter && ` (lọc từ ${data?.orders.length ?? 0} đơn)`} — trang{" "}
+              <strong className="font-mono text-ink">{currentPage}</strong>/{totalPages}
+            </span>
+            {totalPages > 1 && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage <= 1}
+                  className="flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1 text-ink2 hover:bg-card hover:text-ink disabled:opacity-40 transition-colors"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" /> Trước
+                </button>
+                <span className="px-2 font-mono text-ink">
+                  {currentPage} / {totalPages}
+                </span>
+                <button
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage >= totalPages}
+                  className="flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1 text-ink2 hover:bg-card hover:text-ink disabled:opacity-40 transition-colors"
+                >
+                  Sau <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { ShipmentSlipImportWizard } from "@/components/shipment-slips/ShipmentSlipImportWizard";
+import { UploadCloud } from "lucide-react";
+import Link from "next/link";
 
 export default async function ShipmentSlipsImportPage() {
   const session = await auth();
@@ -8,14 +10,28 @@ export default async function ShipmentSlipsImportPage() {
 
   return (
     <div className="space-y-6 max-w-4xl">
-      <div>
-        <h1 className="text-xl font-semibold text-ink">Nhập phiếu đi hàng từ Excel</h1>
-        <p className="text-sm text-muted-foreground">
-          Xuất file phiếu xuất kho bán hàng rồi upload tại đây để cập nhật vào hệ thống — upload lại cùng
-          Số phiếu sẽ tự cập nhật, không tạo trùng.
-        </p>
+      <div className="border-b border-white/10 pb-5">
+        <div className="flex items-center gap-2 mb-2 text-xs text-gray-400">
+          <Link href="/shipment-slips" className="hover:text-amber-400 transition-colors">
+            ← Danh sách phiếu xuất kho
+          </Link>
+          <span>/</span>
+          <span className="text-amber-400">Import Excel</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/10 border border-amber-500/30 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.15)]">
+            <UploadCloud className="h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-white">Nhập Phiếu Xuất Kho Từ Excel</h1>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Xuất file phiếu xuất kho bán hàng rồi upload tại đây — hệ thống tự động gộp theo số phiếu và đối soát tiến độ PO
+            </p>
+          </div>
+        </div>
       </div>
       <ShipmentSlipImportWizard />
     </div>
   );
 }
+

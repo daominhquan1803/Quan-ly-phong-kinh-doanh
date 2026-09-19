@@ -1,13 +1,29 @@
 import { UsersPanel } from "@/components/admin/UsersPanel";
+import { Users, ShieldCheck } from "lucide-react";
 
 export default function AdminUsersPage() {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold text-ink">Nhân viên</h1>
-        <p className="text-sm text-muted-foreground">Quản lý tài khoản đăng nhập và ánh xạ tên nhân viên</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-white/10 pb-5">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-500/20 to-orange-500/10 border border-amber-500/30 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.15)]">
+            <Users className="h-6 w-6" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold tracking-tight text-white">Quản Lý Nhân Viên</h1>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                <ShieldCheck className="h-3 w-3" /> Quản Trị
+              </span>
+            </div>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Quản lý tài khoản đăng nhập, phân quyền, cấu hình thông báo và ánh xạ mã AMIS / Báo giá
+            </p>
+          </div>
+        </div>
       </div>
       <UsersPanel />
     </div>
   );
 }
+

@@ -210,23 +210,34 @@ export function PickingSlipWizard() {
 
   if (step === 1) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-card p-5">
-        <h2 className="font-medium text-ink mb-3">Bước 1 — Chọn khách hàng</h2>
-        <div className="relative mb-4">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted2" />
+      <div className="glass-card border border-white/10 rounded-2xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.3)]">
+        <div className="mb-4">
+          <span className="text-xs font-semibold uppercase tracking-wider text-amber-400">Bước 1</span>
+          <h2 className="text-lg font-bold text-white tracking-wide mt-0.5">Chọn Khách Hàng Cần Soạn Hàng</h2>
+          <p className="text-xs text-gray-400">Chỉ hiển thị các khách hàng có đơn hàng chưa hoàn thành giao</p>
+        </div>
+
+        <div className="relative mb-5 max-w-lg">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <input
             autoFocus
-            placeholder="Gõ tên hoặc mã khách hàng..."
+            placeholder="Tìm theo tên hoặc mã khách hàng..."
             value={customerQuery}
             onChange={(e) => setCustomerQuery(e.target.value)}
-            className="w-full max-w-md pl-9 input"
+            className="w-full pl-10 bg-white/[0.05] border border-white/15 rounded-xl py-2.5 px-4 text-xs text-white placeholder:text-gray-500 focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/60 transition-all"
           />
         </div>
-        <div className="divide-y divide-gray-100 max-w-md">
-          {searchingCustomers && <p className="text-sm text-muted-foreground py-3">Đang tìm...</p>}
+
+        <div className="divide-y divide-white/5 max-w-lg space-y-1">
+          {searchingCustomers && (
+            <p className="text-xs text-amber-400 py-3 flex items-center gap-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-ping" />
+              Đang tìm kiếm khách hàng...
+            </p>
+          )}
           {!searchingCustomers && (customerData?.customers.length ?? 0) === 0 && (
-            <p className="text-sm text-muted-foreground py-3">
-              Không tìm thấy khách hàng nào còn PO chưa giao khớp từ khoá này.
+            <p className="text-xs text-gray-400 py-4 italic">
+              Không tìm thấy khách hàng nào còn PO chưa giao khớp với từ khoá này.
             </p>
           )}
           {customerData?.customers.map((c) => (
@@ -240,10 +251,12 @@ export function PickingSlipWizard() {
                 setSalesEmployeeId("");
                 setStep(2);
               }}
-              className="w-full text-left py-2.5 hover:bg-gray-50 rounded-md px-2 -mx-2"
+              className="w-full text-left p-3 hover:bg-white/[0.04] rounded-xl border border-transparent hover:border-white/10 transition-all group"
             >
-              <p className="text-sm font-medium text-ink">{c.customerName}</p>
-              <p className="text-xs text-muted-foreground">{c.customerCode}</p>
+              <p className="text-xs font-semibold text-white group-hover:text-amber-400 transition-colors">
+                {c.customerName}
+              </p>
+              <p className="text-[11px] font-mono text-gray-400 mt-0.5">{c.customerCode}</p>
             </button>
           ))}
         </div>
@@ -255,28 +268,51 @@ export function PickingSlipWizard() {
     <div className="space-y-4">
       <button
         onClick={() => setStep(1)}
-        className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-ink"
+        className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-400 hover:text-amber-400 transition-colors"
       >
-        <ArrowLeft className="h-4 w-4" /> Đổi khách hàng
+        <ArrowLeft className="h-3.5 w-3.5" /> Chọn khách hàng khác
       </button>
 
-      <div className="rounded-lg border border-gray-200 bg-card p-5">
-        <h2 className="font-medium text-ink mb-1">{selectedCustomer?.customerName}</h2>
-        <p className="text-xs text-muted-foreground mb-4">{selectedCustomer?.customerCode}</p>
+      <div className="glass-card border border-white/10 rounded-2xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.3)]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4 mb-5">
+          <div>
+            <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+              {selectedCustomer?.customerCode}
+            </span>
+            <h2 className="text-lg font-bold text-white tracking-wide mt-1">{selectedCustomer?.customerName}</h2>
+          </div>
+          <div className="text-xs text-gray-400">
+            <span className="text-amber-400 font-semibold">Bước 2:</span> Chọn mã hàng & nhập số lượng soạn
+          </div>
+        </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-          <label className="text-xs text-muted-foreground flex flex-col gap-1">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+          <label className="text-xs text-gray-300 flex flex-col gap-1.5">
             Địa chỉ giao hàng
-            <input value={deliveryAddress} onChange={(e) => setDeliveryAddress(e.target.value)} className="input" />
+            <input
+              value={deliveryAddress}
+              onChange={(e) => setDeliveryAddress(e.target.value)}
+              placeholder="VD: Kho KCN Quế Võ..."
+              className="bg-white/[0.05] border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder:text-gray-600 focus:outline-none focus:border-amber-500/60"
+            />
           </label>
-          <label className="text-xs text-muted-foreground flex flex-col gap-1">
+          <label className="text-xs text-gray-300 flex flex-col gap-1.5">
             SĐT liên hệ
-            <input value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} className="input" />
+            <input
+              value={contactPhone}
+              onChange={(e) => setContactPhone(e.target.value)}
+              placeholder="VD: 0988..."
+              className="bg-white/[0.05] border border-white/15 rounded-xl px-3 py-2 text-xs text-white placeholder:text-gray-600 focus:outline-none focus:border-amber-500/60"
+            />
           </label>
-          <label className="text-xs text-muted-foreground flex flex-col gap-1">
+          <label className="text-xs text-gray-300 flex flex-col gap-1.5">
             Phụ trách đơn hàng
-            <select value={salesEmployeeId} onChange={(e) => setSalesEmployeeId(e.target.value)} className="input">
-              <option value="">— Chọn —</option>
+            <select
+              value={salesEmployeeId}
+              onChange={(e) => setSalesEmployeeId(e.target.value)}
+              className="bg-[#18181b] border border-white/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500/60"
+            >
+              <option value="">— Chọn NVKD phụ trách —</option>
               {employeesData?.users.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.name}
@@ -286,35 +322,46 @@ export function PickingSlipWizard() {
           </label>
         </div>
 
-        <h3 className="font-medium text-ink mb-2">Bước 2 — Chọn mã hàng cần soạn</h3>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-xs uppercase tracking-wider font-semibold text-gray-400">
+            Danh Sách Mã Hàng Chưa Giao ({filteredLines.length} dòng)
+          </h3>
+          <span className="text-xs text-amber-400 font-medium">
+            Đã tích chọn: <strong>{selectedCount}</strong> dòng
+          </span>
+        </div>
+
         {loadingLines ? (
-          <p className="text-sm text-muted-foreground py-4">Đang tải danh sách PO chưa giao...</p>
+          <p className="text-xs text-amber-400 py-6 flex items-center gap-2">
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-ping" />
+            Đang tải dữ liệu đơn hàng chưa giao...
+          </p>
         ) : lines.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-4">Khách hàng này hiện không còn PO nào chưa giao.</p>
+          <p className="text-xs text-gray-500 py-6 italic">Khách hàng này hiện không còn PO nào chưa giao.</p>
         ) : (
-          <div className="overflow-x-auto border border-gray-200 rounded-md">
-            <table className="text-sm" style={{ tableLayout: "fixed", width: TABLE_WIDTH, minWidth: "100%" }}>
+          <div className="overflow-x-auto rounded-xl border border-white/10">
+            <table className="text-xs" style={{ tableLayout: "fixed", width: TABLE_WIDTH, minWidth: "100%" }}>
               <colgroup>
                 {COL_WIDTHS.map((w, i) => (
                   <col key={i} style={{ width: w }} />
                 ))}
               </colgroup>
               <thead>
-                <tr className="text-left text-xs text-muted-foreground">
-                  <th className="font-medium px-2 py-1.5 bg-card z-20" style={stickyStyle("check")}></th>
-                  <th className="font-medium px-2 py-1.5 bg-card z-20" style={stickyStyle("poCode")}>
+                <tr className="text-left text-xs text-gray-400 uppercase tracking-wider border-b border-white/10">
+                  <th className="font-semibold px-2 py-2 bg-[#10121b] z-20" style={stickyStyle("check")}></th>
+                  <th className="font-semibold px-2 py-2 bg-[#10121b] z-20" style={stickyStyle("poCode")}>
                     <div className="flex flex-col gap-1">
                       <span>Số PO</span>
                       <input
                         value={filters.poCode}
                         onChange={(e) => setFilters((f) => ({ ...f, poCode: e.target.value }))}
-                        placeholder="Tìm..."
-                        className="w-full text-xs font-normal bg-card text-ink rounded border border-gray-200 py-0.5 px-1"
+                        placeholder="Lọc..."
+                        className="w-full text-xs font-normal bg-white/[0.05] text-white rounded border border-white/15 py-0.5 px-1.5 focus:outline-none focus:border-amber-500/60"
                       />
                     </div>
                   </th>
                   <th
-                    className="font-medium px-2 py-1.5 bg-card z-20 border-r border-gray-200"
+                    className="font-semibold px-2 py-2 bg-[#10121b] z-20 border-r border-white/10"
                     style={stickyStyle("itemCode")}
                   >
                     <div className="flex flex-col gap-1">
@@ -322,73 +369,73 @@ export function PickingSlipWizard() {
                       <input
                         value={filters.itemCode}
                         onChange={(e) => setFilters((f) => ({ ...f, itemCode: e.target.value }))}
-                        placeholder="Tìm..."
-                        className="w-full text-xs font-normal bg-card text-ink rounded border border-gray-200 py-0.5 px-1"
+                        placeholder="Lọc..."
+                        className="w-full text-xs font-normal bg-white/[0.05] text-white rounded border border-white/15 py-0.5 px-1.5 focus:outline-none focus:border-amber-500/60"
                       />
                     </div>
                   </th>
-                  <th className="font-medium px-2 py-1.5 min-w-[220px]">
+                  <th className="font-semibold px-2 py-2 min-w-[220px] bg-white/[0.02]">
                     <div className="flex flex-col gap-1">
-                      <span>Tên SP</span>
+                      <span>Tên Hàng Hóa</span>
                       <input
                         value={filters.itemName}
                         onChange={(e) => setFilters((f) => ({ ...f, itemName: e.target.value }))}
-                        placeholder="Tìm..."
-                        className="w-full text-xs font-normal bg-card text-ink rounded border border-gray-200 py-0.5 px-1"
+                        placeholder="Lọc..."
+                        className="w-full text-xs font-normal bg-white/[0.05] text-white rounded border border-white/15 py-0.5 px-1.5 focus:outline-none focus:border-amber-500/60"
                       />
                     </div>
                   </th>
-                  <th className="font-medium px-2 py-1.5 min-w-[160px]">
+                  <th className="font-semibold px-2 py-2 min-w-[160px] bg-white/[0.02]">
                     <div className="flex flex-col gap-1">
-                      <span>Mã Hàng/Số PO-KH</span>
+                      <span>Mã KH/PO-KH</span>
                       <input
                         value={filters.customerItemCode}
                         onChange={(e) => setFilters((f) => ({ ...f, customerItemCode: e.target.value }))}
-                        placeholder="Tìm..."
-                        className="w-full text-xs font-normal bg-card text-ink rounded border border-gray-200 py-0.5 px-1"
+                        placeholder="Lọc..."
+                        className="w-full text-xs font-normal bg-white/[0.05] text-white rounded border border-white/15 py-0.5 px-1.5 focus:outline-none focus:border-amber-500/60"
                       />
                     </div>
                   </th>
-                  <th className="font-medium px-2 py-1.5">ĐVT</th>
-                  <th className="font-medium px-2 py-1.5 text-right">SL PO</th>
-                  <th className="font-medium px-2 py-1.5 text-right">SL chưa giao</th>
-                  <th className="font-medium px-2 py-1.5">Ngày PO</th>
-                  <th className="font-medium px-2 py-1.5">Ngày Y/C giao</th>
-                  <th className="font-medium px-2 py-1.5 text-right">SL cần soạn</th>
-                  <th className="font-medium px-2 py-1.5">Ngày cần giao</th>
+                  <th className="font-semibold px-2 py-2 text-center bg-white/[0.02]">ĐVT</th>
+                  <th className="font-semibold px-2 py-2 text-right bg-white/[0.02]">SL PO</th>
+                  <th className="font-semibold px-2 py-2 text-right bg-white/[0.02]">SL Chưa Giao</th>
+                  <th className="font-semibold px-2 py-2 bg-white/[0.02]">Ngày PO</th>
+                  <th className="font-semibold px-2 py-2 bg-white/[0.02]">Ngày Y/C</th>
+                  <th className="font-semibold px-2 py-2 text-right bg-white/[0.02]">SL Cần Soạn</th>
+                  <th className="font-semibold px-2 py-2 bg-white/[0.02]">Ngày Cần Giao</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-white/5">
                 {pagedLines.map((l) => {
                   const isChecked = checked.has(l.poTrackingLineId);
                   return (
-                    <tr key={l.poTrackingLineId} className={cn(isChecked && "bg-amber-500/5")}>
-                      <td className="px-2 py-1.5 bg-card z-10" style={stickyStyle("check")}>
+                    <tr key={l.poTrackingLineId} className={cn("hover:bg-white/[0.02]", isChecked && "bg-amber-500/[0.07]")}>
+                      <td className="px-2 py-1.5 bg-[#10121b] z-10" style={stickyStyle("check")}>
                         <input
                           type="checkbox"
                           checked={isChecked}
                           onChange={() => toggleCheck(l.poTrackingLineId, l)}
-                          className="h-4 w-4"
+                          className="h-4 w-4 rounded border-white/20 text-amber-500 focus:ring-amber-500/40 cursor-pointer"
                         />
                       </td>
-                      <td className="px-2 py-1.5 text-ink2 whitespace-nowrap bg-card z-10" style={stickyStyle("poCode")}>
+                      <td className="px-2 py-1.5 font-mono text-amber-400 whitespace-nowrap bg-[#10121b] z-10" style={stickyStyle("poCode")}>
                         {l.poCode}
                       </td>
                       <td
-                        className="px-2 py-1.5 text-ink whitespace-nowrap bg-card z-10 border-r border-gray-200"
+                        className="px-2 py-1.5 font-mono text-gray-300 whitespace-nowrap bg-[#10121b] z-10 border-r border-white/10"
                         style={stickyStyle("itemCode")}
                       >
                         {l.itemCode ?? "—"}
                       </td>
-                      <td className="px-2 py-1.5 text-ink2 max-w-[240px] truncate" title={l.itemName}>
+                      <td className="px-2 py-1.5 text-white max-w-[240px] truncate" title={l.itemName}>
                         {l.itemName}
                       </td>
-                      <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{l.customerItemCode ?? "—"}</td>
-                      <td className="px-2 py-1.5 text-muted-foreground">{l.unit ?? "—"}</td>
-                      <td className="px-2 py-1.5 text-right font-mono tabular-nums">{l.poQuantity ?? "—"}</td>
-                      <td className="px-2 py-1.5 text-right font-mono tabular-nums text-amber-500">{l.remainingQty ?? "—"}</td>
-                      <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{formatDateVN(l.poDate)}</td>
-                      <td className="px-2 py-1.5 text-muted-foreground whitespace-nowrap">{formatDateVN(l.requestedDeliveryDate)}</td>
+                      <td className="px-2 py-1.5 text-gray-400 font-mono whitespace-nowrap">{l.customerItemCode ?? "—"}</td>
+                      <td className="px-2 py-1.5 text-center text-gray-400">{l.unit ?? "—"}</td>
+                      <td className="px-2 py-1.5 text-right font-mono text-gray-300">{l.poQuantity ?? "—"}</td>
+                      <td className="px-2 py-1.5 text-right font-mono font-semibold text-amber-400">{l.remainingQty ?? "—"}</td>
+                      <td className="px-2 py-1.5 text-gray-400 whitespace-nowrap">{formatDateVN(l.poDate)}</td>
+                      <td className="px-2 py-1.5 text-gray-400 whitespace-nowrap">{formatDateVN(l.requestedDeliveryDate)}</td>
                       <td className="px-2 py-1.5">
                         <input
                           type="number"
@@ -396,7 +443,7 @@ export function PickingSlipWizard() {
                           disabled={!isChecked}
                           value={qtyEdits[l.poTrackingLineId] ?? ""}
                           onChange={(e) => setQtyEdits((p) => ({ ...p, [l.poTrackingLineId]: e.target.value }))}
-                          className="w-20 text-right text-sm bg-card text-ink rounded-md border border-gray-200 py-1 px-1.5 disabled:opacity-40"
+                          className="w-20 text-right text-xs bg-white/[0.07] text-white rounded-lg border border-white/15 py-1 px-1.5 font-mono focus:outline-none focus:border-amber-500/60 disabled:opacity-30"
                         />
                       </td>
                       <td className="px-2 py-1.5">
@@ -405,7 +452,7 @@ export function PickingSlipWizard() {
                           disabled={!isChecked}
                           value={deliveryDateEdits[l.poTrackingLineId] ?? ""}
                           onChange={(e) => setDeliveryDateEdits((p) => ({ ...p, [l.poTrackingLineId]: e.target.value }))}
-                          className="text-sm bg-card text-ink rounded-md border border-gray-200 py-1 px-1.5 disabled:opacity-40"
+                          className="text-xs bg-white/[0.07] text-white rounded-lg border border-white/15 py-1 px-1.5 focus:outline-none focus:border-amber-500/60 disabled:opacity-30"
                         />
                       </td>
                     </tr>
@@ -413,8 +460,8 @@ export function PickingSlipWizard() {
                 })}
                 {filteredLines.length === 0 && (
                   <tr>
-                    <td colSpan={12} className="px-2 py-4 text-center text-muted-foreground">
-                      Không có dòng nào khớp bộ lọc.
+                    <td colSpan={12} className="px-2 py-6 text-center text-gray-500 italic">
+                      Không có dòng mã hàng nào khớp bộ lọc.
                     </td>
                   </tr>
                 )}
@@ -424,22 +471,22 @@ export function PickingSlipWizard() {
         )}
 
         {filteredLines.length > 0 && (
-          <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
+          <div className="flex items-center justify-between mt-3 text-xs text-gray-400">
             <span>
-              Tổng {filteredLines.length} dòng — trang {currentPage}/{totalPages}
+              Tổng {filteredLines.length} dòng — Trang {currentPage}/{totalPages}
             </span>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5">
               <button
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage <= 1}
-                className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 disabled:opacity-40 hover:bg-gray-50"
+                className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-gray-300 disabled:opacity-30 hover:bg-white/[0.08] transition-colors"
               >
                 <ChevronLeft className="h-3.5 w-3.5" /> Trước
               </button>
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={currentPage >= totalPages}
-                className="flex items-center gap-1 rounded-md border border-gray-200 px-2 py-1 disabled:opacity-40 hover:bg-gray-50"
+                className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-gray-300 disabled:opacity-30 hover:bg-white/[0.08] transition-colors"
               >
                 Sau <ChevronRight className="h-3.5 w-3.5" />
               </button>
@@ -447,21 +494,32 @@ export function PickingSlipWizard() {
           </div>
         )}
 
-        <label className="text-xs text-muted-foreground flex flex-col gap-1 mt-4">
-          Lưu ý (in trên phiếu)
-          <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} className="input" />
+        <label className="text-xs text-gray-300 flex flex-col gap-1.5 mt-5">
+          Ghi chú in trên phiếu soạn hàng
+          <textarea
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={3}
+            className="bg-white/[0.05] border border-white/15 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-amber-500/60 font-sans"
+          />
         </label>
 
-        {error && <p className="text-sm text-brandRed-600 mt-3">{error}</p>}
+        {error && (
+          <div className="mt-3 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-300">
+            {error}
+          </div>
+        )}
 
-        <div className="flex items-center justify-between mt-4">
-          <p className="text-sm text-muted-foreground">Đã chọn {selectedCount} dòng hàng</p>
+        <div className="flex items-center justify-between mt-6 pt-4 border-t border-white/10">
+          <p className="text-xs text-gray-400">
+            Đã tích chọn <strong className="text-amber-400">{selectedCount}</strong> dòng hàng
+          </p>
           <button
             onClick={handleCreate}
             disabled={saving || selectedCount === 0}
-            className="flex items-center gap-1.5 rounded-md bg-brandRed-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brandRed-700 disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brandRed-600 to-amber-600 hover:from-brandRed-500 hover:to-amber-500 px-5 py-2.5 text-xs font-semibold text-white shadow-[0_0_20px_rgba(225,29,72,0.3)] border border-brandRed-500/40 disabled:opacity-40 transition-all active:scale-[0.98]"
           >
-            <Save className="h-4 w-4" /> {saving ? "Đang tạo..." : "Tạo phiếu soạn hàng"}
+            <Save className="h-4 w-4" /> {saving ? "Đang tạo phiếu..." : "Tạo Phiếu Soạn Hàng"}
           </button>
         </div>
       </div>

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { formatCurrencyVND } from "@/lib/utils";
+import { formatCurrencyVND, cn } from "@/lib/utils";
 import { Upload } from "lucide-react";
 import { SalesPlanImportWizard } from "./SalesPlanImportWizard";
 
@@ -40,45 +40,51 @@ export function SalesPlanDetailSection({ isAdmin }: { isAdmin: boolean }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="font-medium text-ink">Kế hoạch chi tiết theo sản phẩm</h2>
-          <p className="text-xs text-muted-foreground">
-            Nhập từ Excel: doanh số mục tiêu theo Nhân viên x Sản phẩm x Nhóm hàng. Thực hiện tính theo giá trị đã
+          <h2 className="font-semibold text-ink text-sm tracking-wide">Kế hoạch chi tiết theo sản phẩm</h2>
+          <p className="text-xs text-muted2 mt-0.5">
+            Nhập từ Excel: Doanh số mục tiêu theo Nhân viên x Sản phẩm x Nhóm hàng. Thực hiện tính theo giá trị đã
             giao trong tháng.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="text-sm bg-card text-ink rounded-md border border-gray-200 py-2 px-2">
+        <div className="flex items-center gap-2.5">
+          <select
+            value={month}
+            onChange={(e) => setMonth(Number(e.target.value))}
+            className="text-xs font-medium bg-card text-ink rounded-xl border border-white/10 py-2 px-3 focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-sm"
+          >
             {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
               <option key={m} value={m}>
                 Tháng {m}
               </option>
             ))}
           </select>
-          <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="text-sm bg-card text-ink rounded-md border border-gray-200 py-2 px-2">
+          <select
+            value={year}
+            onChange={(e) => setYear(Number(e.target.value))}
+            className="text-xs font-medium bg-card text-ink rounded-xl border border-white/10 py-2 px-3 focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-sm"
+          >
             {[year - 1, year, year + 1].map((y) => (
               <option key={y} value={y}>
-                {y}
+                Năm {y}
               </option>
             ))}
           </select>
+          {isAdmin && (
+            <button
+              onClick={() => setShowWizard((v) => !v)}
+              className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-brandRed-600 to-brandRed-700 hover:from-brandRed-500 hover:to-brandRed-600 px-3.5 py-2 text-xs font-semibold text-white shadow-[0_0_15px_rgba(200,16,46,0.3)] transition-all"
+            >
+              <Upload className="h-4 w-4" />
+              {showWizard ? "Đóng nhập file" : "Nhập Excel kế hoạch"}
+            </button>
+          )}
         </div>
-        {isAdmin && (
-          <button
-            onClick={() => setShowWizard((v) => !v)}
-            className="flex items-center gap-1.5 rounded-md bg-brandRed-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brandRed-700"
-          >
-            <Upload className="h-4 w-4" />
-            {showWizard ? "Đóng" : "Nhập Excel kế hoạch"}
-          </button>
-        )}
       </div>
 
       {showWizard && (
-        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <div className="glass-card border border-white/10 p-5 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
           <SalesPlanImportWizard
             onDone={() => {
-              // Không tự đóng wizard — để người dùng thấy tóm tắt kết quả (Đã nhập/Lỗi/NV
-              // chưa khớp) trước khi tự bấm đóng hoặc nhập file khác.
               queryClient.invalidateQueries({ queryKey: ["sales-plan-lines"] });
             }}
           />
@@ -86,73 +92,115 @@ export function SalesPlanDetailSection({ isAdmin }: { isAdmin: boolean }) {
       )}
 
       {isLoading && (
-        <div className="rounded-lg border border-gray-200 bg-card px-4 py-6 text-center text-muted-foreground text-sm">
-          Đang tải...
+        <div className="glass-card border border-white/10 p-8 text-center text-muted-foreground text-xs">
+          <div className="inline-flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-amber-400 animate-ping" />
+            Đang tải kế hoạch chi tiết...
+          </div>
         </div>
       )}
       {!isLoading && (data?.lines.length ?? 0) === 0 && (
-        <div className="rounded-lg border border-gray-200 bg-card px-4 py-6 text-center text-muted-foreground text-sm">
+        <div className="glass-card border border-white/10 p-8 text-center text-muted2 text-xs">
           Chưa có kế hoạch chi tiết cho tháng này.
         </div>
       )}
       {!isLoading &&
         data &&
         groupLines(data.lines).map((group) => (
-          <div key={group.name} className="rounded-lg border border-gray-200 bg-card overflow-hidden">
-            <div className="flex items-center justify-between flex-wrap gap-2 bg-gray-50 px-4 py-2.5 border-b border-gray-200">
-              <h3 className="font-medium text-ink">Nhóm hàng {group.name}</h3>
-              <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                <span>
-                  Chỉ tiêu: <span className="font-medium text-ink">{formatCurrencyVND(group.targetRevenue)}</span>
+          <div key={group.name} className="glass-card border border-white/10 overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
+            <div className="flex items-center justify-between flex-wrap gap-2 bg-white/[0.04] px-4 py-3 border-b border-white/5 backdrop-blur-md">
+              <h3 className="font-semibold text-ink text-sm">Nhóm hàng {group.name}</h3>
+              <div className="flex items-center gap-4 text-xs font-mono">
+                <span className="text-muted2">
+                  Chỉ tiêu: <span className="font-bold text-ink">{formatCurrencyVND(group.targetRevenue)}</span>
                 </span>
-                <span>
-                  Thực hiện: <span className="font-medium text-ink">{formatCurrencyVND(group.actualRevenue)}</span>
+                <span className="text-muted2">
+                  Thực hiện: <span className="font-bold text-emerald-400">{formatCurrencyVND(group.actualRevenue)}</span>
                 </span>
-                <span className="font-semibold text-ink">
+                <span
+                  className={cn(
+                    "px-2 py-0.5 rounded-full text-xs font-bold border",
+                    group.completionPct != null && group.completionPct >= 100
+                      ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.2)]"
+                      : group.completionPct != null && group.completionPct < 60
+                      ? "bg-brandRed-500/15 text-brandRed-400 border-brandRed-500/30"
+                      : "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                  )}
+                >
                   {group.completionPct != null ? `${group.completionPct}%` : "—"}
                 </span>
               </div>
             </div>
             <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="text-muted-foreground">
+              <table className="min-w-full text-xs">
+                <thead className="bg-white/[0.02] text-muted-foreground border-b border-white/5">
                   <tr>
-                    <th className="text-left font-medium px-4 py-2">Nhân viên</th>
-                    <th className="text-right font-medium px-4 py-2">Chỉ tiêu</th>
-                    <th className="text-right font-medium px-4 py-2">Thực hiện</th>
-                    <th className="text-right font-medium px-4 py-2">%</th>
+                    <th className="text-left font-medium px-4 py-2.5">Nhân viên</th>
+                    <th className="text-right font-medium px-4 py-2.5">Chỉ tiêu</th>
+                    <th className="text-right font-medium px-4 py-2.5">Thực hiện</th>
+                    <th className="text-right font-medium px-4 py-2.5">% Đạt</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-white/5">
                   {group.rows.map((r) => (
-                    <tr key={r.key} className="hover:bg-gray-50">
+                    <tr key={r.key} className="hover:bg-white/[0.02] transition-colors">
                       <td className="px-4 py-2.5 font-medium text-ink">
                         {r.employeeName}
                         {r.hasEmployeeTotalBasis && (
-                          <span className="block text-[11px] text-muted2 font-normal">
+                          <span className="block text-[10px] text-muted2 font-normal">
                             *thực hiện = tổng NV (chưa tách theo nhóm)
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-2.5 text-right">{formatCurrencyVND(r.targetRevenue)}</td>
-                      <td className="px-4 py-2.5 text-right">{formatCurrencyVND(r.actualRevenue)}</td>
-                      <td className="px-4 py-2.5 text-right font-medium">
-                        {r.completionPct != null ? `${r.completionPct}%` : "—"}
+                      <td className="px-4 py-2.5 text-right font-mono text-ink">{formatCurrencyVND(r.targetRevenue)}</td>
+                      <td className="px-4 py-2.5 text-right font-mono font-semibold text-emerald-400">{formatCurrencyVND(r.actualRevenue)}</td>
+                      <td className="px-4 py-2.5 text-right font-mono">
+                        {r.completionPct != null ? (
+                          <span
+                            className={cn(
+                              "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold border",
+                              r.completionPct >= 100
+                                ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.2)]"
+                                : r.completionPct < 60
+                                ? "bg-brandRed-500/15 text-brandRed-400 border-brandRed-500/30"
+                                : "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                            )}
+                          >
+                            {r.completionPct}%
+                          </span>
+                        ) : (
+                          "—"
+                        )}
                       </td>
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className="border-t-2 border-gray-200 bg-gray-50">
+                <tfoot className="border-t-2 border-white/10 bg-white/[0.03]">
                   <tr>
-                    <td className="px-4 py-2.5 font-semibold text-ink">Tổng</td>
-                    <td className="px-4 py-2.5 text-right font-semibold text-ink">
+                    <td className="px-4 py-3 font-semibold text-ink">Tổng nhóm {group.name}</td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-ink">
                       {formatCurrencyVND(group.targetRevenue)}
                     </td>
-                    <td className="px-4 py-2.5 text-right font-semibold text-ink">
+                    <td className="px-4 py-3 text-right font-mono font-bold text-emerald-400">
                       {formatCurrencyVND(group.actualRevenue)}
                     </td>
-                    <td className="px-4 py-2.5 text-right font-semibold text-ink">
-                      {group.completionPct != null ? `${group.completionPct}%` : "—"}
+                    <td className="px-4 py-3 text-right font-mono">
+                      {group.completionPct != null ? (
+                        <span
+                          className={cn(
+                            "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold border",
+                            group.completionPct >= 100
+                              ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40 shadow-[0_0_10px_rgba(16,185,129,0.25)]"
+                              : group.completionPct < 60
+                              ? "bg-brandRed-500/20 text-brandRed-400 border-brandRed-500/40"
+                              : "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                          )}
+                        >
+                          {group.completionPct}%
+                        </span>
+                      ) : (
+                        "—"
+                      )}
                     </td>
                   </tr>
                 </tfoot>

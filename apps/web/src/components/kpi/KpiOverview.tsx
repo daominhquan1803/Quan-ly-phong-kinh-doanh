@@ -56,11 +56,11 @@ interface EmployeeOption {
 }
 
 const GRADE_STYLE: Record<KpiRow["grade"], string> = {
-  A: "bg-success-600/10 text-success-600",
-  B: "bg-info-500/10 text-info-500",
-  C: "bg-gold-500/10 text-gold-500",
-  D: "bg-warning-500/10 text-warning-500",
-  F: "bg-brandRed-50 text-brandRed-600",
+  A: "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-[0_0_8px_rgba(16,185,129,0.25)] font-bold",
+  B: "bg-info-500/20 text-info-300 border border-info-500/40 shadow-[0_0_8px_rgba(91,141,239,0.2)] font-semibold",
+  C: "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-[0_0_8px_rgba(224,163,39,0.2)] font-semibold",
+  D: "bg-orange-500/20 text-orange-300 border border-orange-500/40 font-medium",
+  F: "bg-brandRed-500/25 text-brandRed-400 border border-brandRed-500/40 shadow-[0_0_8px_rgba(200,16,46,0.3)] font-bold",
 };
 
 function pct(n: number | null): string {
@@ -96,183 +96,202 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2">
-        <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="text-sm bg-card text-ink rounded-md border border-gray-200 py-2 px-2">
+      <div className="flex items-center gap-2.5">
+        <select
+          value={month}
+          onChange={(e) => setMonth(Number(e.target.value))}
+          className="text-xs font-medium bg-card text-ink rounded-xl border border-white/10 py-2 px-3 focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-sm"
+        >
           {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
             <option key={m} value={m}>
               Tháng {m}
             </option>
           ))}
         </select>
-        <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="text-sm bg-card text-ink rounded-md border border-gray-200 py-2 px-2">
+        <select
+          value={year}
+          onChange={(e) => setYear(Number(e.target.value))}
+          className="text-xs font-medium bg-card text-ink rounded-xl border border-white/10 py-2 px-3 focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-sm"
+        >
           {[year - 1, year, year + 1].map((y) => (
             <option key={y} value={y}>
-              {y}
+              Năm {y}
             </option>
           ))}
         </select>
       </div>
 
-      <div className="rounded-lg border border-gray-200 bg-card overflow-x-auto">
-        <table className="min-w-full text-xs">
-          <thead className="bg-gray-50 text-muted-foreground">
-            <tr>
-              <th rowSpan={2} className="text-left font-medium px-3 py-2 align-bottom">Nhân viên</th>
-              <th colSpan={3} className="text-center font-medium px-3 py-1.5 border-l border-gray-200" title="Trọng số do Quản trị viên tự phân bổ riêng từng người, mặc định 30">Doanh số tổng</th>
-              <th colSpan={4} className="text-center font-medium px-3 py-1.5 border-l border-gray-200" title="Tỷ lệ đạt chỉ tiêu doanh số riêng nhóm hàng Sản xuất — lấy từ Kế hoạch kinh doanh. Trọng số mặc định 20">DS ngành Sản xuất</th>
-              <th colSpan={4} className="text-center font-medium px-3 py-1.5 border-l border-gray-200" title="Trọng số mặc định 10">KH mới</th>
-              <th colSpan={3} className="text-center font-medium px-3 py-1.5 border-l border-gray-200" title="Trọng số mặc định 10 — không còn trừ điểm hàng lỗi">CSKH / Đi gặp KH</th>
-              <th colSpan={4} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">Công nợ (20đ)</th>
-              <th colSpan={2} className="text-center font-medium px-3 py-1.5 border-l border-gray-200" title="max(2 − số lần vi phạm, 0)">Thái độ (2đ)</th>
-              <th rowSpan={2} className="text-right font-medium px-3 py-2 border-l border-gray-200 align-bottom" title="Tổng điểm 0/1/2 của 4 tuần trong tháng, từ Kế hoạch làm việc tuần">Điểm tuần (8đ)</th>
-              <th colSpan={3} className="text-center font-medium px-3 py-1.5 border-l border-gray-200">Tổng hợp</th>
-              {isAdmin && <th rowSpan={2} className="px-3 py-2 align-bottom"></th>}
-            </tr>
-            <tr>
-              <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">%</th>
-              <th className="text-right font-normal px-3 py-1.5">Trọng số</th>
-              <th className="text-right font-normal px-3 py-1.5">Điểm</th>
-              <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Chỉ tiêu</th>
-              <th className="text-right font-normal px-3 py-1.5">Thực tế</th>
-              <th className="text-right font-normal px-3 py-1.5">Trọng số</th>
-              <th className="text-right font-normal px-3 py-1.5">Điểm</th>
-              <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Chỉ tiêu</th>
-              <th className="text-right font-normal px-3 py-1.5">Thực tế</th>
-              <th className="text-right font-normal px-3 py-1.5">Trọng số</th>
-              <th className="text-right font-normal px-3 py-1.5">Điểm</th>
-              <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Đi gặp KH</th>
-              <th className="text-right font-normal px-3 py-1.5">Trọng số</th>
-              <th className="text-right font-normal px-3 py-1.5">Điểm</th>
-              <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Quá hạn</th>
-              <th className="text-right font-normal px-3 py-1.5">Điểm</th>
-              <th className="text-right font-normal px-3 py-1.5">Thu hồi</th>
-              <th className="text-right font-normal px-3 py-1.5">Điểm</th>
-              <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Vi phạm</th>
-              <th className="text-right font-normal px-3 py-1.5">Điểm</th>
-              <th className="text-right font-normal px-3 py-1.5 border-l border-gray-200">Điểm tổng</th>
-              <th className="text-center font-normal px-3 py-1.5">Xếp loại</th>
-              <th className="text-left font-normal px-3 py-1.5">Đề xuất thưởng</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {isLoading && (
+      <div className="glass-card border border-white/10 overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-xs">
+            <thead className="bg-white/[0.04] text-muted-foreground border-b border-white/5 backdrop-blur-md">
               <tr>
-                <td colSpan={24} className="px-4 py-6 text-center text-muted-foreground">
-                  Đang tải...
-                </td>
+                <th rowSpan={2} className="text-left font-semibold text-ink px-3.5 py-3 align-bottom sticky left-0 bg-brandNavy-900/90 backdrop-blur-md z-10 border-r border-white/5">Nhân viên</th>
+                <th colSpan={3} className="text-center font-medium px-3 py-2 border-l border-white/5" title="Trọng số do Quản trị viên tự phân bổ riêng từng người, mặc định 30">Doanh số tổng</th>
+                <th colSpan={4} className="text-center font-medium px-3 py-2 border-l border-white/5" title="Tỷ lệ đạt chỉ tiêu doanh số riêng nhóm hàng Sản xuất — lấy từ Kế hoạch kinh doanh. Trọng số mặc định 20">DS ngành Sản xuất</th>
+                <th colSpan={4} className="text-center font-medium px-3 py-2 border-l border-white/5" title="Trọng số mặc định 10">KH mới</th>
+                <th colSpan={3} className="text-center font-medium px-3 py-2 border-l border-white/5" title="Trọng số mặc định 10 — không còn trừ điểm hàng lỗi">CSKH / Đi gặp KH</th>
+                <th colSpan={4} className="text-center font-medium px-3 py-2 border-l border-white/5">Công nợ (20đ)</th>
+                <th colSpan={2} className="text-center font-medium px-3 py-2 border-l border-white/5" title="max(2 − số lần vi phạm, 0)">Thái độ (2đ)</th>
+                <th rowSpan={2} className="text-right font-medium px-3 py-3 border-l border-white/5 align-bottom" title="Tổng điểm 0/1/2 của 4 tuần trong tháng, từ Kế hoạch làm việc tuần">Điểm tuần (8đ)</th>
+                <th colSpan={3} className="text-center font-medium px-3 py-2 border-l border-white/5 text-amber-300">Tổng hợp</th>
+                {isAdmin && <th rowSpan={2} className="px-3 py-3 align-bottom border-l border-white/5"></th>}
               </tr>
-            )}
-            {!isLoading && (data?.rows.length ?? 0) === 0 && (
-              <tr>
-                <td colSpan={24} className="px-4 py-6 text-center text-muted-foreground">
-                  Chưa có dữ liệu nhân viên.
-                </td>
+              <tr className="bg-white/[0.02] border-t border-white/5 text-muted2">
+                <th className="text-right font-normal px-2.5 py-1.5 border-l border-white/5">%</th>
+                <th className="text-right font-normal px-2.5 py-1.5">TS</th>
+                <th className="text-right font-normal px-2.5 py-1.5">Điểm</th>
+                <th className="text-right font-normal px-2.5 py-1.5 border-l border-white/5">Chỉ tiêu</th>
+                <th className="text-right font-normal px-2.5 py-1.5">Thực tế</th>
+                <th className="text-right font-normal px-2.5 py-1.5">TS</th>
+                <th className="text-right font-normal px-2.5 py-1.5">Điểm</th>
+                <th className="text-right font-normal px-2.5 py-1.5 border-l border-white/5">Chỉ tiêu</th>
+                <th className="text-right font-normal px-2.5 py-1.5">Thực tế</th>
+                <th className="text-right font-normal px-2.5 py-1.5">TS</th>
+                <th className="text-right font-normal px-2.5 py-1.5">Điểm</th>
+                <th className="text-right font-normal px-2.5 py-1.5 border-l border-white/5">Gặp KH</th>
+                <th className="text-right font-normal px-2.5 py-1.5">TS</th>
+                <th className="text-right font-normal px-2.5 py-1.5">Điểm</th>
+                <th className="text-right font-normal px-2.5 py-1.5 border-l border-white/5">Quá hạn</th>
+                <th className="text-right font-normal px-2.5 py-1.5">Điểm</th>
+                <th className="text-right font-normal px-2.5 py-1.5">Thu hồi</th>
+                <th className="text-right font-normal px-2.5 py-1.5">Điểm</th>
+                <th className="text-right font-normal px-2.5 py-1.5 border-l border-white/5">Vi phạm</th>
+                <th className="text-right font-normal px-2.5 py-1.5">Điểm</th>
+                <th className="text-right font-semibold px-2.5 py-1.5 border-l border-white/5 text-ink">Tổng điểm</th>
+                <th className="text-center font-semibold px-2.5 py-1.5 text-amber-300">Xếp loại</th>
+                <th className="text-left font-normal px-2.5 py-1.5">Thưởng đề xuất</th>
               </tr>
-            )}
-            {data?.rows.map((r) => (
-              <Fragment key={r.employeeId}>
-                <tr className="hover:bg-gray-50">
-                  <td className="px-3 py-2 font-medium text-ink whitespace-nowrap">{r.employeeName}</td>
-                  <td
-                    className="px-3 py-2 text-right border-l border-gray-100"
-                    title={`${formatCurrencyVND(r.actualRevenue)} / ${formatCurrencyVND(r.targetRevenue)}`}
-                  >
-                    {pct(r.revenuePct)}
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {isLoading && (
+                <tr>
+                  <td colSpan={24} className="px-4 py-8 text-center text-muted-foreground">
+                    <div className="inline-flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-amber-400 animate-ping" />
+                      Đang tải bảng đánh giá KPI...
+                    </div>
                   </td>
-                  <td className="px-3 py-2 text-right text-muted-foreground">{r.weightRevenue}</td>
-                  <td
-                    className="px-3 py-2 text-right font-medium"
-                    title={r.revenueBonus > 0 ? `Có thưởng vượt chỉ tiêu: +${r.revenueBonus}đ (đạt ${Math.round((r.revenuePct ?? 0) * 100)}% chỉ tiêu, từ 110% cứ mỗi 5% vượt thêm +1đ)` : undefined}
-                  >
-                    {r.scoreRevenue}
-                    {r.revenueBonus > 0 && <span className="text-success-600 font-normal"> (+{r.revenueBonus})</span>}
-                  </td>
-                  <td className="px-3 py-2 text-right border-l border-gray-100">
-                    {r.targetRevenueSX > 0 ? formatCurrencyVND(r.targetRevenueSX) : "—"}
-                  </td>
-                  <td className="px-3 py-2 text-right" title={r.revenueSXPct != null ? `Đạt ${Math.round(r.revenueSXPct * 100)}% chỉ tiêu` : undefined}>
-                    {formatCurrencyVND(r.actualRevenueSX)}
-                  </td>
-                  <td className="px-3 py-2 text-right text-muted-foreground">{r.weightRevenueSX}</td>
-                  <td
-                    className="px-3 py-2 text-right font-medium"
-                    title={r.revenueSXBonus > 0 ? `Có thưởng vượt chỉ tiêu: +${r.revenueSXBonus}đ (đạt ${Math.round((r.revenueSXPct ?? 0) * 100)}% chỉ tiêu, từ 110% cứ mỗi 5% vượt thêm +1đ)` : undefined}
-                  >
-                    {r.scoreSX}
-                    {r.revenueSXBonus > 0 && <span className="text-success-600 font-normal"> (+{r.revenueSXBonus})</span>}
-                  </td>
-                  <td className="px-3 py-2 text-right border-l border-gray-100">{numOrDash(r.targetNewCustomers)}</td>
-                  <td className="px-3 py-2 text-right">{numOrDash(r.actualNewCustomers)}</td>
-                  <td className="px-3 py-2 text-right text-muted-foreground">{r.weightNewCustomers}</td>
-                  <td className="px-3 py-2 text-right font-medium">{r.scoreNewCustomers}</td>
-                  <td className="px-3 py-2 text-right border-l border-gray-100">
-                    {r.approvedVisitCount}/{r.visitTarget}
-                  </td>
-                  <td className="px-3 py-2 text-right text-muted-foreground">{r.weightVisit}</td>
-                  <td className="px-3 py-2 text-right font-medium">{r.scoreVisit}</td>
-                  <td className="px-3 py-2 text-right border-l border-gray-100">{pctRaw(r.debtOverduePct)}</td>
-                  <td className="px-3 py-2 text-right font-medium">{r.scoreDebtOverdue}</td>
-                  <td className="px-3 py-2 text-right">{pctRaw(r.debtCollectionRatePct)}</td>
-                  <td className="px-3 py-2 text-right font-medium">{r.scoreDebtCollection}</td>
-                  <td className="px-3 py-2 text-right border-l border-gray-100">{r.violationCount}</td>
-                  <td className="px-3 py-2 text-right font-medium">{r.scoreAttitude}</td>
-                  <td className="px-3 py-2 text-right border-l border-gray-100 font-medium">{r.scoreWeek}</td>
-                  <td className="px-3 py-2 text-right border-l border-gray-100 font-bold text-ink">{r.totalScore}</td>
-                  <td className="px-3 py-2 text-center">
-                    <span className={cn("status-badge", GRADE_STYLE[r.grade])}>{r.gradeLabel}</span>
-                  </td>
-                  <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{r.bonusSuggestion}</td>
-                  {isAdmin && (
-                    <td className="px-3 py-2">
-                      <button
-                        onClick={() => setEditingId(editingId === r.employeeId ? null : r.employeeId)}
-                        className="text-muted2 hover:text-ink"
-                        title="Sửa chỉ tiêu KPI"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                    </td>
-                  )}
                 </tr>
-                {isAdmin && editingId === r.employeeId && (
-                  <tr>
-                    <td colSpan={24} className="bg-navy-50/40 px-4 py-4">
-                      <KpiEditForm
-                        row={r}
-                        year={year}
-                        month={month}
-                        onSaved={() => {
-                          setEditingId(null);
-                          queryClient.invalidateQueries({ queryKey: ["kpi-report", year, month] });
-                        }}
-                        onCancel={() => setEditingId(null)}
-                      />
+              )}
+              {!isLoading && (data?.rows.length ?? 0) === 0 && (
+                <tr>
+                  <td colSpan={24} className="px-4 py-8 text-center text-muted2">
+                    Chưa có dữ liệu nhân viên.
+                  </td>
+                </tr>
+              )}
+              {data?.rows.map((r) => (
+                <Fragment key={r.employeeId}>
+                  <tr className="hover:bg-white/[0.02] transition-colors">
+                    <td className="px-3.5 py-2.5 font-medium text-ink whitespace-nowrap sticky left-0 bg-brandNavy-900/90 backdrop-blur-md z-10 border-r border-white/5">
+                      {r.employeeName}
                     </td>
+                    <td
+                      className="px-2.5 py-2 text-right border-l border-white/5 font-mono"
+                      title={`${formatCurrencyVND(r.actualRevenue)} / ${formatCurrencyVND(r.targetRevenue)}`}
+                    >
+                      {pct(r.revenuePct)}
+                    </td>
+                    <td className="px-2.5 py-2 text-right font-mono text-muted2">{r.weightRevenue}</td>
+                    <td
+                      className="px-2.5 py-2 text-right font-mono font-semibold text-ink"
+                      title={r.revenueBonus > 0 ? `Có thưởng vượt chỉ tiêu: +${r.revenueBonus}đ (đạt ${Math.round((r.revenuePct ?? 0) * 100)}% chỉ tiêu, từ 110% cứ mỗi 5% vượt thêm +1đ)` : undefined}
+                    >
+                      {r.scoreRevenue}
+                      {r.revenueBonus > 0 && <span className="text-emerald-400 font-normal"> (+${r.revenueBonus})</span>}
+                    </td>
+                    <td className="px-2.5 py-2 text-right border-l border-white/5 font-mono text-muted2">
+                      {r.targetRevenueSX > 0 ? formatCurrencyVND(r.targetRevenueSX) : "—"}
+                    </td>
+                    <td className="px-2.5 py-2 text-right font-mono text-ink" title={r.revenueSXPct != null ? `Đạt ${Math.round(r.revenueSXPct * 100)}% chỉ tiêu` : undefined}>
+                      {formatCurrencyVND(r.actualRevenueSX)}
+                    </td>
+                    <td className="px-2.5 py-2 text-right font-mono text-muted2">{r.weightRevenueSX}</td>
+                    <td
+                      className="px-2.5 py-2 text-right font-mono font-semibold text-ink"
+                      title={r.revenueSXBonus > 0 ? `Có thưởng vượt chỉ tiêu: +${r.revenueSXBonus}đ (đạt ${Math.round((r.revenueSXPct ?? 0) * 100)}% chỉ tiêu, từ 110% cứ mỗi 5% vượt thêm +1đ)` : undefined}
+                    >
+                      {r.scoreSX}
+                      {r.revenueSXBonus > 0 && <span className="text-emerald-400 font-normal"> (+${r.revenueSXBonus})</span>}
+                    </td>
+                    <td className="px-2.5 py-2 text-right border-l border-white/5 font-mono text-muted2">{numOrDash(r.targetNewCustomers)}</td>
+                    <td className="px-2.5 py-2 text-right font-mono text-ink">{numOrDash(r.actualNewCustomers)}</td>
+                    <td className="px-2.5 py-2 text-right font-mono text-muted2">{r.weightNewCustomers}</td>
+                    <td className="px-2.5 py-2 text-right font-mono font-semibold text-ink">{r.scoreNewCustomers}</td>
+                    <td className="px-2.5 py-2 text-right border-l border-white/5 font-mono text-muted2">
+                      {r.approvedVisitCount}/{r.visitTarget}
+                    </td>
+                    <td className="px-2.5 py-2 text-right font-mono text-muted2">{r.weightVisit}</td>
+                    <td className="px-2.5 py-2 text-right font-mono font-semibold text-ink">{r.scoreVisit}</td>
+                    <td className="px-2.5 py-2 text-right border-l border-white/5 font-mono text-muted2">{pctRaw(r.debtOverduePct)}</td>
+                    <td className="px-2.5 py-2 text-right font-mono font-semibold text-ink">{r.scoreDebtOverdue}</td>
+                    <td className="px-2.5 py-2 text-right font-mono text-muted2">{pctRaw(r.debtCollectionRatePct)}</td>
+                    <td className="px-2.5 py-2 text-right font-mono font-semibold text-ink">{r.scoreDebtCollection}</td>
+                    <td className="px-2.5 py-2 text-right border-l border-white/5 font-mono text-brandRed-400">{r.violationCount}</td>
+                    <td className="px-2.5 py-2 text-right font-mono font-semibold text-ink">{r.scoreAttitude}</td>
+                    <td className="px-2.5 py-2 text-right border-l border-white/5 font-mono font-semibold text-amber-300">{r.scoreWeek}</td>
+                    <td className="px-2.5 py-2 text-right border-l border-white/5 font-mono font-bold text-amber-400 text-sm">{r.totalScore}</td>
+                    <td className="px-2.5 py-2 text-center">
+                      <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold", GRADE_STYLE[r.grade])}>
+                        {r.gradeLabel}
+                      </span>
+                    </td>
+                    <td className="px-2.5 py-2 text-muted2 whitespace-nowrap text-xs">{r.bonusSuggestion}</td>
+                    {isAdmin && (
+                      <td className="px-2.5 py-2 border-l border-white/5 text-center">
+                        <button
+                          onClick={() => setEditingId(editingId === r.employeeId ? null : r.employeeId)}
+                          className="p-1.5 rounded-lg text-muted2 hover:text-amber-400 hover:bg-white/5 transition-colors"
+                          title="Sửa chỉ tiêu KPI"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      </td>
+                    )}
                   </tr>
-                )}
-              </Fragment>
-            ))}
-          </tbody>
-        </table>
+                  {isAdmin && editingId === r.employeeId && (
+                    <tr>
+                      <td colSpan={24} className="bg-amber-500/[0.03] border-y border-amber-500/20 px-5 py-4">
+                        <KpiEditForm
+                          row={r}
+                          year={year}
+                          month={month}
+                          onSaved={() => {
+                            setEditingId(null);
+                            queryClient.invalidateQueries({ queryKey: ["kpi-report", year, month] });
+                          }}
+                          onCancel={() => setEditingId(null)}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
-      <p className="text-xs text-muted2">
-        Doanh số &amp; DS ngành Sản xuất lấy tự động từ Kế hoạch kinh doanh — đạt từ 110% chỉ tiêu trở
-        lên, cứ mỗi 5% vượt thêm được cộng 1đ thưởng, không giới hạn trần. Trọng số 4 mục Doanh số/DS
-        SX/KH mới/CSKH do Quản trị viên tự phân bổ riêng từng người (tổng luôn = 70). Điểm &quot;Đi gặp
-        KH&quot; tự tính theo số lượt đăng ký đi công tác đã được duyệt trong tháng. Điểm tuần tự cộng từ
-        Kế hoạch làm việc tuần. Thực tế KH mới tự đếm từ đơn hàng (đơn đầu tiên của khách với PKD1,
-        hoặc quay lại sau &gt;=365 ngày im lặng). Công nợ quá hạn &amp; Tỷ lệ thu hồi nợ tự tính từ
-        trang Công nợ. Các ô còn lại do Quản trị viên nhập.
-      </p>
+
+      <div className="glass-card border border-white/5 p-4 rounded-xl">
+        <p className="text-xs text-muted2 leading-relaxed">
+          <strong>Ghi chú cơ chế chấm điểm:</strong> Doanh số &amp; DS ngành Sản xuất lấy tự động từ Kế hoạch kinh doanh — đạt từ 110% chỉ tiêu trở
+          lên, cứ mỗi 5% vượt thêm được cộng 1đ thưởng, không giới hạn trần. Trọng số 4 mục Doanh số/DS
+          SX/KH mới/CSKH do Quản trị viên tự phân bổ riêng từng người (tổng luôn = 70). Điểm &quot;Đi gặp
+          KH&quot; tự tính theo số lượt đăng ký đi công tác đã được duyệt trong tháng. Điểm tuần tự cộng từ
+          Kế hoạch làm việc tuần. Thực tế KH mới tự đếm từ đơn hàng. Công nợ quá hạn &amp; Tỷ lệ thu hồi nợ tự tính từ
+          trang Công nợ.
+        </p>
+      </div>
 
       {isAdmin && (
-        <div className="rounded-lg border border-gray-200 bg-card">
+        <div className="glass-card border border-white/10 rounded-2xl overflow-hidden shadow-[0_4px_20px_rgba(0,0,0,0.3)]">
           <button
             onClick={() => setShowDefects((v) => !v)}
-            className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-ink"
+            className="w-full flex items-center justify-between px-5 py-3.5 text-sm font-semibold text-ink bg-white/[0.03] hover:bg-white/[0.06] transition-colors"
           >
-            Biên bản hàng lỗi tháng {month}/{year}
-            {showDefects ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            <span>Biên bản hàng lỗi tháng {month}/{year}</span>
+            {showDefects ? <ChevronUp className="h-4 w-4 text-amber-400" /> : <ChevronDown className="h-4 w-4 text-muted2" />}
           </button>
           {showDefects && <DefectsPanel year={year} month={month} />}
         </div>
@@ -314,14 +333,14 @@ function KpiEditForm({
 
   function field(key: keyof typeof form, label: string, opts?: { step?: string }) {
     return (
-      <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+      <label className="flex flex-col gap-1 text-xs text-muted2 font-medium">
         {label}
         <input
           type="number"
           step={opts?.step ?? "1"}
           value={form[key]}
           onChange={(e) => setForm((prev) => ({ ...prev, [key]: e.target.value === "" ? "" : Number(e.target.value) }))}
-          className="bg-card text-ink rounded-md border border-gray-200 py-1.5 px-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-amber-500"
+          className="bg-black/50 text-ink rounded-xl border border-white/10 py-1.5 px-3 text-xs font-mono focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/50"
         />
       </label>
     );
@@ -360,12 +379,17 @@ function KpiEditForm({
   }
 
   return (
-    <div className="space-y-3">
-      <p className="text-sm font-medium text-ink">Sửa chỉ tiêu KPI — {row.employeeName}</p>
-      <div>
-        <p className={cn("text-xs mb-1.5", weightSum === 70 ? "text-muted-foreground" : "text-brandRed-600 font-medium")}>
-          Tổng 4 trọng số bên dưới: {weightSum} (bắt buộc = 70)
+    <div className="space-y-3.5">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold text-ink flex items-center gap-2">
+          <span>Sửa chỉ tiêu KPI:</span>
+          <span className="text-amber-400">{row.employeeName}</span>
         </p>
+        <p className={cn("text-xs font-mono px-2.5 py-0.5 rounded-full border", weightSum === 70 ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" : "bg-brandRed-500/10 text-brandRed-400 border-brandRed-500/30 font-bold")}>
+          Tổng 4 trọng số: {weightSum}/70
+        </p>
+      </div>
+      <div>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
           {field("weightRevenue", "Trọng số Doanh số tổng")}
           {field("weightRevenueSX", "Trọng số DS ngành SX")}
@@ -378,20 +402,20 @@ function KpiEditForm({
         {field("visitTarget", "Chỉ tiêu lượt đi gặp KH/tháng")}
         {field("violationCount", "Vi phạm nội quy (lần)")}
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-muted2">
         Thực tế KH mới tự đếm từ đơn hàng. Công nợ quá hạn &amp; Tỷ lệ thu hồi nợ tự động lấy từ
-        trang Công nợ. Không sửa được các mục này ở đây.
+        trang Công nợ.
       </p>
-      {error && <p className="text-xs text-brandRed-600">{error}</p>}
-      <div className="flex items-center gap-2">
+      {error && <p className="text-xs text-brandRed-400 font-medium">{error}</p>}
+      <div className="flex items-center gap-2 pt-1">
         <button
           onClick={handleSave}
           disabled={saving}
-          className="rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-amber-foreground hover:bg-amber-400 disabled:opacity-50"
+          className="rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 px-4 py-2 text-xs font-semibold text-black shadow-[0_0_15px_rgba(224,163,39,0.3)] disabled:opacity-50 transition-all"
         >
-          {saving ? "Đang lưu..." : "Lưu"}
+          {saving ? "Đang lưu..." : "Lưu thay đổi"}
         </button>
-        <button onClick={onCancel} className="text-xs text-muted-foreground hover:text-ink">
+        <button onClick={onCancel} className="px-4 py-2 rounded-xl text-xs text-muted2 hover:text-ink hover:bg-white/5 transition-colors">
           Huỷ
         </button>
       </div>
@@ -453,29 +477,31 @@ function DefectsPanel({ year, month }: { year: number; month: number }) {
   }
 
   return (
-    <div className="border-t border-gray-200 px-4 py-3 space-y-3">
-      <p className="text-xs text-muted2">
-        Chỉ để ghi nhận/theo dõi — không còn dùng để trừ điểm KPI CSKH nữa.
-      </p>
-      <button
-        onClick={() => setShowForm((v) => !v)}
-        className="rounded-md bg-brandRed-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brandRed-700"
-      >
-        {showForm ? "Đóng" : "+ Thêm biên bản hàng lỗi"}
-      </button>
+    <div className="border-t border-white/5 p-5 space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <p className="text-xs text-muted2">
+          Ghi nhận các sự vụ hàng lỗi trong tháng để theo dõi chất lượng.
+        </p>
+        <button
+          onClick={() => setShowForm((v) => !v)}
+          className="rounded-xl bg-gradient-to-r from-brandRed-600 to-brandRed-700 hover:from-brandRed-500 hover:to-brandRed-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-[0_0_15px_rgba(200,16,46,0.3)] transition-all"
+        >
+          {showForm ? "Đóng form" : "+ Thêm biên bản hàng lỗi"}
+        </button>
+      </div>
 
       {showForm && (
-        <div className="rounded-md border border-gray-200 bg-gray-50 p-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="glass-card border border-white/10 p-4 rounded-xl grid grid-cols-1 sm:grid-cols-2 gap-3">
           <input
-            placeholder="Số biên bản hàng lỗi"
+            placeholder="Số biên bản hàng lỗi (vd: BB-01/09)"
             value={form.reportNumber}
             onChange={(e) => setForm((p) => ({ ...p, reportNumber: e.target.value }))}
-            className="bg-card text-ink rounded-md border border-gray-200 py-1.5 px-2 text-sm"
+            className="input !text-xs !bg-black/50 !border-white/10 rounded-xl"
           />
           <select
             value={form.employeeId}
             onChange={(e) => setForm((p) => ({ ...p, employeeId: e.target.value }))}
-            className="bg-card text-ink rounded-md border border-gray-200 py-1.5 px-2 text-sm"
+            className="input !text-xs !bg-black/50 !border-white/10 rounded-xl"
           >
             <option value="">— Chọn NVKD chịu trách nhiệm —</option>
             {employeesData?.users.map((u) => (
@@ -488,52 +514,56 @@ function DefectsPanel({ year, month }: { year: number; month: number }) {
             type="date"
             value={form.reportDate}
             onChange={(e) => setForm((p) => ({ ...p, reportDate: e.target.value }))}
-            className="bg-card text-ink rounded-md border border-gray-200 py-1.5 px-2 text-sm"
+            className="input !text-xs !bg-black/50 !border-white/10 rounded-xl font-mono"
           />
           <input
-            placeholder="Nội dung lỗi"
+            placeholder="Nội dung và nguyên nhân lỗi"
             value={form.description}
             onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-            className="bg-card text-ink rounded-md border border-gray-200 py-1.5 px-2 text-sm sm:col-span-2"
+            className="input !text-xs !bg-black/50 !border-white/10 rounded-xl sm:col-span-2"
           />
-          {error && <p className="text-xs text-brandRed-600 sm:col-span-2">{error}</p>}
+          {error && <p className="text-xs text-brandRed-400 sm:col-span-2">{error}</p>}
           <button
             onClick={handleCreate}
             disabled={saving}
-            className="rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-amber-foreground hover:bg-amber-400 disabled:opacity-50 sm:col-span-2 w-fit"
+            className="rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 px-4 py-2 text-xs font-semibold text-black shadow-[0_0_15px_rgba(224,163,39,0.3)] disabled:opacity-50 sm:col-span-2 w-fit transition-all"
           >
             {saving ? "Đang lưu..." : "Lưu biên bản"}
           </button>
         </div>
       )}
 
-      <div className="overflow-x-auto">
+      <div className="rounded-xl border border-white/5 bg-black/40 overflow-x-auto">
         <table className="min-w-full text-xs">
-          <thead className="text-muted-foreground">
+          <thead className="bg-white/[0.04] text-muted-foreground border-b border-white/5">
             <tr>
-              <th className="text-left font-medium px-2 py-1.5">Số biên bản</th>
-              <th className="text-left font-medium px-2 py-1.5">NVKD</th>
-              <th className="text-left font-medium px-2 py-1.5">Ngày</th>
-              <th className="text-left font-medium px-2 py-1.5">Nội dung lỗi</th>
-              <th className="px-2 py-1.5"></th>
+              <th className="text-left font-medium px-4 py-2.5">Số biên bản</th>
+              <th className="text-left font-medium px-4 py-2.5">NVKD</th>
+              <th className="text-left font-medium px-4 py-2.5">Ngày</th>
+              <th className="text-left font-medium px-4 py-2.5">Nội dung lỗi</th>
+              <th className="px-4 py-2.5"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-white/5">
             {(data?.defects.length ?? 0) === 0 && (
               <tr>
-                <td colSpan={5} className="px-2 py-4 text-center text-muted-foreground">
+                <td colSpan={5} className="px-4 py-6 text-center text-muted2">
                   Chưa có biên bản hàng lỗi tháng này.
                 </td>
               </tr>
             )}
             {data?.defects.map((d) => (
-              <tr key={d.id}>
-                <td className="px-2 py-1.5 font-medium text-ink">{d.reportNumber}</td>
-                <td className="px-2 py-1.5">{d.employee.name}</td>
-                <td className="px-2 py-1.5">{formatDateVN(d.reportDate)}</td>
-                <td className="px-2 py-1.5">{d.description}</td>
-                <td className="px-2 py-1.5">
-                  <button onClick={() => handleDelete(d.id)} className="text-muted2 hover:text-brandRed-600">
+              <tr key={d.id} className="hover:bg-white/[0.02] transition-colors">
+                <td className="px-4 py-2 font-mono font-semibold text-amber-300/90">{d.reportNumber}</td>
+                <td className="px-4 py-2 text-ink font-medium">{d.employee.name}</td>
+                <td className="px-4 py-2 font-mono text-muted2">{formatDateVN(d.reportDate)}</td>
+                <td className="px-4 py-2 text-muted-foreground max-w-sm truncate">{d.description}</td>
+                <td className="px-4 py-2 text-right">
+                  <button
+                    onClick={() => handleDelete(d.id)}
+                    className="p-1 rounded-lg text-muted2 hover:text-brandRed-400 hover:bg-white/5 transition-colors"
+                    title="Xoá biên bản"
+                  >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </td>

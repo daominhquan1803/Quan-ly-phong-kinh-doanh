@@ -67,16 +67,16 @@ const STATUS_LABEL: Record<QuoteStatus, string> = {
   NOT_QUOTED: "Chưa báo giá",
 };
 const STATUS_STYLE: Record<QuoteStatus, string> = {
-  WON: "bg-success-600/10 text-success-600",
-  NEGOTIATING: "bg-warning-500/10 text-warning-500",
-  LOST: "bg-brandRed-50 text-brandRed-600",
-  NOT_QUOTED: "bg-gray-200 text-muted-foreground",
+  WON: "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.2)]",
+  NEGOTIATING: "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_8px_rgba(224,163,39,0.2)]",
+  LOST: "bg-brandRed-500/15 text-brandRed-400 border border-brandRed-500/30 shadow-[0_0_8px_rgba(200,16,46,0.2)]",
+  NOT_QUOTED: "bg-white/5 text-gray-400 border border-white/10",
 };
 const STATUS_CHART_COLOR: Record<QuoteStatus, string> = {
-  WON: "#22B378",
-  NEGOTIATING: "#F2A93B",
-  LOST: "#C8102E",
-  NOT_QUOTED: "#5b6478",
+  WON: "#10B981",
+  NEGOTIATING: "#F59E0B",
+  LOST: "#EF4444",
+  NOT_QUOTED: "#64748B",
 };
 const STATUS_KPI_BORDER: Record<QuoteStatus, string> = {
   WON: "border-t-success-600",
@@ -210,13 +210,10 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
               if (found) {
                 setMonth(found.month);
                 setYear(found.year);
-                // Bộ lọc theo nhân viên (bấm từ bảng "Theo nhân viên phụ trách") đặt riêng cho
-                // từng tháng — người đó có thể không có báo giá nào ở tháng khác, xoá đi để
-                // tránh bảng chi tiết hiện trống gây hiểu nhầm là lỗi.
                 setAssigneeFilter("");
               }
             }}
-            className="text-sm bg-card text-ink rounded-md border border-gray-200 py-2 px-2 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="text-xs font-medium bg-card text-ink rounded-xl border border-white/10 py-2 px-3 focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-sm"
           >
             {(summary?.availableMonths ?? []).map((m) => (
               <option key={`${m.year}-${m.month}`} value={m.month}>
@@ -230,62 +227,92 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
           <button
             onClick={handleSync}
             disabled={syncing}
-            className="flex items-center gap-1.5 rounded-md bg-amber-500 px-3 py-2 text-sm font-semibold text-amber-foreground hover:bg-amber-400 disabled:opacity-60"
+            className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 px-4 py-2 text-xs font-semibold text-black shadow-[0_0_15px_rgba(224,163,39,0.3)] disabled:opacity-60 transition-all"
           >
-            <RefreshCw className={cn("h-4 w-4", syncing && "animate-spin")} />
-            {syncing ? "Đang đồng bộ..." : "Đồng bộ thủ công"}
+            <RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} />
+            {syncing ? "Đang đồng bộ..." : "Đồng bộ Google Sheet"}
           </button>
         )}
       </div>
 
-      {syncError && <div className="rounded-md bg-brandRed-50 text-brandRed-600 text-sm px-4 py-2.5">{syncError}</div>}
+      {syncError && (
+        <div className="rounded-xl border border-brandRed-500/30 bg-brandRed-500/10 text-brandRed-400 text-sm px-4 py-3 shadow-[0_0_15px_rgba(200,16,46,0.15)]">
+          {syncError}
+        </div>
+      )}
 
       {syncData?.lastSync && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 text-xs text-muted2">
           {syncData.lastSync.status === "SUCCESS" ? (
-            <CheckCircle2 className="h-4 w-4 text-success-600" />
+            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
           ) : syncData.lastSync.status === "FAILED" ? (
-            <XCircle className="h-4 w-4 text-brandRed-600" />
+            <XCircle className="h-4 w-4 text-brandRed-400" />
           ) : (
-            <RefreshCw className="h-4 w-4 animate-spin" />
+            <RefreshCw className="h-4 w-4 animate-spin text-amber-400" />
           )}
-          Đồng bộ gần nhất: {formatDateVN(syncData.lastSync.startedAt)}
-          {syncData.lastSync.recordsSynced != null && ` — ${syncData.lastSync.recordsSynced} dòng`}
+          <span>Đồng bộ gần nhất: <strong className="text-ink font-mono">{formatDateVN(syncData.lastSync.startedAt)}</strong></span>
+          {syncData.lastSync.recordsSynced != null && <span className="font-mono">({syncData.lastSync.recordsSynced} dòng)</span>}
           {syncData.lastSync.status === "FAILED" && syncData.lastSync.message && (
-            <span className="text-brandRed-600">— {syncData.lastSync.message}</span>
+            <span className="text-brandRed-400">— {syncData.lastSync.message}</span>
           )}
         </div>
       )}
 
-      <div className="flex items-start gap-2 rounded-md bg-warning-500/10 text-warning-500 text-xs px-4 py-2.5">
-        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-        <span>
-          Trạng thái (Chốt được giá / Đang thương thảo / Không bán được / Chưa báo giá) được suy đoán tự động từ MÀU
-          NỀN dòng trong Google Sheet gốc (file không có cột chữ ghi trạng thái) — có thể sai lệch một phần với các
-          dòng dùng màu hiếm gặp, không thuộc 3 màu quy ước (xanh lá/vàng/đỏ).
+      <div className="glass-card border border-amber-500/25 bg-amber-500/[0.02] p-4 rounded-xl flex items-start gap-2.5 text-xs text-amber-300/90 shadow-[0_0_15px_rgba(224,163,39,0.06)]">
+        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-400" />
+        <span className="leading-relaxed">
+          Trạng thái (Chốt được giá / Đang thương thảo / Không bán được / Chưa báo giá) được nhận diện tự động từ màu nền dòng trong Google Sheet gốc.
         </span>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <div className="kpi-card kpi-card--navy">
-          <p className="text-sm text-muted-foreground">Tổng số báo giá</p>
-          <p className="text-2xl font-bold text-ink mt-1">{summaryLoading ? "—" : summary?.total ?? 0}</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+        <div className="glass-card border border-white/10 p-4 relative overflow-hidden group hover:border-amber-500/30 transition-all">
+          <p className="text-xs font-medium text-muted2 tracking-wider uppercase">Tổng số báo giá</p>
+          <p className="text-2xl font-bold font-mono text-ink mt-2">{summaryLoading ? "—" : summary?.total ?? 0}</p>
           <p className="text-xs text-muted2 mt-1">{summary?.month ? `Tháng ${summary.month}/${summary.year}` : ""}</p>
+          <div className="h-0.5 w-12 bg-white/20 mt-3 group-hover:w-full group-hover:bg-amber-400/50 transition-all duration-300" />
         </div>
-        {(summary?.byStatus ?? []).map((s) => (
-          <div key={s.status} className={cn("kpi-card", STATUS_KPI_BORDER[s.status])}>
-            <p className="text-sm text-muted-foreground">{s.label}</p>
-            <p className="text-2xl font-bold text-ink mt-1">{s.pct}%</p>
-            <p className="text-xs text-muted2 mt-1">{s.count} báo giá</p>
-          </div>
-        ))}
+
+        {(summary?.byStatus ?? []).map((s) => {
+          const isWon = s.status === "WON";
+          const isNegotiating = s.status === "NEGOTIATING";
+          const isLost = s.status === "LOST";
+          return (
+            <div
+              key={s.status}
+              className={cn(
+                "glass-card p-4 relative overflow-hidden group transition-all",
+                isWon
+                  ? "border border-emerald-500/30 bg-emerald-500/[0.03] hover:shadow-[0_0_20px_rgba(16,185,129,0.15)]"
+                  : isNegotiating
+                  ? "border border-amber-500/30 bg-amber-500/[0.03] hover:shadow-[0_0_20px_rgba(224,163,39,0.15)]"
+                  : isLost
+                  ? "border border-brandRed-500/30 bg-brandRed-500/[0.03] hover:shadow-[0_0_20px_rgba(200,16,46,0.15)]"
+                  : "border border-white/10 bg-white/[0.02]"
+              )}
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-muted2 tracking-wider uppercase">{s.label}</p>
+                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: STATUS_CHART_COLOR[s.status] }} />
+              </div>
+              <p className="text-2xl font-bold font-mono text-ink mt-2">
+                <span style={{ color: STATUS_CHART_COLOR[s.status] }}>{s.pct}%</span>
+              </p>
+              <p className="text-xs font-mono text-muted2 mt-1">{s.count} báo giá</p>
+              <div
+                className="h-0.5 w-12 mt-3 group-hover:w-full transition-all duration-300"
+                style={{ backgroundColor: STATUS_CHART_COLOR[s.status] }}
+              />
+            </div>
+          );
+        })}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {donutData.length > 0 && (
-          <div className="rounded-lg border border-gray-200 bg-card p-5">
-            <h2 className="font-medium text-ink mb-1">Tỷ lệ theo trạng thái</h2>
-            <p className="text-xs text-muted2 mb-2">{summary?.month ? `Tháng ${summary.month}/${summary.year}` : ""}</p>
+          <div className="glass-card border border-white/10 p-5 rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
+            <h2 className="font-semibold text-ink text-sm tracking-wide mb-1">Tỷ lệ theo trạng thái</h2>
+            <p className="text-xs text-muted2 mb-3">{summary?.month ? `Tháng ${summary.month}/${summary.year}` : ""}</p>
             <div className="relative">
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
@@ -297,7 +324,7 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
                     outerRadius={96}
                     paddingAngle={3}
                     cornerRadius={4}
-                    stroke="#101c31"
+                    stroke="#0B132B"
                     strokeWidth={2}
                   >
                     {donutData.map((d) => (
@@ -314,16 +341,16 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
                 </PieChart>
               </ResponsiveContainer>
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-2xl font-bold text-ink">{summary?.total ?? 0}</span>
-                <span className="text-[11px] text-muted2">báo giá</span>
+                <span className="text-2xl font-bold font-mono text-ink">{summary?.total ?? 0}</span>
+                <span className="text-[11px] text-muted2 uppercase tracking-wider">báo giá</span>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 mt-3 pt-3 border-t border-gray-100">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 mt-3 pt-3 border-t border-white/5">
               {(summary?.byStatus ?? []).map((s) => (
                 <div key={s.status} className="flex items-center gap-2 text-xs">
-                  <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: STATUS_CHART_COLOR[s.status] }} />
-                  <span className="text-muted-foreground truncate">{s.label}</span>
-                  <span className="ml-auto font-medium text-ink whitespace-nowrap">
+                  <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: STATUS_CHART_COLOR[s.status] }} />
+                  <span className="text-muted2 truncate">{s.label}</span>
+                  <span className="ml-auto font-mono font-medium text-ink whitespace-nowrap">
                     {s.count} <span className="text-muted2 font-normal">({s.pct}%)</span>
                   </span>
                 </div>
@@ -332,57 +359,63 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
           </div>
         )}
 
-        <div className="lg:col-span-2 rounded-lg border border-gray-200 bg-card overflow-x-auto">
-          <div className="px-4 pt-3 pb-1">
-            <h2 className="font-medium text-ink">Theo nhân viên phụ trách</h2>
+        <div className="lg:col-span-2 glass-card border border-white/10 rounded-2xl overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
+          <div className="px-5 py-3.5 border-b border-white/5 flex items-center justify-between">
+            <h2 className="font-semibold text-ink text-sm tracking-wide">Theo nhân viên phụ trách</h2>
+            <span className="text-xs text-muted2 font-mono">Bấm hàng để lọc</span>
           </div>
-          <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 text-muted-foreground">
-              <tr>
-                <th className="text-left font-medium px-4 py-2.5">Phụ trách</th>
-                <th className="text-right font-medium px-4 py-2.5">Tổng</th>
-                <th className="text-right font-medium px-4 py-2.5 text-success-600">Chốt</th>
-                <th className="text-right font-medium px-4 py-2.5 text-warning-500">Thương thảo</th>
-                <th className="text-right font-medium px-4 py-2.5 text-brandRed-600">Không bán được</th>
-                <th className="text-right font-medium px-4 py-2.5">Chưa báo giá</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {(summary?.byAssignee.length ?? 0) === 0 && (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-xs">
+              <thead className="bg-white/[0.04] text-muted-foreground border-b border-white/5 backdrop-blur-md">
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
-                    {summaryLoading ? "Đang tải..." : "Chưa có dữ liệu."}
-                  </td>
+                  <th className="text-left font-medium px-4 py-3">Phụ trách</th>
+                  <th className="text-right font-medium px-4 py-3">Tổng</th>
+                  <th className="text-right font-medium px-4 py-3 text-emerald-400">Chốt</th>
+                  <th className="text-right font-medium px-4 py-3 text-amber-400">Thương thảo</th>
+                  <th className="text-right font-medium px-4 py-3 text-brandRed-400">Không bán</th>
+                  <th className="text-right font-medium px-4 py-3">Chưa báo giá</th>
                 </tr>
-              )}
-              {summary?.byAssignee.map((a) => (
-                <tr
-                  key={a.assigneeRaw}
-                  className={cn("hover:bg-gray-50 cursor-pointer", assigneeFilter === a.assigneeRaw && "bg-navy-50/60")}
-                  onClick={() => setAssigneeFilter((prev) => (prev === a.assigneeRaw ? "" : a.assigneeRaw))}
-                  title="Bấm để lọc bảng chi tiết theo người này"
-                >
-                  <td className="px-4 py-2.5 font-medium text-ink">{a.assigneeRaw}</td>
-                  <td className="px-4 py-2.5 text-right">{a.total}</td>
-                  <td className="px-4 py-2.5 text-right text-success-600">{a.WON || "—"}</td>
-                  <td className="px-4 py-2.5 text-right text-warning-500">{a.NEGOTIATING || "—"}</td>
-                  <td className="px-4 py-2.5 text-right text-brandRed-600">{a.LOST || "—"}</td>
-                  <td className="px-4 py-2.5 text-right text-muted-foreground">{a.NOT_QUOTED || "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {(summary?.byAssignee.length ?? 0) === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
+                      {summaryLoading ? "Đang tải..." : "Chưa có dữ liệu."}
+                    </td>
+                  </tr>
+                )}
+                {summary?.byAssignee.map((a) => (
+                  <tr
+                    key={a.assigneeRaw}
+                    className={cn(
+                      "hover:bg-white/[0.03] cursor-pointer transition-colors",
+                      assigneeFilter === a.assigneeRaw && "bg-amber-500/10 ring-1 ring-inset ring-amber-500/30"
+                    )}
+                    onClick={() => setAssigneeFilter((prev) => (prev === a.assigneeRaw ? "" : a.assigneeRaw))}
+                    title="Bấm để lọc bảng chi tiết theo người này"
+                  >
+                    <td className="px-4 py-2.5 font-medium text-ink">{a.assigneeRaw}</td>
+                    <td className="px-4 py-2.5 text-right font-mono font-bold text-ink">{a.total}</td>
+                    <td className="px-4 py-2.5 text-right font-mono font-bold text-emerald-400">{a.WON || "—"}</td>
+                    <td className="px-4 py-2.5 text-right font-mono font-bold text-amber-400">{a.NEGOTIATING || "—"}</td>
+                    <td className="px-4 py-2.5 text-right font-mono font-bold text-brandRed-400">{a.LOST || "—"}</td>
+                    <td className="px-4 py-2.5 text-right font-mono text-muted2">{a.NOT_QUOTED || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
-      <div className="rounded-lg border border-gray-200 bg-card overflow-x-auto">
-        <div className="flex items-center justify-between flex-wrap gap-3 px-4 pt-3 pb-1">
-          <h2 className="font-medium text-ink">Chi tiết từng báo giá</h2>
+      <div className="glass-card border border-white/10 rounded-2xl overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
+        <div className="flex items-center justify-between flex-wrap gap-3 px-5 py-3.5 border-b border-white/5 backdrop-blur-md">
+          <h2 className="font-semibold text-ink text-sm tracking-wide">Chi tiết từng báo giá</h2>
           <div className="flex items-center gap-2 flex-wrap">
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as QuoteStatus | "")}
-              className="text-sm bg-card text-ink rounded-md border border-gray-200 py-1.5 px-2"
+              className="text-xs font-medium bg-card text-ink rounded-xl border border-white/10 py-1.5 px-3 focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-sm"
             >
               <option value="">Tất cả trạng thái</option>
               {(summary?.byStatus ?? []).map((s) => (
@@ -394,80 +427,88 @@ export function QuoteOverview({ isAdmin }: { isAdmin: boolean }) {
             {assigneeFilter && (
               <button
                 onClick={() => setAssigneeFilter("")}
-                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-brandRed-600 border border-gray-200 rounded-md px-2 py-1.5"
+                className="inline-flex items-center gap-1 text-xs text-amber-400 border border-amber-500/30 bg-amber-500/10 rounded-xl px-2.5 py-1.5"
               >
                 <X className="h-3 w-3" /> {assigneeFilter}
               </button>
             )}
           </div>
         </div>
-        <table className="min-w-full text-sm">
-          <thead className="bg-gray-50 text-muted-foreground">
-            <tr>
-              <SortableTh field="requestDay" sort={sort} onSort={handleSort}>
-                Ngày
-              </SortableTh>
-              <SortableTh field="assigneeRaw" sort={sort} onSort={handleSort}>
-                Phụ trách
-              </SortableTh>
-              <SortableTh field="customerName" sort={sort} onSort={handleSort}>
-                Khách hàng
-              </SortableTh>
-              <th className="text-left font-medium px-4 py-2.5">Mặt hàng quan tâm</th>
-              <th className="text-left font-medium px-4 py-2.5">SL / ĐVT</th>
-              <th className="text-left font-medium px-4 py-2.5">Nhân viên báo giá</th>
-              <th className="text-left font-medium px-4 py-2.5">Trạng thái</th>
-            </tr>
-            <tr className="bg-card border-t border-gray-100">
-              <th colSpan={3} className="px-4 py-2 font-normal">
-                <FilterInput value={q} onChange={setQ} placeholder="Tìm khách hàng, mặt hàng, phụ trách..." />
-              </th>
-              <th colSpan={4} className="px-4 py-2 text-right">
-                {hasActiveFilter && (
-                  <button onClick={() => setQ("")} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-brandRed-600">
-                    <X className="h-3 w-3" /> Xoá lọc
-                  </button>
-                )}
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {listLoading && (
+
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-xs">
+            <thead className="bg-white/[0.04] text-muted-foreground border-b border-white/5">
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-muted-foreground">
-                  Đang tải...
-                </td>
+                <SortableTh field="requestDay" sort={sort} onSort={handleSort}>
+                  Ngày
+                </SortableTh>
+                <SortableTh field="assigneeRaw" sort={sort} onSort={handleSort}>
+                  Phụ trách
+                </SortableTh>
+                <SortableTh field="customerName" sort={sort} onSort={handleSort}>
+                  Khách hàng
+                </SortableTh>
+                <th className="text-left font-medium px-4 py-3">Mặt hàng quan tâm</th>
+                <th className="text-left font-medium px-4 py-3">SL / ĐVT</th>
+                <th className="text-left font-medium px-4 py-3">Nhân viên báo giá</th>
+                <th className="text-left font-medium px-4 py-3">Trạng thái</th>
               </tr>
-            )}
-            {!listLoading && visibleRows.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-muted-foreground">
-                  {hasActiveFilter ? "Không tìm thấy báo giá phù hợp" : "Chưa có báo giá nào trong tháng này."}
-                </td>
+              <tr className="bg-black/30 border-t border-white/5">
+                <th colSpan={3} className="px-4 py-2 font-normal">
+                  <FilterInput value={q} onChange={setQ} placeholder="Tìm khách hàng, mặt hàng, phụ trách..." />
+                </th>
+                <th colSpan={4} className="px-4 py-2 text-right">
+                  {hasActiveFilter && (
+                    <button onClick={() => setQ("")} className="inline-flex items-center gap-1 text-xs text-brandRed-400 hover:underline">
+                      <X className="h-3 w-3" /> Xoá lọc
+                    </button>
+                  )}
+                </th>
               </tr>
-            )}
-            {visibleRows.map((r) => (
-              <tr key={r.id} className="hover:bg-gray-50">
-                <td className="px-4 py-2.5 whitespace-nowrap">{r.requestDay ?? "—"}</td>
-                <td className="px-4 py-2.5">{r.assigneeRaw ?? "—"}</td>
-                <td className="px-4 py-2.5 font-medium text-ink">{r.customerName}</td>
-                <td className="px-4 py-2.5 max-w-xs truncate" title={r.productInterest ?? undefined}>
-                  {r.productInterest ?? "—"}
-                </td>
-                <td className="px-4 py-2.5 whitespace-nowrap">
-                  {r.quantity ?? "—"} {r.unit ?? ""}
-                </td>
-                <td className="px-4 py-2.5">{r.pricingStaff ?? "—"}</td>
-                <td className="px-4 py-2.5">
-                  <span className={cn("status-badge", STATUS_STYLE[r.status])}>{STATUS_LABEL[r.status]}</span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {listLoading && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
+                    <div className="inline-flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-amber-400 animate-ping" />
+                      Đang tải danh sách báo giá...
+                    </div>
+                  </td>
+                </tr>
+              )}
+              {!listLoading && visibleRows.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-8 text-center text-muted2">
+                    {hasActiveFilter ? "Không tìm thấy báo giá phù hợp." : "Chưa có báo giá nào trong tháng này."}
+                  </td>
+                </tr>
+              )}
+              {visibleRows.map((r) => (
+                <tr key={r.id} className="hover:bg-white/[0.02] transition-colors">
+                  <td className="px-4 py-2.5 font-mono text-muted2 whitespace-nowrap">{r.requestDay ?? "—"}</td>
+                  <td className="px-4 py-2.5 font-medium text-ink">{r.assigneeRaw ?? "—"}</td>
+                  <td className="px-4 py-2.5 font-medium text-ink">{r.customerName}</td>
+                  <td className="px-4 py-2.5 text-muted-foreground max-w-xs truncate" title={r.productInterest ?? undefined}>
+                    {r.productInterest ?? "—"}
+                  </td>
+                  <td className="px-4 py-2.5 whitespace-nowrap font-mono text-muted2">
+                    {r.quantity ?? "—"} {r.unit ?? ""}
+                  </td>
+                  <td className="px-4 py-2.5 text-muted2">{r.pricingStaff ?? "—"}</td>
+                  <td className="px-4 py-2.5">
+                    <span className={cn("inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold", STATUS_STYLE[r.status])}>
+                      {STATUS_LABEL[r.status]}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         {hasActiveFilter && !listLoading && (
-          <p className="text-xs text-muted-foreground px-4 py-2">
-            Đang hiển thị {visibleRows.length} / {listData?.rows.length ?? 0} báo giá theo bộ lọc hiện tại.
+          <p className="text-xs text-muted2 px-5 py-2.5 border-t border-white/5 font-mono">
+            Đang hiển thị {visibleRows.length} / {listData?.rows.length ?? 0} báo giá theo bộ lọc.
           </p>
         )}
       </div>
