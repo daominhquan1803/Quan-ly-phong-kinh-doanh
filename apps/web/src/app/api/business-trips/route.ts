@@ -3,6 +3,7 @@ import { prisma } from "@hoanggia/db";
 import { requireSession, UnauthorizedError } from "@/lib/rbac";
 import { z } from "zod";
 import { stopSchema } from "@/lib/business-trip-schema";
+import { isWeekEntryLocked, snapToWeekStart, weekLockedMessage } from "@/lib/week-plan";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,11 @@ export async function GET(req: NextRequest) {
       take: 500,
     });
 
-    return NextResponse.json({ trips });
+    // entryLocked: quá hạn đăng ký của tuần chứa ngày đi (hết thứ Hai tuần kế tiếp) — NVKD không còn
+    // sửa/huỷ được, chỉ Quản trị viên (cùng quy tắc khoá nhập liệu Kế hoạch tuần).
+    return NextResponse.json({
+      trips: trips.map((t) => ({ ...t, entryLocked: isWeekEntryLocked(snapToWeekStart(t.visitDate)) })),
+    });
   } catch (err) {
     if (err instanceof UnauthorizedError) return NextResponse.json({ error: err.message }, { status: 401 });
     console.error("business-trips GET error", err);
@@ -57,6 +62,8 @@ const createSchema = z.object({
   // Đồng nghiệp đi hỗ trợ cùng lượt đi này — cũng được tính KPI "đi gặp khách" khi lượt đi được
   // duyệt, không cần duyệt riêng từng người (xem model BusinessTripSupporter).
   supporterEmployeeIds: z.array(z.string().trim().min(1)).max(20).optional(),
+  // Chỉ ADMIN: đăng ký bổ sung HỘ nhân viên (kể cả sau hạn khoá) — bỏ qua nếu không phải ADMIN.
+  employeeId: z.string().trim().min(1).optional(),
 });
 
 /**
@@ -74,11 +81,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Dữ liệu không hợp lệ" }, { status: 400 });
     }
 
-    // Loại trùng + loại chính mình (đã là người đăng ký chính, không cần thêm làm người hỗ trợ) —
-    // không suy đoán/báo lỗi, chỉ lặng lẽ bỏ qua các trường hợp không hợp lệ này.
-    const supporterIds = Array.from(new Set(parsed.data.supporterEmployeeIds ?? [])).filter(
-      (id) => id !== session.user.id
-    );
+    const isAdmin = session.user.role === "ADMIN";
+    const visitDate = new Date(parsed.data.visitDate);
+    if (Number.isNaN(visitDate.getTime())) {
+      return NextResponse.json({ error: "Ngày đi không hợp lệ" }, { status: 400 });
+    }
+    // Quá hạn đăng ký (hết thứ Hai của tuần kế tiếp sau tuần chứa ngày đi) — chỉ ADMIN được bổ sung.
+    if (!isAdmin && isWeekEntryLocked(snapToWeekStart(visitDate))) {
+      return NextResponse.json({ error: weekLockedMessage(snapToWeekStart(visitDate)) }, { status: 403 });
+    }
+    const ownerId = isAdmin && parsed.data.employeeId ? parsed.data.employeeId : session.user.id;
+    const onBehalf = ownerId !== session.user.id;
+    if (onBehalf) {
+      const owner = await prisma.user.findFirst({ where: { id: ownerId, active: true }, select: { id: true } });
+      if (!owner) return NextResponse.json({ error: "Nhân viên không hợp lệ" }, { status: 400 });
+    }
+
+    // Loại trùng + loại chính người đăng ký (đã là người đăng ký chính, không cần thêm làm người
+    // hỗ trợ) — không suy đoán/báo lỗi, chỉ lặng lẽ bỏ qua các trường hợp không hợp lệ này.
+    const supporterIds = Array.from(new Set(parsed.data.supporterEmployeeIds ?? [])).filter((id) => id !== ownerId);
     // Xác thực đúng là nhân viên đang hoạt động — tránh gán nhầm ID rác/ID đã khoá tài khoản vào
     // KPI người khác.
     const validSupporters =
@@ -88,8 +109,10 @@ export async function POST(req: NextRequest) {
 
     const trip = await prisma.businessTripRequest.create({
       data: {
-        employeeId: session.user.id,
-        visitDate: new Date(parsed.data.visitDate),
+        employeeId: ownerId,
+        visitDate,
+        // Admin đăng ký bổ sung hộ nhân viên thì duyệt luôn (admin chính là người duyệt).
+        ...(onBehalf ? { status: "APPROVED" as const, approvedById: session.user.id, approvedAt: new Date() } : {}),
         supporters: {
           create: validSupporters.map((u) => ({ employeeId: u.id })),
         },

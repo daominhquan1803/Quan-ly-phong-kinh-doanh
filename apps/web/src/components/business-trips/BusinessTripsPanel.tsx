@@ -25,6 +25,8 @@ interface TripRow {
   rejectReason: string | null;
   supporters: { employee: { id: string; name: string } }[];
   stops: StopRow[];
+  // Quá hạn đăng ký của tuần chứa ngày đi — NVKD không sửa/huỷ được nữa, chỉ Quản trị viên.
+  entryLocked?: boolean;
 }
 
 const STATUS_LABEL: Record<TripRow["status"], string> = {
@@ -95,10 +97,11 @@ export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
       </div>
 
       {showForm && (
-        <TripForm currentUserId={session?.user?.id} onCreated={() => { setShowForm(false); invalidate(); }} />
+        <TripForm isAdmin={isAdmin} currentUserId={session?.user?.id} onCreated={() => { setShowForm(false); invalidate(); }} />
       )}
       {editingTrip && (
         <TripForm
+          isAdmin={isAdmin}
           currentUserId={session?.user?.id}
           editingTrip={editingTrip}
           onCreated={() => { setEditingTrip(null); invalidate(); }}
@@ -193,7 +196,12 @@ export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
                         </button>
                       </span>
                     )}
-                    {t.status === "PENDING" && t.employee.id === session?.user?.id && (
+                    {t.status === "PENDING" && t.employee.id === session?.user?.id && !isAdmin && t.entryLocked && (
+                      <span className="text-[11px] text-muted2" title="Quá hạn đăng ký — liên hệ Quản trị viên để sửa">
+                        Đã khoá
+                      </span>
+                    )}
+                    {t.status === "PENDING" && (isAdmin || (t.employee.id === session?.user?.id && !t.entryLocked)) && (
                       <span className="inline-flex items-center gap-2">
                         <button
                           onClick={() => {
@@ -243,11 +251,13 @@ function emptyStop(): StopDraft {
 
 function TripForm({
   onCreated,
+  isAdmin,
   currentUserId,
   editingTrip,
   onCancelEdit,
 }: {
   onCreated: () => void;
+  isAdmin?: boolean;
   currentUserId?: string;
   // Có giá trị -> form ở chế độ SỬA đăng ký hiện có (NVKD tự sửa lỗi gõ nhầm khi còn Chờ duyệt),
   // không có -> chế độ tạo mới như cũ.
@@ -279,7 +289,10 @@ function TripForm({
       return res.json() as Promise<{ users: EmployeeOption[] }>;
     },
   });
-  const supporterOptions = (employeesData?.users ?? []).filter((u) => u.id !== currentUserId);
+  // Admin đăng ký bổ sung HỘ nhân viên (không bị hạn khoá, được duyệt luôn) — rỗng = cho chính mình.
+  const [forEmployeeId, setForEmployeeId] = useState("");
+  const ownerId = isAdmin && forEmployeeId ? forEmployeeId : currentUserId;
+  const supporterOptions = (employeesData?.users ?? []).filter((u) => u.id !== ownerId);
 
   function toggleSupporter(id: string) {
     setSupporterIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -325,7 +338,12 @@ function TripForm({
         : await fetch("/api/business-trips", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ visitDate, stops: stopsPayload, supporterEmployeeIds: supporterIds }),
+            body: JSON.stringify({
+              visitDate,
+              stops: stopsPayload,
+              supporterEmployeeIds: supporterIds,
+              employeeId: isAdmin && forEmployeeId ? forEmployeeId : undefined,
+            }),
           });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -347,6 +365,26 @@ function TripForm({
   return (
     <div className="glass-card border border-white/10 p-5 rounded-2xl space-y-4 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
       {editingTrip && <p className="text-sm font-medium text-ink">Sửa đăng ký ngày {formatDateVN(editingTrip.visitDate)}</p>}
+      <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+        {isAdmin
+          ? "Quản trị viên đăng ký bổ sung không bị giới hạn hạn chót. Đăng ký hộ nhân viên sẽ được duyệt luôn."
+          : "Hạn đăng ký: chậm nhất hết ngày thứ Hai của tuần kế tiếp sau tuần chứa ngày đi. Quá hạn sẽ bị khoá, chỉ Quản trị viên bổ sung được."}
+      </p>
+      {isAdmin && !editingTrip && (
+        <label className="flex flex-col gap-1 text-xs text-muted-foreground max-w-xs">
+          Đăng ký cho
+          <select value={forEmployeeId} onChange={(e) => setForEmployeeId(e.target.value)} className="input">
+            <option value="">— Chính tôi —</option>
+            {(employeesData?.users ?? [])
+              .filter((u) => u.id !== currentUserId)
+              .map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+          </select>
+        </label>
+      )}
       <label className="flex flex-col gap-1 text-xs text-muted-foreground max-w-xs">
         Ngày đi
         <input type="date" value={visitDate} onChange={(e) => setVisitDate(e.target.value)} className="input" />

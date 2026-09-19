@@ -3,6 +3,7 @@ import { prisma } from "@hoanggia/db";
 import { requireSession, ForbiddenError, UnauthorizedError } from "@/lib/rbac";
 import { z } from "zod";
 import { stopSchema } from "@/lib/business-trip-schema";
+import { isWeekEntryLocked, snapToWeekStart, weekLockedMessage } from "@/lib/week-plan";
 
 export const dynamic = "force-dynamic";
 
@@ -29,10 +30,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     if (!trip) return NextResponse.json({ error: "Không tìm thấy đăng ký" }, { status: 404 });
 
     const { action } = parsed.data;
+    const isAdmin = session.user.role === "ADMIN";
+
+    // Quá hạn đăng ký của tuần chứa ngày đi (hết thứ Hai tuần kế tiếp) — NVKD không còn huỷ/sửa
+    // được, chỉ Quản trị viên (approve/reject vốn đã chỉ ADMIN).
+    if ((action === "cancel" || action === "update") && !isAdmin && isWeekEntryLocked(snapToWeekStart(trip.visitDate))) {
+      return NextResponse.json({ error: weekLockedMessage(snapToWeekStart(trip.visitDate)) }, { status: 403 });
+    }
 
     if (action === "cancel") {
-      // Chủ đăng ký tự huỷ khi còn chờ duyệt.
-      if (trip.employeeId !== session.user.id) {
+      // Chủ đăng ký (hoặc Quản trị viên) huỷ khi còn chờ duyệt.
+      if (trip.employeeId !== session.user.id && !isAdmin) {
         return NextResponse.json({ error: "Chỉ chủ đăng ký mới được huỷ" }, { status: 403 });
       }
       if (trip.status !== "PENDING") {
@@ -49,7 +57,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       // Chủ đăng ký tự sửa khi gõ nhầm — chỉ cho sửa lúc còn chờ duyệt, giống điều kiện "cancel"
       // (đã duyệt/từ chối thì không tự sửa được nữa, tránh đổi nội dung sau khi Quản trị viên đã
       // xem xét).
-      if (trip.employeeId !== session.user.id) {
+      if (trip.employeeId !== session.user.id && !isAdmin) {
         return NextResponse.json({ error: "Chỉ chủ đăng ký mới được sửa" }, { status: 403 });
       }
       if (trip.status !== "PENDING") {
@@ -58,9 +66,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       if (!parsed.data.visitDate || !parsed.data.stops || parsed.data.stops.length === 0) {
         return NextResponse.json({ error: "Thiếu dữ liệu sửa" }, { status: 400 });
       }
+      // Không cho NVKD chuyển ngày đi sang 1 tuần đã quá hạn (lách khoá bằng cách sửa ngày).
+      const newVisitDate = new Date(parsed.data.visitDate);
+      if (Number.isNaN(newVisitDate.getTime())) {
+        return NextResponse.json({ error: "Ngày đi không hợp lệ" }, { status: 400 });
+      }
+      if (!isAdmin && isWeekEntryLocked(snapToWeekStart(newVisitDate))) {
+        return NextResponse.json({ error: weekLockedMessage(snapToWeekStart(newVisitDate)) }, { status: 403 });
+      }
 
       const supporterIds = Array.from(new Set(parsed.data.supporterEmployeeIds ?? [])).filter(
-        (id) => id !== session.user.id
+        (id) => id !== trip.employeeId
       );
       const validSupporters =
         supporterIds.length > 0
