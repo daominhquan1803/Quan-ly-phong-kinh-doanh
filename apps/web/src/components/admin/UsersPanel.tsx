@@ -269,7 +269,7 @@ export function UsersPanel() {
                 <select
                   value={form.role}
                   onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as "ADMIN" | "SALES" }))}
-                  className="w-full bg-[#18181b] border border-white/15 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/60"
+                  className="w-full bg-gray-100 border border-white/15 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/60"
                 >
                   <option value="SALES">Nhân viên kinh doanh</option>
                   <option value="ADMIN">Quản trị viên (Admin)</option>
@@ -347,8 +347,8 @@ export function UsersPanel() {
                             : "bg-blue-500/10 text-blue-300 border-blue-500/30"
                         }`}
                       >
-                        <option value="SALES" className="bg-[#18181b] text-white">Nhân viên kinh doanh</option>
-                        <option value="ADMIN" className="bg-[#18181b] text-white">Quản trị viên (Admin)</option>
+                        <option value="SALES" className="bg-gray-100 text-white">Nhân viên kinh doanh</option>
+                        <option value="ADMIN" className="bg-gray-100 text-white">Quản trị viên (Admin)</option>
                       </select>
                     </td>
                     <td className="py-3 px-4 whitespace-nowrap">
@@ -540,7 +540,7 @@ export function UsersPanel() {
             <select
               value={aliasForm.employeeId}
               onChange={(e) => setAliasForm((f) => ({ ...f, employeeId: e.target.value }))}
-              className="w-full sm:w-64 bg-[#18181b] border border-white/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500/60"
+              className="w-full sm:w-64 bg-gray-100 border border-white/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500/60"
             >
               <option value="">— Chọn nhân viên đích —</option>
               {salesUsers.map((u) => (

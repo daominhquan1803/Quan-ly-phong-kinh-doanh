@@ -271,7 +271,7 @@ export function ManualOrderWizard({ isAdmin }: { isAdmin: boolean }) {
                   <select
                     value={employeeId}
                     onChange={(e) => setEmployeeId(e.target.value)}
-                    className="bg-[#18181b] border border-white/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500/60"
+                    className="bg-gray-100 border border-white/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500/60"
                   >
                     <option value="">— Chọn nhân viên phụ trách —</option>
                     {employeeOptions.map((e) => (

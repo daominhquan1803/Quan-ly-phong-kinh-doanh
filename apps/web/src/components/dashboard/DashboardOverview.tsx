@@ -509,7 +509,7 @@ export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
                 innerRadius="72%"
                 outerRadius="100%"
               >
-                <RadialBar dataKey="value" background={{ fill: "#1e2c45" }} cornerRadius={20} />
+                <RadialBar dataKey="value" background={{ fill: "rgb(var(--c-gray-200))" }} cornerRadius={20} />
               </RadialBarChart>
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center">

@@ -33,7 +33,7 @@ export function MobileNav({ role }: { role?: "ADMIN" | "SALES" }) {
         createPortal(
         <>
           <div className="fixed inset-0 z-[60] bg-black/60" onClick={() => setOpen(false)} />
-          <div className="fixed inset-y-0 left-0 z-[70] flex w-72 max-w-[85vw] flex-col bg-[#0b1628] text-white shadow-xl border-r border-white/10">
+          <div className="fixed inset-y-0 left-0 z-[70] flex w-72 max-w-[85vw] flex-col bg-navy-900 text-white shadow-xl border-r border-white/10">
             <div className="flex items-center justify-between gap-3 px-5 py-5 border-b border-white/10">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white p-1.5">

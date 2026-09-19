@@ -40,10 +40,10 @@ export function Sidebar({ role }: { role?: "ADMIN" | "SALES" }) {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden md:flex md:w-64 md:flex-col bg-[#0b1628]/95 backdrop-blur-2xl border-r border-gray-200/80 text-ink shadow-[4px_0_24px_rgba(0,0,0,0.35)] select-none">
+    <aside className="hidden md:flex md:w-64 md:flex-col bg-navy-900/95 backdrop-blur-2xl border-r border-gray-200/80 text-ink shadow-[4px_0_24px_rgba(0,0,0,0.35)] select-none">
       {/* Brand Header */}
       <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-200/70">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-white to-gray-200 p-1.5 shadow-[0_0_15px_rgba(255,255,255,0.2)]">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-white to-gray-200 [--c-white:255_255_255] p-1.5 shadow-[0_0_15px_rgba(255,255,255,0.2)]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo/mark.svg" alt="Hoàng Gia PS" className="w-full h-auto logo-3d-spin" />
         </div>

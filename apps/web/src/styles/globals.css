@@ -3,10 +3,103 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
+  /* ===== Chủ đề TỐI (mặc định) — màu dạng "R G B" để Tailwind ghép được độ trong suốt ===== */
+  :root,
+  html.light .force-dark {
+    color-scheme: dark;
     --background: 220 45% 8%; /* gray-50 #0A1424 */
     --foreground: 220 40% 93%; /* ink #E9EEF7 */
     --border: 216 39% 19%; /* gray-200 #1e2c45 */
+
+    --c-white: 255 255 255;
+    --c-navy-50: 22 35 61;
+    --c-navy-100: 27 43 72;
+    --c-navy-700: 22 41 74;
+    --c-navy-900: 14 27 51;
+    --c-gray-50: 10 20 36;
+    --c-gray-100: 16 28 49;
+    --c-gray-200: 30 44 69;
+    --c-gray-300: 42 58 86;
+    --c-gray-400: 91 100 120;
+    --c-gray-500: 139 150 171;
+    --c-gray-600: 163 173 192;
+    --c-gray-700: 199 206 222;
+    --c-gray-900: 233 238 247;
+    --c-ink: 233 238 247;
+    --c-ink2: 199 206 222;
+    --c-muted2: 91 100 120;
+    --c-card: 16 28 49;
+    --c-amber-300: 252 211 77;
+    --c-amber-400: 236 193 101;
+    --c-amber-500: 224 163 39;
+    --c-emerald-300: 110 231 183;
+    --c-emerald-400: 52 211 153;
+    --c-rose-300: 253 164 175;
+    --c-rose-400: 251 113 133;
+    --c-blue-400: 96 165 250;
+    --c-red-400: 255 107 118;
+    --c-red-500: 255 59 71;
+    --c-alert: 255 59 71;
+    --c-success: 34 179 120;
+
+    --shadow-card: 0 1px 0 0 rgba(255, 255, 255, 0.03) inset, 0 10px 24px -12px rgba(0, 0, 0, 0.55);
+    --scroll-track: rgba(10, 20, 36, 0.6);
+    --scroll-thumb: rgba(30, 44, 69, 0.8);
+  }
+
+  /* ===== Chủ đề SÁNG — bật bằng class "light" trên <html> (nút Sáng/Tối ở thanh đầu trang) ===== */
+  html.light {
+    color-scheme: light;
+    --background: 220 30% 97%;
+    --foreground: 222 47% 11%;
+    --border: 217 25% 85%;
+
+    /* "trắng" của chủ đề tối (chữ nổi, lớp phủ bg-white/5, viền border-white/10...) đổi thành xanh
+       đen: chữ đậm + lớp phủ tối nhẹ trên nền sáng. Nút nền đỏ thương hiệu giữ chữ trắng, xem dưới. */
+    --c-white: 15 23 42;
+    --c-navy-50: 230 236 246;
+    --c-navy-100: 221 229 241;
+    --c-navy-700: 208 218 234;
+    --c-navy-900: 255 255 255;
+    --c-gray-50: 244 246 250;
+    --c-gray-100: 234 238 245;
+    --c-gray-200: 213 220 232;
+    --c-gray-300: 188 198 214;
+    --c-gray-400: 122 134 155;
+    --c-gray-500: 91 103 128;
+    --c-gray-600: 71 83 105;
+    --c-gray-700: 51 65 85;
+    --c-gray-900: 15 23 42;
+    --c-ink: 15 23 42;
+    --c-ink2: 51 65 85;
+    --c-muted2: 100 116 139;
+    --c-card: 255 255 255;
+    --c-amber-300: 180 83 9;
+    --c-amber-400: 183 121 31;
+    --c-amber-500: 201 138 11;
+    --c-emerald-300: 4 120 87;
+    --c-emerald-400: 5 150 105;
+    --c-rose-300: 190 18 60;
+    --c-rose-400: 225 29 72;
+    --c-blue-400: 37 99 235;
+    --c-red-400: 232 60 76;
+    --c-red-500: 217 30 46;
+    --c-alert: 217 30 46;
+    --c-success: 15 157 103;
+
+    --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.06), 0 8px 20px -10px rgba(15, 23, 42, 0.18);
+    --scroll-track: rgba(226, 232, 240, 0.7);
+    --scroll-thumb: rgba(148, 163, 184, 0.7);
+  }
+
+  /* Nút/nhãn nền đỏ thương hiệu luôn giữ chữ trắng ở cả 2 chủ đề. */
+  html.light :is(.bg-brandRed-600, .bg-brandRed-700, .bg-destructive, .status-badge--bad-debt, [class~="from-brandRed-600"]) {
+    --c-white: 255 255 255;
+  }
+  /* Ô chọn ngày: bỏ lật màu biểu tượng lịch (đã lật để hợp nền tối). */
+  html.light input[type="date"]::-webkit-calendar-picker-indicator,
+  html.light input[type="time"]::-webkit-calendar-picker-indicator {
+    filter: none !important;
   }
 
   * {
@@ -24,10 +117,10 @@
     height: 6px;
   }
   ::-webkit-scrollbar-track {
-    background: rgba(10, 20, 36, 0.6);
+    background: var(--scroll-track);
   }
   ::-webkit-scrollbar-thumb {
-    background: rgba(30, 44, 69, 0.8);
+    background: var(--scroll-thumb);
     border-radius: 9999px;
   }
   ::-webkit-scrollbar-thumb:hover {

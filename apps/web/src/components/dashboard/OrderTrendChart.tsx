@@ -105,7 +105,7 @@ export function OrderTrendChart({ isAdmin }: { isAdmin: boolean }) {
             <XAxis
               dataKey="day"
               tick={{ ...CHART_TICK, fontSize: 12 }}
-              label={{ value: "Ngày trong tháng", position: "insideBottom", offset: -4, fontSize: 11, fill: "#5b6478" }}
+              label={{ value: "Ngày trong tháng", position: "insideBottom", offset: -4, fontSize: 11, fill: "rgb(var(--c-gray-400))" }}
             />
             <YAxis
               tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}tr`}
@@ -120,7 +120,7 @@ export function OrderTrendChart({ isAdmin }: { isAdmin: boolean }) {
             <Legend wrapperStyle={LEGEND_STYLE} />
             <ReferenceLine
               x={data.todayDate}
-              stroke="#5b6478"
+              stroke="rgb(var(--c-gray-400))"
               strokeDasharray="4 4"
               label={{ value: "Hôm nay", fontSize: 10, fill: "#E0A327", position: "top" }}
             />
@@ -132,7 +132,7 @@ export function OrderTrendChart({ isAdmin }: { isAdmin: boolean }) {
                 stroke={colorForMonth(m, idx)}
                 strokeWidth={m.isCurrent ? 3 : 1.75}
                 dot={false}
-                activeDot={{ r: 5, strokeWidth: 2, stroke: "#E9EEF7" }}
+                activeDot={{ r: 5, strokeWidth: 2, stroke: "rgb(var(--c-ink))" }}
                 connectNulls={false}
               />
             ))}

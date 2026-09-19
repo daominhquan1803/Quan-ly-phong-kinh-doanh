@@ -37,7 +37,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="vi" className={`${plexSans.variable} ${plexMono.variable}`}>
+    <html lang="vi" className={`${plexSans.variable} ${plexMono.variable}`} suppressHydrationWarning>
+      <head>
+        {/* Áp chủ đề đã chọn TRƯỚC khi vẽ trang để không bị nháy tối→sáng. Mặc định: tối. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{if(localStorage.getItem("theme")==="light")document.documentElement.classList.add("light")}catch(e){}`,
+          }}
+        />
+      </head>
       <body className="font-sans antialiased">
         <PwaRegister />
         <Providers>{children}</Providers>

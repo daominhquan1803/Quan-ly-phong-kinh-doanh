@@ -149,7 +149,7 @@ export function ImportWizard() {
                     onChange={(e) =>
                       setMapping((m) => ({ ...m, [field.key]: e.target.value || undefined }))
                     }
-                    className="w-full text-xs bg-[#18181b] text-white rounded-xl border border-white/15 py-2 px-3 focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/60"
+                    className="w-full text-xs bg-gray-100 text-white rounded-xl border border-white/15 py-2 px-3 focus:outline-none focus:border-amber-500/60 focus:ring-1 focus:ring-amber-500/60"
                   >
                     <option value="">— Không chọn —</option>
                     {preview.headers.map((h) => (

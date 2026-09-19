@@ -11,46 +11,57 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Mọi màu nền/chữ/viền của theme đều đọc từ biến CSS --c-* (định nghĩa ở styles/globals.css:
+        // :root = tối, html.light = sáng) nên đổi Sáng/Tối chỉ cần đổi class trên <html>.
+        white: "rgb(var(--c-white) / <alpha-value>)", // "trắng" theo chủ đề: trắng khi tối, xanh đen khi sáng
         navy: {
-          50: "#16233d", // tint nổi bật nhẹ (dòng tổng phụ, hàng đang chọn) — trước là nền navy rất nhạt
-          100: "#1b2b48",
-          700: "#16294a", // hover cho khối navy cấu trúc (sidebar không dùng shade này)
-          900: "#0E1B33", // nền cấu trúc: sidebar, khối avatar, trang đăng nhập — KHÔNG dùng cho nút bấm
+          50: "rgb(var(--c-navy-50) / <alpha-value>)", // tint nổi bật nhẹ (dòng tổng phụ, hàng đang chọn)
+          100: "rgb(var(--c-navy-100) / <alpha-value>)",
+          700: "rgb(var(--c-navy-700) / <alpha-value>)",
+          900: "rgb(var(--c-navy-900) / <alpha-value>)", // nền cấu trúc: sidebar, thẻ, trang đăng nhập — KHÔNG dùng cho nút bấm
         },
         brandRed: {
-          50: "rgba(200,16,46,0.16)", // nền nhạt cho badge (trước là đỏ rất nhạt trên nền trắng)
-          // 400/500: trước đây các lớp brandRed-400/500 được dùng khắp nơi nhưng CHƯA có màu nên không
-          // hiển thị gì — định nghĩa thành đỏ tươi để badge/viền cảnh báo nhìn thấy được trên nền tối.
-          400: "#FF6B76",
-          500: "#FF3B47",
+          50: "rgba(200,16,46,0.16)", // nền nhạt cho badge
+          400: "rgb(var(--c-red-400) / <alpha-value>)",
+          500: "rgb(var(--c-red-500) / <alpha-value>)",
           600: "#C8102E", // đỏ thương hiệu (nền nút) — KHÔNG dùng làm màu chữ cảnh báo, xem "alert"
           700: "#9E0B22",
         },
         // Đỏ TƯƠI cho chữ/biểu tượng cảnh báo: chỉ số chưa đạt, quá hạn, nợ xấu... (anh Quân yêu cầu
-        // 19/09/2026 — #C8102E quá tối trên nền xanh đen nên khó nhận ra để nhắc nhở).
-        alert: "#FF3B47",
-        // Thang xám bị đảo tông hoàn toàn: gray-50 giờ là nền tối nhất (nền trang),
-        // gray-900 gần trắng nhất (chữ chính) — đúng như cách các theme tối vẫn làm.
+        // 19/09/2026). Chủ đề sáng dùng đỏ đậm hơn để vẫn đủ tương phản trên nền trắng.
+        alert: "rgb(var(--c-alert) / <alpha-value>)",
+        // Thang xám bị đảo tông ở chủ đề tối: gray-50 là nền tối nhất (nền trang), gray-900 gần
+        // trắng nhất (chữ chính). Chủ đề sáng đảo lại theo đúng vai trò.
         gray: {
-          50: "#0A1424", // nền trang / nền lõm (bảng header, hàng hover)
-          100: "#101c31", // bề mặt phụ (progress track, badge nền)
-          200: "#1e2c45", // viền chủ đạo
-          300: "#2a3a56", // viền/icon mờ hơn 1 chút
-          400: "#5b6478", // chữ/icon mờ
-          500: "#8b96ab", // chữ phụ — dùng nhiều nhất
-          600: "#a3adc0",
-          700: "#c7cede", // chữ phụ đậm hơn / nhãn
-          900: "#E9EEF7", // gần trắng — hiếm khi còn dùng trực tiếp (đã đổi sang text-ink)
+          50: "rgb(var(--c-gray-50) / <alpha-value>)", // nền trang / nền lõm
+          100: "rgb(var(--c-gray-100) / <alpha-value>)", // bề mặt phụ
+          200: "rgb(var(--c-gray-200) / <alpha-value>)", // viền chủ đạo
+          300: "rgb(var(--c-gray-300) / <alpha-value>)",
+          400: "rgb(var(--c-gray-400) / <alpha-value>)", // chữ/icon mờ
+          500: "rgb(var(--c-gray-500) / <alpha-value>)", // chữ phụ — dùng nhiều nhất
+          600: "rgb(var(--c-gray-600) / <alpha-value>)",
+          700: "rgb(var(--c-gray-700) / <alpha-value>)",
+          900: "rgb(var(--c-gray-900) / <alpha-value>)",
         },
-        ink: "#E9EEF7", // chữ chính (thay cho text-navy-900 / text-gray-900 cũ)
-        ink2: "#c7cede", // chữ phụ đậm (thay cho text-gray-700)
-        muted2: "#5b6478", // chữ/icon rất mờ (thay cho text-gray-400 / text-gray-300)
+        ink: "rgb(var(--c-ink) / <alpha-value>)", // chữ chính
+        ink2: "rgb(var(--c-ink2) / <alpha-value>)", // chữ phụ đậm
+        muted2: "rgb(var(--c-muted2) / <alpha-value>)", // chữ/icon rất mờ
         amber: {
-          400: "#ecc165",
-          500: "#E0A327", // điểm nhấn chính của theme: nút CTA, mục menu đang chọn, viền focus
+          300: "rgb(var(--c-amber-300) / <alpha-value>)",
+          400: "rgb(var(--c-amber-400) / <alpha-value>)",
+          500: "rgb(var(--c-amber-500) / <alpha-value>)", // điểm nhấn chính: nút CTA, mục menu đang chọn, viền focus
           foreground: "#10192b",
         },
-        success: { 600: "#22B378" },
+        emerald: {
+          300: "rgb(var(--c-emerald-300) / <alpha-value>)",
+          400: "rgb(var(--c-emerald-400) / <alpha-value>)",
+        },
+        rose: {
+          300: "rgb(var(--c-rose-300) / <alpha-value>)",
+          400: "rgb(var(--c-rose-400) / <alpha-value>)",
+        },
+        blue: { 400: "rgb(var(--c-blue-400) / <alpha-value>)" },
+        success: { 600: "rgb(var(--c-success) / <alpha-value>)" },
         warning: { 500: "#F2A93B" },
         info: { 500: "#5B8DEF" },
         gold: { 500: "#D4A017" },
@@ -66,19 +77,18 @@ const config: Config = {
           foreground: "#FFFFFF",
         },
         muted: {
-          DEFAULT: "#101c31",
-          foreground: "#8b96ab",
+          DEFAULT: "rgb(var(--c-gray-100) / <alpha-value>)",
+          foreground: "rgb(var(--c-gray-500) / <alpha-value>)",
         },
         accent: {
-          DEFAULT: "#16233d",
-          foreground: "#E9EEF7",
+          DEFAULT: "rgb(var(--c-navy-50) / <alpha-value>)",
+          foreground: "rgb(var(--c-ink) / <alpha-value>)",
         },
         card: {
-          DEFAULT: "#101c31",
-          foreground: "#E9EEF7",
+          DEFAULT: "rgb(var(--c-card) / <alpha-value>)",
+          foreground: "rgb(var(--c-ink) / <alpha-value>)",
         },
-      },
-      borderRadius: {
+      },      borderRadius: {
         lg: "0.75rem",
         md: "0.5rem",
         sm: "0.375rem",
@@ -88,7 +98,7 @@ const config: Config = {
         mono: ["var(--font-plex-mono)", "ui-monospace", "SFMono-Regular", "monospace"],
       },
       boxShadow: {
-        card: "0 1px 0 0 rgba(255,255,255,0.03) inset, 0 10px 24px -12px rgba(0,0,0,0.55)",
+        card: "var(--shadow-card)",
       },
     },
   },

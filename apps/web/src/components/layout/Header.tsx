@@ -2,6 +2,7 @@ import { LogOut, ShieldCheck, User } from "lucide-react";
 import { ChangePasswordButton } from "@/components/layout/ChangePasswordButton";
 import { NotificationBell } from "@/components/layout/NotificationBell";
 import { MobileNav } from "@/components/layout/MobileNav";
+import { ThemeToggle } from "@/components/layout/ThemeToggle";
 
 function initials(name?: string): string {
   if (!name) return "?";
@@ -19,7 +20,7 @@ export function Header({ userName, role }: { userName?: string; role?: "ADMIN" |
       {/* Lớp nền mờ tách riêng: backdrop-filter đặt thẳng lên <header> sẽ biến header thành khung
           chứa của mọi phần tử position:fixed bên trong (khay menu điện thoại, lớp bấm-ra-ngoài của
           chuông thông báo/đổi mật khẩu) khiến chúng bị bó vào chiều cao thanh header. */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-[#0c182b]/80 backdrop-blur-xl" />
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-navy-900/80 backdrop-blur-xl" />
       <div className="flex min-w-0 items-center gap-2.5 sm:gap-3.5">
         <MobileNav role={role} />
         <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-navy-100 to-navy-900 border border-amber-500/30 text-xs font-mono font-bold text-amber-400 shadow-[0_0_12px_rgba(224,163,39,0.2)]">
@@ -33,6 +34,7 @@ export function Header({ userName, role }: { userName?: string; role?: "ADMIN" |
       </div>
 
       <div className="flex shrink-0 items-center gap-2.5 sm:gap-4">
+        <ThemeToggle />
         <NotificationBell />
 
         <span

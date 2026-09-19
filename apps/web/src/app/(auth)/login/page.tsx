@@ -4,7 +4,7 @@ import { ShieldCheck, Sparkles } from "lucide-react";
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen flex bg-[#090a0f] text-white relative overflow-hidden">
+    <div className="force-dark min-h-screen flex bg-[#090a0f] text-white relative overflow-hidden">
       {/* Background ambient lighting */}
       <div className="absolute top-0 left-1/4 w-96 h-96 bg-brandRed-600/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />

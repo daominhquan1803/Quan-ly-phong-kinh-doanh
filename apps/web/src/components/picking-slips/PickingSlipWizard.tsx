@@ -310,7 +310,7 @@ export function PickingSlipWizard() {
             <select
               value={salesEmployeeId}
               onChange={(e) => setSalesEmployeeId(e.target.value)}
-              className="bg-[#18181b] border border-white/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500/60"
+              className="bg-gray-100 border border-white/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500/60"
             >
               <option value="">— Chọn NVKD phụ trách —</option>
               {employeesData?.users.map((u) => (
@@ -348,8 +348,8 @@ export function PickingSlipWizard() {
               </colgroup>
               <thead>
                 <tr className="text-left text-xs text-gray-400 uppercase tracking-wider border-b border-white/10">
-                  <th className="font-semibold px-2 py-2 bg-[#10121b] z-20" style={stickyStyle("check")}></th>
-                  <th className="font-semibold px-2 py-2 bg-[#10121b] z-20" style={stickyStyle("poCode")}>
+                  <th className="font-semibold px-2 py-2 bg-gray-100 z-20" style={stickyStyle("check")}></th>
+                  <th className="font-semibold px-2 py-2 bg-gray-100 z-20" style={stickyStyle("poCode")}>
                     <div className="flex flex-col gap-1">
                       <span>Số PO</span>
                       <input
@@ -361,7 +361,7 @@ export function PickingSlipWizard() {
                     </div>
                   </th>
                   <th
-                    className="font-semibold px-2 py-2 bg-[#10121b] z-20 border-r border-white/10"
+                    className="font-semibold px-2 py-2 bg-gray-100 z-20 border-r border-white/10"
                     style={stickyStyle("itemCode")}
                   >
                     <div className="flex flex-col gap-1">
@@ -410,7 +410,7 @@ export function PickingSlipWizard() {
                   const isChecked = checked.has(l.poTrackingLineId);
                   return (
                     <tr key={l.poTrackingLineId} className={cn("hover:bg-white/[0.02]", isChecked && "bg-amber-500/[0.07]")}>
-                      <td className="px-2 py-1.5 bg-[#10121b] z-10" style={stickyStyle("check")}>
+                      <td className="px-2 py-1.5 bg-gray-100 z-10" style={stickyStyle("check")}>
                         <input
                           type="checkbox"
                           checked={isChecked}
@@ -418,11 +418,11 @@ export function PickingSlipWizard() {
                           className="h-4 w-4 rounded border-white/20 text-amber-500 focus:ring-amber-500/40 cursor-pointer"
                         />
                       </td>
-                      <td className="px-2 py-1.5 font-mono text-amber-400 whitespace-nowrap bg-[#10121b] z-10" style={stickyStyle("poCode")}>
+                      <td className="px-2 py-1.5 font-mono text-amber-400 whitespace-nowrap bg-gray-100 z-10" style={stickyStyle("poCode")}>
                         {l.poCode}
                       </td>
                       <td
-                        className="px-2 py-1.5 font-mono text-gray-300 whitespace-nowrap bg-[#10121b] z-10 border-r border-white/10"
+                        className="px-2 py-1.5 font-mono text-gray-300 whitespace-nowrap bg-gray-100 z-10 border-r border-white/10"
                         style={stickyStyle("itemCode")}
                       >
                         {l.itemCode ?? "—"}
