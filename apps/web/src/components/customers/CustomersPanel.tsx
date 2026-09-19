@@ -66,7 +66,8 @@ function toRowEdit(c: CustomerRow): RowEdit {
   };
 }
 
-export function CustomersPanel() {
+/** readOnly = NVKD (SALES): chỉ xem khách của mình, không thêm/sửa/xoá/nhập Excel. */
+export function CustomersPanel({ readOnly = false }: { readOnly?: boolean }) {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
@@ -102,6 +103,7 @@ export function CustomersPanel() {
   // Cùng queryKey với DebtDashboard — dùng chung cache react-query cho danh sách nhân viên gán được.
   const { data: usersData } = useQuery({
     queryKey: ["admin-users-filter"],
+    enabled: !readOnly,
     queryFn: async () => {
       const res = await fetch("/api/admin/users");
       if (!res.ok) throw new Error("Không tải được danh sách nhân viên");
@@ -319,8 +321,8 @@ export function CustomersPanel() {
 
   return (
     <div className="space-y-6">
-      {/* 4 Thẻ KPI Glassmorphism Đầu Trang */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* 4 Thẻ KPI Glassmorphism Đầu Trang (thống kê gán NVKD chỉ có nghĩa với admin) */}
+      <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 ${readOnly ? "hidden" : ""}`}>
         {/* Card 1: Tổng khách hàng */}
         <div
           onClick={() => {
@@ -663,7 +665,7 @@ export function CustomersPanel() {
           </div>
 
           {/* Bộ lọc NVKD */}
-          <div className="relative">
+          <div className={`relative ${readOnly ? "hidden" : ""}`}>
             <select
               value={nvkdFilter}
               onChange={(e) => {
@@ -704,7 +706,7 @@ export function CustomersPanel() {
         </div>
 
         {/* Các nút hành động bên phải */}
-        <div className="flex items-center gap-2.5">
+        <div className={`flex items-center gap-2.5 ${readOnly ? "hidden" : ""}`}>
           <input
             ref={fileInputRef}
             type="file"
@@ -745,7 +747,7 @@ export function CustomersPanel() {
                 <th className="px-5 py-3.5 text-left min-w-[280px]">Tên khách hàng & Người liên hệ</th>
                 <th className="px-5 py-3.5 text-left w-64">NVKD phụ trách</th>
                 <th className="px-5 py-3.5 text-left min-w-[240px]">Thời hạn công nợ</th>
-                <th className="px-5 py-3.5 text-right w-44">Thao tác</th>
+                {!readOnly && <th className="px-5 py-3.5 text-right w-44">Thao tác</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200/40">
@@ -778,6 +780,12 @@ export function CustomersPanel() {
 
                     {/* Cột Tên khách hàng & Người liên hệ */}
                     <td className="px-5 py-3.5 align-middle">
+                      {readOnly ? (
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium text-ink">{c.customerName}</p>
+                          <p className="text-xs text-ink2/90">LH: {c.contactPerson || "—"}</p>
+                        </div>
+                      ) : (
                       <div className="space-y-1">
                         <input
                           value={edit.customerName}
@@ -795,10 +803,14 @@ export function CustomersPanel() {
                           />
                         </div>
                       </div>
+                      )}
                     </td>
 
                     {/* Cột NVKD phụ trách */}
                     <td className="px-5 py-3.5 align-middle">
+                      {readOnly ? (
+                        <span className="text-sm text-ink">{c.salesEmployee?.name ?? "—"}</span>
+                      ) : (
                       <div className="relative">
                         <select
                           value={edit.salesEmployeeId}
@@ -819,12 +831,13 @@ export function CustomersPanel() {
                           ))}
                         </select>
                       </div>
+                      )}
                     </td>
 
                     {/* Cột Thời hạn công nợ */}
                     <td className="px-5 py-3.5 align-middle">
                       <div className="space-y-1.5">
-                        <div className="flex items-center gap-2">
+                        <div className={`flex items-center gap-2 ${readOnly ? "hidden" : ""}`}>
                           <select
                             value={edit.paymentTermType}
                             onChange={(e) =>
@@ -869,7 +882,7 @@ export function CustomersPanel() {
                     </td>
 
                     {/* Cột Thao tác */}
-                    <td className="px-5 py-3.5 align-middle text-right">
+                    <td className={`px-5 py-3.5 align-middle text-right ${readOnly ? "hidden" : ""}`}>
                       <div className="flex items-center justify-end gap-1.5">
                         {isEditing && (
                           <>
@@ -920,7 +933,7 @@ export function CustomersPanel() {
 
               {filteredCustomers.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-5 py-12 text-center">
+                  <td colSpan={readOnly ? 4 : 5} className="px-5 py-12 text-center">
                     <div className="flex flex-col items-center justify-center space-y-2 text-muted-foreground">
                       <Building2 className="h-10 w-10 text-muted2 opacity-50" />
                       <p className="text-sm font-medium text-ink">Không tìm thấy khách hàng nào</p>

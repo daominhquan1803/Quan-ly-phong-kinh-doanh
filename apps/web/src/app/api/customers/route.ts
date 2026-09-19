@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@hoanggia/db";
-import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
+import { requireAdmin, requireSession, scopeByOwner, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    await requireAdmin();
+    // SALES chỉ xem khách do mình phụ trách (chỉ đọc); ADMIN xem toàn bộ.
+    const session = await requireSession();
     const customers = await prisma.customer.findMany({
+      where: scopeByOwner(session, "salesEmployeeId"),
       orderBy: { customerName: "asc" },
       include: { salesEmployee: { select: { id: true, name: true } } },
     });

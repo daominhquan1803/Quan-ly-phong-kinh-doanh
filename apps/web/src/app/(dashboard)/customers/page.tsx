@@ -1,7 +1,10 @@
 import { CustomersPanel } from "@/components/customers/CustomersPanel";
+import { auth } from "@/lib/auth";
 import { Users, ShieldCheck } from "lucide-react";
 
-export default function CustomersPage() {
+export default async function CustomersPage() {
+  const session = await auth();
+  const isAdmin = session?.user?.role === "ADMIN";
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-5">
@@ -11,19 +14,22 @@ export default function CustomersPage() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight text-white">Quản Lý Khách Hàng</h1>
+              <h1 className="text-2xl font-bold tracking-tight text-white">
+                {isAdmin ? "Quản Lý Khách Hàng" : "Khách Hàng Của Tôi"}
+              </h1>
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
                 <ShieldCheck className="h-3 w-3" /> Hồ Sơ Doanh Nghiệp
               </span>
             </div>
             <p className="text-xs text-gray-400 mt-0.5">
-              Hồ sơ khách hàng, phân công NVKD phụ trách và quy chuẩn hạn nợ — tự động kích hoạt tính hạn trên Hub Công Nợ
+              {isAdmin
+                ? "Hồ sơ khách hàng, phân công NVKD phụ trách và quy chuẩn hạn nợ — tự động kích hoạt tính hạn trên Hub Công Nợ"
+                : "Danh sách khách hàng do anh/chị phụ trách và quy chuẩn hạn nợ (chỉ xem — liên hệ quản trị viên nếu cần chỉnh sửa)"}
             </p>
           </div>
         </div>
       </div>
-      <CustomersPanel />
+      <CustomersPanel readOnly={!isAdmin} />
     </div>
   );
 }
-
