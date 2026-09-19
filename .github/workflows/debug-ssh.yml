@@ -1,0 +1,35 @@
+name: Debug SSH (temporary)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH debug
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd ${{ secrets.VPS_DEPLOY_PATH }}
+            docker compose exec -T worker node -e "
+            const {prisma}=require('/repo/packages/db/dist/index.js');
+            (async () => {
+              const batches = await prisma.weekPlanResultImportBatch.findMany({ orderBy: { createdAt: 'desc' }, take: 8, include: { createdBy: { select: { name: true } } } });
+              console.log('===== Recent import batches =====');
+              for (const b of batches) console.log(b.createdAt.toISOString(), b.createdBy && b.createdBy.name, b.fileName, 'rows=', b.totalRows, 'created=', b.createdCount, 'errors=', b.errorCount, JSON.stringify(b.errorReport || null).slice(0, 600));
+              console.log('===== Entries per batch: metric / weekStart / entryDate counts =====');
+              for (const b of batches.slice(0, 4)) {
+                const entries = await prisma.weekPlanResultEntry.findMany({ where: { importBatchId: b.id }, select: { metric: true, weekStart: true, entryDate: true, customerName: true } });
+                const g = {};
+                for (const e of entries) { const k = e.metric + ' | week ' + e.weekStart.toISOString().slice(0,10) + ' | date ' + e.entryDate.toISOString().slice(0,10); g[k] = (g[k]||0)+1; }
+                console.log('-- batch', b.fileName, 'entries=', entries.length);
+                console.log(JSON.stringify(g, null, 1));
+              }
+              await prisma.\$disconnect();
+            })();
+            "
