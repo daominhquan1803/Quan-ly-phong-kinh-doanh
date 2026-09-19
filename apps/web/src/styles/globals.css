@@ -82,3 +82,19 @@
     @apply text-sm rounded-xl border border-gray-200/80 bg-navy-50/80 py-2.5 px-3.5 w-full text-ink placeholder:text-muted2/60 transition-all focus:border-amber-500 focus:bg-navy-50 focus:outline-none focus:ring-1 focus:ring-amber-500;
   }
 }
+
+@layer utilities {
+  .logo-3d-spin {
+    animation: autoSpin3D 8s linear infinite;
+    transform-style: preserve-3d;
+  }
+  
+  @keyframes autoSpin3D {
+    0% {
+      transform: perspective(600px) rotateY(0deg);
+    }
+    100% {
+      transform: perspective(600px) rotateY(360deg);
+    }
+  }
+}
