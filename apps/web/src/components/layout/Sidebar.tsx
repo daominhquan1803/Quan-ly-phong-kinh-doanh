@@ -17,8 +17,8 @@ import {
   ClipboardList,
   PackageCheck,
   Contact,
-  Sparkles,
 } from "lucide-react";
+import { SidebarBanner } from "./SidebarBanner";
 
 export const NAV_ITEMS = [
   { href: "/", label: "Tổng quan", icon: LayoutDashboard, adminOnly: false },
@@ -85,16 +85,7 @@ export function Sidebar({ role }: { role?: "ADMIN" | "SALES" }) {
       </nav>
 
       {/* Brand Mini Banner */}
-      <div className="mx-3 mb-3 overflow-hidden rounded-xl border border-gray-200/80 bg-navy-900/50 shadow-sm backdrop-blur-md">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/images/company-banner.webp" alt="Hoàng Gia PS" className="h-14 w-full object-cover opacity-80" />
-        <div className="bg-navy-900/90 px-3 py-2 border-t border-gray-200/50">
-          <p className="text-[11px] font-semibold text-ink flex items-center gap-1">
-            Hoàng Gia PS <Sparkles className="h-2.5 w-2.5 text-amber-400 inline" />
-          </p>
-          <p className="text-[10px] text-muted2">Giải pháp đóng gói toàn diện</p>
-        </div>
-      </div>
+      <SidebarBanner />
 
       {/* Footer Copyright */}
       <div className="px-5 py-3.5 border-t border-gray-200/70 text-[11px] text-muted2 flex items-center justify-between">

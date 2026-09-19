@@ -4,6 +4,14 @@ const path = require("path");
 const nextConfig = {
   output: "standalone",
   transpilePackages: ["@hoanggia/db"],
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "hoanggiaps.com",
+      },
+    ],
+  },
   experimental: {
     // Monorepo (npm workspaces) — chỉ định rõ root để Next.js trace đúng file cho standalone build.
     outputFileTracingRoot: path.join(__dirname, "../../"),
