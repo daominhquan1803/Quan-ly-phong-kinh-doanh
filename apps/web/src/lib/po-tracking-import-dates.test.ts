@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import * as XLSX from "xlsx";
-import { excelCellToDate, parsePoTrackingExcel } from "@hoanggia/db";
+import { excelCellToDate, parsePoTrackingExcel, baselineSlipCutoff } from "@hoanggia/db";
 
 const ymd = (d: Date | null) => (d ? [d.getFullYear(), d.getMonth() + 1, d.getDate()] : null);
 
@@ -48,5 +48,18 @@ describe("parsePoTrackingExcel — ngày giao", () => {
     expect(rows).toHaveLength(1);
     expect(ymd(rows[0].poDate)).toEqual([2026, 8, 1]);
     expect(ymd(rows[0].delivery1?.date ?? null)).toEqual([2026, 9, 5]);
+  });
+});
+
+describe("baselineSlipCutoff", () => {
+  it("mốc = 00:00 giờ VN của ngày nhập file (phiếu ngày nhập vẫn được tính, ngày trước bị nền hấp thụ)", () => {
+    // nhập 17/09/2026 14:48 giờ VN (= 07:48 UTC) -> mốc 17/09 00:00 VN = 16/09 17:00 UTC
+    expect(baselineSlipCutoff(new Date("2026-09-17T07:48:20.225Z")).toISOString()).toBe("2026-09-16T17:00:00.000Z");
+    // nhập 17/09 00:30 giờ VN (= 16/09 17:30 UTC) vẫn thuộc ngày 17/09 VN
+    expect(baselineSlipCutoff(new Date("2026-09-16T17:30:00.000Z")).toISOString()).toBe("2026-09-16T17:00:00.000Z");
+    // Phiếu ngày 17/09 lưu ở 00:00 VN = đúng mốc -> được tính (>= mốc)
+    expect(new Date("2026-09-16T17:00:00.000Z") >= baselineSlipCutoff(new Date("2026-09-17T07:48:20.225Z"))).toBe(true);
+    // Phiếu ngày 16/09 (00:00 VN = 15/09 17:00 UTC) bị loại
+    expect(new Date("2026-09-15T17:00:00.000Z") < baselineSlipCutoff(new Date("2026-09-17T07:48:20.225Z"))).toBe(true);
   });
 });

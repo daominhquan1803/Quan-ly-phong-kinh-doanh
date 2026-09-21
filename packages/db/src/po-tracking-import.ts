@@ -2,6 +2,7 @@ import * as XLSX from "xlsx";
 import { prisma } from "./index";
 import {
   getSlipAggForAllLines,
+  baselineSlipCutoff,
   computeLineDeliveryFields,
   normPoStatus,
   PO_CLOSED_STATUS,
@@ -205,7 +206,7 @@ export async function importPoTrackingRows(rows: ParsedPoTrackingRow[], batchId:
   // slip cũ hơn (đã "hấp thụ" vào nền) để không bị đếm lại lần sau — tránh lặp lại bug đếm trùng
   // doanh số đã xảy ra 17/09/2026 khi nhập lại baseline đè lên dữ liệu Phiếu đi hàng đã có sẵn.
   const batch = await prisma.poTrackingImportBatch.findUniqueOrThrow({ where: { id: batchId }, select: { createdAt: true } });
-  const slipAggByLine = await getSlipAggForAllLines(batch.createdAt);
+  const slipAggByLine = await getSlipAggForAllLines(baselineSlipCutoff(batch.createdAt));
 
   let created = 0;
   let updated = 0;
@@ -283,7 +284,7 @@ export async function importPoTrackingRows(rows: ParsedPoTrackingRow[], batchId:
       // Xoá đợt giao Phiếu đi hàng ĐÃ bị nền mới hấp thụ (eventDate trước mốc nhập file này) — xem
       // giải thích ở batch.createdAt phía trên.
       await prisma.poDeliveryEvent.deleteMany({
-        where: { lineId: line.id, sourceShipmentSlipId: { not: null }, eventDate: { lt: batch.createdAt } },
+        where: { lineId: line.id, sourceShipmentSlipId: { not: null }, eventDate: { lt: baselineSlipCutoff(batch.createdAt) } },
       });
       const slots: [ParsedPoTrackingRow["delivery1"], number][] = [
         [r.delivery1, 1],

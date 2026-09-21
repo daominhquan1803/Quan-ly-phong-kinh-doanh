@@ -139,6 +139,19 @@ export interface SlipAgg {
  * Phiếu đi hàng theo xác nhận của anh Quân) — không cộng lại các đợt đó lần nữa, tránh đếm trùng
  * doanh số (bug thật đã xảy ra 17/09/2026, xem scripts/repair-redundant-slip-events.ts).
  */
+/**
+ * Mốc "nền đã bao gồm": file PO tracking nhập ở thời điểm `batchCreatedAt` chứa các đợt giao đến HẾT NGÀY
+ * HÔM TRƯỚC ngày nhập (file 16/09 nhập lúc 14h48 ngày 17/09) — nên mốc là 00:00 giờ VN của NGÀY NHẬP: Phiếu
+ * đi hàng ngày 17/09 trở đi vẫn được tính, từ 16/09 trở về trước bị nền hấp thụ. (Trước 21/09/2026 mốc là
+ * đúng thời điểm nhập nên phiếu ngày 17/09 — lưu ở 00:00 — bị loại nhầm.) Quy ước vận hành: nhập file PO
+ * tracking gốc vào sáng/ngày sau ngày file, rồi upload phiếu đi hàng từ ngày nhập trở đi.
+ */
+export function baselineSlipCutoff(batchCreatedAt: Date): Date {
+  const VN_OFFSET_MS = 7 * 3600 * 1000;
+  const vn = new Date(batchCreatedAt.getTime() + VN_OFFSET_MS);
+  return new Date(Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), vn.getUTCDate()) - VN_OFFSET_MS);
+}
+
 export async function getSlipAggForAllLines(sinceEventDate?: Date): Promise<Map<string, SlipAgg>> {
   const rows = await prisma.poDeliveryEvent.groupBy({
     by: ["lineId"],
@@ -223,7 +236,7 @@ export async function recomputeLineDeliveryFields(lineId: string): Promise<void>
     },
   });
   if (!line) return;
-  const slipAgg = await getSlipAggForLine(lineId, line.importBatch?.createdAt);
+  const slipAgg = await getSlipAggForLine(lineId, line.importBatch ? baselineSlipCutoff(line.importBatch.createdAt) : undefined);
   const fields = computeLineDeliveryFields(
     {
       poValue: Number(line.poValue),
@@ -471,7 +484,7 @@ export async function applyShipmentSlipDeliveries(
     if (candidates.length === 1) {
       const line = candidates[0];
       const res = await createEvent(
-        { id: line.id, contractPrice: line.contractPrice != null ? Number(line.contractPrice) : null, poValue: Number(line.poValue), poQuantity: line.poQuantity != null ? Number(line.poQuantity) : null, salesEmployeeId: line.salesEmployeeId, baselineCutoff: line.importBatch?.createdAt ?? null },
+        { id: line.id, contractPrice: line.contractPrice != null ? Number(line.contractPrice) : null, poValue: Number(line.poValue), poQuantity: line.poQuantity != null ? Number(line.poQuantity) : null, salesEmployeeId: line.salesEmployeeId, baselineCutoff: line.importBatch ? baselineSlipCutoff(line.importBatch.createdAt) : null },
         item.qtyActual
       );
       if (res === "noPrice") {
@@ -494,7 +507,7 @@ export async function applyShipmentSlipDeliveries(
     const sorted = [...candidates].sort((a, b) => parseOccurrenceIndex(a.naturalKey) - parseOccurrenceIndex(b.naturalKey));
     const allocCandidates: AllocationCandidate[] = [];
     for (const c of sorted) {
-      const otherSlipAgg = await getSlipAggForLine(c.id, c.importBatch?.createdAt); // đã loại trừ chính phiếu này (event của nó đã bị xoá ở trên)
+      const otherSlipAgg = await getSlipAggForLine(c.id, c.importBatch ? baselineSlipCutoff(c.importBatch.createdAt) : undefined); // đã loại trừ chính phiếu này (event của nó đã bị xoá ở trên)
       const used = Number(c.baselineDeliveredQty ?? 0) + otherSlipAgg.qty + (allocatedThisRun.get(c.id) ?? 0);
       allocCandidates.push({ lineId: c.id, capacity: Number(c.poQuantity) - used });
     }
@@ -505,7 +518,7 @@ export async function applyShipmentSlipDeliveries(
     for (const alloc of allocations) {
       const line = sorted.find((c) => c.id === alloc.lineId)!;
       const res = await createEvent(
-        { id: line.id, contractPrice: line.contractPrice != null ? Number(line.contractPrice) : null, poValue: Number(line.poValue), poQuantity: Number(line.poQuantity), salesEmployeeId: line.salesEmployeeId, baselineCutoff: line.importBatch?.createdAt ?? null },
+        { id: line.id, contractPrice: line.contractPrice != null ? Number(line.contractPrice) : null, poValue: Number(line.poValue), poQuantity: Number(line.poQuantity), salesEmployeeId: line.salesEmployeeId, baselineCutoff: line.importBatch ? baselineSlipCutoff(line.importBatch.createdAt) : null },
         alloc.qty
       );
       if (res === "created") anyAllocated = true;
