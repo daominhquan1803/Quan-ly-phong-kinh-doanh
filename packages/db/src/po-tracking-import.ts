@@ -51,8 +51,27 @@ export interface ParsedPoTrackingRow {
   content: string | null;
 }
 
+/**
+ * Ô ngày Excel -> Date (nửa đêm giờ máy chủ). Đọc file với cellDates=false nên ô ngày là SỐ (serial),
+ * quy đổi bằng XLSX.SSF.parse_date_code — KHÔNG dùng cellDates:true: thư viện xlsx (0.18.5) đổi serial
+ * nguyên ngày thành 23:59:30 của NGÀY HÔM TRƯỚC khi máy chủ chạy múi giờ Việt Nam, khiến mọi ngày
+ * giao (và ngày PO) lùi 1 ngày — lệch doanh số theo ngày/tháng (phát hiện 21/09/2026 khi đối chiếu
+ * file PO tracking 19/09 với app: 324/326 đợt giao lệch đúng 1 ngày).
+ * Nếu vẫn nhận được Date (nguồn khác), cộng 12 giờ rồi lấy ngày để chịu được lệch vài giây/phút.
+ */
+export function excelCellToDate(v: unknown): Date | null {
+  if (typeof v === "number" && v > 20000 && v < 80000) {
+    const p = XLSX.SSF.parse_date_code(v);
+    return p ? new Date(p.y, p.m - 1, p.d) : null;
+  }
+  if (v instanceof Date && !isNaN(v.getTime())) {
+    const n = new Date(v.getTime() + 12 * 3600 * 1000);
+    return new Date(n.getFullYear(), n.getMonth(), n.getDate());
+  }
+  return null;
+}
 function toDate(v: unknown): Date | null {
-  return v instanceof Date && !isNaN(v.getTime()) ? v : null;
+  return excelCellToDate(v);
 }
 function toNum(v: unknown): number | null {
   return typeof v === "number" && !isNaN(v) ? v : null;
@@ -91,7 +110,7 @@ export function parsePoTrackingExcel(buffer: Buffer): ParsedPoTrackingRow[] {
       `Không tìm thấy sheet dữ liệu — cần 1 trong các tên: ${KNOWN_SHEET_NAMES.join(", ")}.`
     );
   }
-  const wb = XLSX.read(buffer, { type: "buffer", cellDates: true, sheets: [sheetName] });
+  const wb = XLSX.read(buffer, { type: "buffer", sheets: [sheetName] }); // KHÔNG cellDates — xem excelCellToDate
   const ws = wb.Sheets[sheetName];
   // Range tường minh vì !ref của file này lỡ tràn tới cột XFA (do định dạng thừa), khiến
   // sheet_to_json không giới hạn range sẽ quét cực chậm/không cần thiết.
