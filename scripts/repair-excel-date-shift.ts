@@ -56,6 +56,18 @@ async function main() {
   const badReq = lines.filter((l) => l.requestedDeliveryDate && isBuggy(l.requestedDeliveryDate));
   console.log(`Dòng PO: ${lines.length}; poDate lệch: ${badPo.length}; requestedDeliveryDate lệch: ${badReq.length}`);
 
+  // Mẫu để đối chiếu tay với file Excel (ngày thật trong file: D08.26DT03A/AA05223 PO 01/08/2026, giao
+  // 19/08, 27/08, 05/09; D09.26PD01A/SI08635 PO 03/09/2026).
+  for (const [po, item] of [["D08.26DT03A", "AA05223"], ["D09.26PD01A", "SI08635"]]) {
+    const ls = await prisma.poTrackingLine.findMany({
+      where: { poCode: po, itemCode: item },
+      select: { poDate: true, requestedDeliveryDate: true, deliveryEvents: { select: { eventDate: true, sourceShipmentSlipId: true } } },
+    });
+    for (const l of ls) {
+      console.log(`Mẫu ${po}/${item}: poDate=${l.poDate?.toISOString()} yêu cầu giao=${l.requestedDeliveryDate?.toISOString()} đợt giao=${JSON.stringify(l.deliveryEvents.map((e) => e.eventDate.toISOString() + (e.sourceShipmentSlipId ? "(phiếu)" : "")))}`);
+    }
+  }
+
   if (!apply) return;
   for (const e of buggy) await prisma.poDeliveryEvent.update({ where: { id: e.id }, data: { eventDate: fixed(e.eventDate) } });
   for (const l of badPo) await prisma.poTrackingLine.update({ where: { id: l.id }, data: { poDate: fixed(l.poDate as Date) } });
