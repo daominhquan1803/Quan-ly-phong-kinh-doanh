@@ -23,6 +23,22 @@ interface CommitResponse {
   errors: { rowNumber: number; message: string }[];
   deliveryMatchedCount: number;
   deliveryUnmatchedItems: string[];
+  skippedIdenticalCount: number;
+  skippedBeforeBaselineCount: number;
+  conflicts: { slipNumber: string; customerName: string | null; differences: string[] }[];
+}
+
+/** Gộp kết quả lần ghi đè (sau khi admin xác nhận) vào kết quả lần nhập đầu. */
+function mergeResults(a: CommitResponse, b: CommitResponse): CommitResponse {
+  return {
+    ...a,
+    createdCount: a.createdCount + b.createdCount,
+    updatedCount: a.updatedCount + b.updatedCount,
+    deliveryMatchedCount: a.deliveryMatchedCount + b.deliveryMatchedCount,
+    deliveryUnmatchedItems: [...a.deliveryUnmatchedItems, ...b.deliveryUnmatchedItems],
+    skippedBeforeBaselineCount: a.skippedBeforeBaselineCount + b.skippedBeforeBaselineCount,
+    conflicts: b.conflicts,
+  };
 }
 
 export function ShipmentSlipImportWizard() {
@@ -34,6 +50,7 @@ export function ShipmentSlipImportWizard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CommitResponse | null>(null);
+  const [overwriteChoice, setOverwriteChoice] = useState<Set<string>>(new Set());
 
   async function fetchPreview(f: File, sheetName?: string) {
     setError(null);
@@ -65,7 +82,7 @@ export function ShipmentSlipImportWizard() {
     await fetchPreview(file, sheetName);
   }
 
-  async function handleCommit() {
+  async function handleCommit(overwrite: string[] = []) {
     if (!file || !preview) return;
     setLoading(true);
     setError(null);
@@ -74,11 +91,13 @@ export function ShipmentSlipImportWizard() {
       formData.append("file", file);
       formData.append("mapping", JSON.stringify(mapping));
       formData.append("sheetName", preview.sheetName);
+      if (overwrite.length > 0) formData.append("overwrite", JSON.stringify(overwrite));
 
       const res = await fetch("/api/shipment-slips/import/commit", { method: "POST", body: formData });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Import thất bại");
-      setResult(json);
+      setResult((prev) => (overwrite.length > 0 && prev ? mergeResults(prev, json) : json));
+      setOverwriteChoice(new Set());
       setStep("result");
       router.refresh();
     } catch (e) {
@@ -217,7 +236,7 @@ export function ShipmentSlipImportWizard() {
               ← Chọn file khác
             </button>
             <button
-              onClick={handleCommit}
+              onClick={() => handleCommit()}
               disabled={loading || requiredMissing.length > 0}
               className="rounded-xl bg-gradient-to-r from-brandRed-600 to-amber-600 hover:from-brandRed-500 hover:to-amber-500 px-6 py-2.5 text-xs font-semibold text-white shadow-[0_0_20px_rgba(225,29,72,0.3)] border border-brandRed-500/40 disabled:opacity-50 transition-all"
             >
@@ -265,10 +284,79 @@ export function ShipmentSlipImportWizard() {
             </div>
           )}
 
+          {result.conflicts.length > 0 && (
+            <div className="glass-card border border-amber-500/40 bg-amber-500/5 rounded-2xl p-5 space-y-3">
+              <p className="flex items-center gap-2 text-sm font-semibold text-amber-400">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <span>
+                  {result.conflicts.length} phiếu đã có trong hệ thống nhưng SỐ LIỆU KHÁC — chưa ghi đè. Chọn phiếu cần ghi đè bằng số liệu trong file:
+                </span>
+              </p>
+              <ul className="space-y-2">
+                {result.conflicts.map((c) => (
+                  <li key={c.slipNumber} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                    <label className="flex items-start gap-2.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={overwriteChoice.has(c.slipNumber)}
+                        onChange={(e) =>
+                          setOverwriteChoice((prev) => {
+                            const next = new Set(prev);
+                            if (e.target.checked) next.add(c.slipNumber);
+                            else next.delete(c.slipNumber);
+                            return next;
+                          })
+                        }
+                      />
+                      <span className="text-xs">
+                        <span className="font-mono font-semibold text-white">{c.slipNumber}</span>
+                        {c.customerName && <span className="text-gray-400"> — {c.customerName}</span>}
+                        <ul className="mt-1 list-disc pl-5 text-gray-300 font-mono">
+                          {c.differences.slice(0, 8).map((d, i) => (
+                            <li key={i}>{d}</li>
+                          ))}
+                          {c.differences.length > 8 && <li>… và {c.differences.length - 8} khác biệt nữa</li>}
+                        </ul>
+                      </span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={() => setOverwriteChoice(new Set(result.conflicts.map((c) => c.slipNumber)))}
+                  className="rounded-xl border border-white/15 bg-white/[0.03] hover:bg-white/[0.08] px-3 py-2 text-xs font-medium text-gray-300 transition-colors"
+                >
+                  Chọn tất cả
+                </button>
+                <button
+                  onClick={() => handleCommit(Array.from(overwriteChoice))}
+                  disabled={loading || overwriteChoice.size === 0}
+                  className="rounded-xl bg-amber-500 hover:bg-amber-400 px-4 py-2 text-xs font-semibold text-gray-950 disabled:opacity-50 transition-all"
+                >
+                  {loading ? "Đang ghi đè..." : `Ghi đè ${overwriteChoice.size} phiếu đã chọn`}
+                </button>
+                <span className="text-[11px] text-gray-400">Phiếu không chọn sẽ giữ nguyên số liệu hiện có.</span>
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center gap-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs px-4 py-3">
             <CheckCircle2 className="h-4 w-4 shrink-0" />
-            <span>Đã lưu thành công vào danh sách Phiếu xuất kho.</span>
+            <span>
+              Đã lưu vào danh sách Phiếu xuất kho.
+              {result.skippedIdenticalCount > 0 && ` Bỏ qua ${result.skippedIdenticalCount} phiếu đã có và trùng số liệu.`}
+            </span>
           </div>
+
+          {result.skippedBeforeBaselineCount > 0 && (
+            <div className="flex items-center gap-2.5 rounded-xl bg-white/[0.04] border border-white/10 text-gray-300 text-xs px-4 py-3">
+              <span>
+                {result.skippedBeforeBaselineCount} dòng hàng có ngày phiếu trước lần nhập file PO tracking gần nhất nên không ghi thêm vào doanh số (dữ liệu nền đã bao gồm, tránh tính trùng).
+              </span>
+            </div>
+          )}
 
           <div className="flex items-center gap-2.5 rounded-xl bg-teal-500/10 border border-teal-500/30 text-teal-300 text-xs px-4 py-3">
             <CheckCircle2 className="h-4 w-4 shrink-0 text-teal-400" />

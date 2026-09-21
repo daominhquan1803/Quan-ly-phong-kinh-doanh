@@ -286,6 +286,8 @@ export interface ShipmentSlipDeliveryItem {
 export interface ApplyShipmentSlipResult {
   matchedCount: number;
   unmatchedItems: string[];
+  // Số dòng hàng KHÔNG ghi đợt giao vì ngày phiếu trước mốc nhập PO tracking (nền đã bao gồm).
+  skippedBeforeBaseline: number;
 }
 
 /** Số thứ tự xuất hiện của 1 dòng PO trong file PO tracking gốc — hậu tố cuối naturalKey (vd
@@ -346,6 +348,9 @@ const CANDIDATE_LINE_SELECT = {
   poQuantity: true,
   salesEmployeeId: true,
   baselineDeliveredQty: true,
+  // Mốc nhập file PO tracking gần nhất của dòng — đợt giao Phiếu đi hàng có ngày TRƯỚC mốc này đã nằm
+  // trong "nền" rồi, không ghi lại (xem createEvent trong applyShipmentSlipDeliveries).
+  importBatch: { select: { createdAt: true } },
 } as const;
 
 /**
@@ -408,18 +413,25 @@ export async function applyShipmentSlipDeliveries(
   // SL đã phân bổ cho từng dòng TRONG CHÍNH LẦN CHẠY NÀY — trừ tiếp vào capacity của các dòng
   // hàng khác trong cùng phiếu nếu chúng cũng rơi vào cùng nhóm nhiều-dòng-cùng-mã.
   const allocatedThisRun = new Map<string, number>();
+  let skippedBeforeBaseline = 0;
 
+  // "created" = đã ghi đợt giao; "skipped" = ngày phiếu TRƯỚC mốc nhập PO tracking của dòng (nền đã bao
+  // gồm, ghi thêm sẽ tính trùng doanh số — bug thật 17-21/09/2026); "noPrice" = thiếu đơn giá.
   async function createEvent(
-    line: { id: string; contractPrice: number | null; poValue: number; poQuantity: number | null; salesEmployeeId: string | null },
+    line: { id: string; contractPrice: number | null; poValue: number; poQuantity: number | null; salesEmployeeId: string | null; baselineCutoff: Date | null },
     qty: number
-  ): Promise<boolean> {
+  ): Promise<"created" | "skipped" | "noPrice"> {
+    if (line.baselineCutoff && (slipDate ?? new Date()) < line.baselineCutoff) {
+      skippedBeforeBaseline++;
+      return "skipped";
+    }
     const unitPrice =
       line.contractPrice != null
         ? line.contractPrice
         : line.poQuantity != null && line.poQuantity > 0
         ? line.poValue / line.poQuantity
         : null;
-    if (unitPrice == null) return false;
+    if (unitPrice == null) return "noPrice";
     await prisma.poDeliveryEvent.create({
       data: {
         lineId: line.id,
@@ -433,7 +445,7 @@ export async function applyShipmentSlipDeliveries(
     });
     touchedLineIds.add(line.id);
     allocatedThisRun.set(line.id, (allocatedThisRun.get(line.id) ?? 0) + qty);
-    return true;
+    return "created";
   }
 
   for (const item of items) {
@@ -458,15 +470,15 @@ export async function applyShipmentSlipDeliveries(
 
     if (candidates.length === 1) {
       const line = candidates[0];
-      const ok = await createEvent(
-        { id: line.id, contractPrice: line.contractPrice != null ? Number(line.contractPrice) : null, poValue: Number(line.poValue), poQuantity: line.poQuantity != null ? Number(line.poQuantity) : null, salesEmployeeId: line.salesEmployeeId },
+      const res = await createEvent(
+        { id: line.id, contractPrice: line.contractPrice != null ? Number(line.contractPrice) : null, poValue: Number(line.poValue), poQuantity: line.poQuantity != null ? Number(line.poQuantity) : null, salesEmployeeId: line.salesEmployeeId, baselineCutoff: line.importBatch?.createdAt ?? null },
         item.qtyActual
       );
-      if (!ok) {
+      if (res === "noPrice") {
         unmatchedItems.push(`${item.poSaleNumber} / ${item.itemCode ?? item.itemName} (không có đơn giá để tính giá trị)`);
         continue;
       }
-      matchedCount++;
+      if (res === "created") matchedCount++;
       continue;
     }
 
@@ -482,7 +494,7 @@ export async function applyShipmentSlipDeliveries(
     const sorted = [...candidates].sort((a, b) => parseOccurrenceIndex(a.naturalKey) - parseOccurrenceIndex(b.naturalKey));
     const allocCandidates: AllocationCandidate[] = [];
     for (const c of sorted) {
-      const otherSlipAgg = await getSlipAggForLine(c.id); // đã loại trừ chính phiếu này (event của nó đã bị xoá ở trên)
+      const otherSlipAgg = await getSlipAggForLine(c.id, c.importBatch?.createdAt); // đã loại trừ chính phiếu này (event của nó đã bị xoá ở trên)
       const used = Number(c.baselineDeliveredQty ?? 0) + otherSlipAgg.qty + (allocatedThisRun.get(c.id) ?? 0);
       allocCandidates.push({ lineId: c.id, capacity: Number(c.poQuantity) - used });
     }
@@ -492,12 +504,12 @@ export async function applyShipmentSlipDeliveries(
     let anyPriceMissing = false;
     for (const alloc of allocations) {
       const line = sorted.find((c) => c.id === alloc.lineId)!;
-      const ok = await createEvent(
-        { id: line.id, contractPrice: line.contractPrice != null ? Number(line.contractPrice) : null, poValue: Number(line.poValue), poQuantity: Number(line.poQuantity), salesEmployeeId: line.salesEmployeeId },
+      const res = await createEvent(
+        { id: line.id, contractPrice: line.contractPrice != null ? Number(line.contractPrice) : null, poValue: Number(line.poValue), poQuantity: Number(line.poQuantity), salesEmployeeId: line.salesEmployeeId, baselineCutoff: line.importBatch?.createdAt ?? null },
         alloc.qty
       );
-      if (ok) anyAllocated = true;
-      else anyPriceMissing = true;
+      if (res === "created") anyAllocated = true;
+      else if (res === "noPrice") anyPriceMissing = true;
     }
     if (anyAllocated) matchedCount++;
     if (anyPriceMissing) {
@@ -509,7 +521,7 @@ export async function applyShipmentSlipDeliveries(
     await recomputeLineDeliveryFields(lineId);
   }
 
-  return { matchedCount, unmatchedItems };
+  return { matchedCount, unmatchedItems, skippedBeforeBaseline };
 }
 
 export interface ResyncAllShipmentSlipsResult {

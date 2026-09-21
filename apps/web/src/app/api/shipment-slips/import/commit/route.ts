@@ -3,6 +3,7 @@ import { prisma, applyShipmentSlipDeliveries } from "@hoanggia/db";
 import { parseShipmentSlipsWithMapping } from "@/lib/shipment-slip-parser";
 import { ShipmentSlipFieldKey, getMissingRequiredShipmentSlipFields } from "@/lib/shipment-slip-fields";
 import { requireSession, UnauthorizedError } from "@/lib/rbac";
+import { diffShipmentSlip } from "@/lib/shipment-slip-diff";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,11 @@ export async function POST(req: NextRequest) {
     }
 
     const mapping: Partial<Record<ShipmentSlipFieldKey, string>> = JSON.parse(mappingRaw);
+    // Số phiếu admin đã xác nhận cho ghi đè (phiếu đã có nhưng số liệu khác) — mặc định không phiếu nào.
+    const overwriteRaw = formData.get("overwrite");
+    const overwriteSet = new Set<string>(
+      typeof overwriteRaw === "string" && overwriteRaw ? (JSON.parse(overwriteRaw) as string[]) : []
+    );
     // Đối chiếu server-side với đúng danh sách field bắt buộc của wizard (phòng khi client bị
     // qua mặt) — đây chính là nguyên nhân gây lỗi thật trước đó: phiếu vẫn commit được dù
     // thiếu Số PO/SL thực xuất, khiến toàn bộ dòng hàng không tự ghi nhận vào Tiến độ giao
@@ -51,9 +57,33 @@ export async function POST(req: NextRequest) {
     let createdCount = 0;
     let updatedCount = 0;
     let deliveryMatchedCount = 0;
+    let skippedIdenticalCount = 0;
+    let skippedBeforeBaselineCount = 0;
     const deliveryUnmatchedItems: string[] = [];
+    const conflicts: { slipNumber: string; customerName: string | null; differences: string[] }[] = [];
 
     for (const slip of slips) {
+      // Phiếu đã có: trùng hệt số liệu → bỏ qua hẳn (không ghi lại, không sinh lại đợt giao); khác số
+      // liệu → CHƯA ghi, trả về danh sách để admin xác nhận rồi mới ghi đè (anh Quân chốt 21/09/2026).
+      const already = await prisma.shipmentSlip.findUnique({
+        where: { slipNumber: slip.slipNumber },
+        select: {
+          slipDate: true,
+          items: { select: { poSaleNumber: true, itemCode: true, itemName: true, qtyActual: true } },
+        },
+      });
+      if (already) {
+        const differences = diffShipmentSlip(already, { slipDate: slip.slipDate, items: slip.items });
+        if (differences.length === 0) {
+          skippedIdenticalCount++;
+          continue;
+        }
+        if (!overwriteSet.has(slip.slipNumber)) {
+          conflicts.push({ slipNumber: slip.slipNumber, customerName: slip.customerName, differences });
+          continue;
+        }
+      }
+
       // Tự khớp đơn hàng nếu "Số PO bán" của dòng hàng đầu tiên trùng đúng 1 mã đơn đang có
       // trong hệ thống — không bắt buộc, chỉ để tiện đối chiếu, không tạo lỗi nếu không khớp.
       const poCode = slip.items.find((it) => it.poSaleNumber)?.poSaleNumber ?? null;
@@ -120,6 +150,7 @@ export async function POST(req: NextRequest) {
         }))
       );
       deliveryMatchedCount += deliveryResult.matchedCount;
+      skippedBeforeBaselineCount += deliveryResult.skippedBeforeBaseline;
       deliveryUnmatchedItems.push(...deliveryResult.unmatchedItems);
     }
 
@@ -137,6 +168,9 @@ export async function POST(req: NextRequest) {
       errors,
       deliveryMatchedCount,
       deliveryUnmatchedItems,
+      skippedIdenticalCount,
+      skippedBeforeBaselineCount,
+      conflicts,
     });
   } catch (err) {
     if (err instanceof UnauthorizedError) return NextResponse.json({ error: err.message }, { status: 401 });
