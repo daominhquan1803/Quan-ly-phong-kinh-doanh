@@ -48,3 +48,10 @@ test-results/
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local scratch: file sao lưu tay + output của graphify
+*.backup
+graphify-out/
+
+# File bàn giao của dây chuyền planner/coder/tester/reviewer (/ship) — chỉ dùng cục bộ
+.bangiao/
