@@ -1,17 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn, formatCurrencyVND, formatDateVN, toDateInputValueVN } from "@/lib/utils";
 import { normalizeVN } from "@/lib/text-normalize";
+import { normalizeCustomerCode } from "@/lib/debt-customer-match";
 import { computeDebtStatus, remainingAmount, overdueDays, DEBT_STATUS_LABEL, DebtStatus } from "@/lib/debt-status";
+import { reminderMilestoneFor, DEBT_REMINDER_MILESTONE_LABEL, DebtReminderMilestone } from "@/lib/debt-reminder";
 import { DebtStatusBadge } from "./DebtStatusBadge";
 import { DebtPaymentsImportWizard } from "./DebtPaymentsImportWizard";
 import { ManualPaymentModal, type ManualPaymentInvoice } from "./ManualPaymentModal";
 import { DebtUnmatchedPaymentsPanel } from "./DebtUnmatchedPaymentsPanel";
 import { EmployeeFilterSelect } from "@/components/shared/EmployeeFilterSelect";
 import { FilterInput, SortableTh, toggleSort, type SortState } from "@/components/shared/SortableFilterableTable";
-import { UploadCloud, ChevronLeft, ChevronRight, X, CheckCircle2, Banknote } from "lucide-react";
+import { UploadCloud, ChevronLeft, ChevronRight, X, CheckCircle2, Banknote, Mail, Send } from "lucide-react";
 
 interface InvoiceRow {
   id: string;
@@ -24,6 +27,7 @@ interface InvoiceRow {
   paidAmount: string;
   expectedPaymentDate: string | null;
   lastPaymentDate: string | null;
+  source: string;
   salesEmployee: { id: string; name: string } | null;
 }
 interface EmployeeOption {
@@ -82,6 +86,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadingBaseline, setUploadingBaseline] = useState(false);
   const [uploadingNewInvoices, setUploadingNewInvoices] = useState(false);
+  const [busyRow, setBusyRow] = useState<string | null>(null);
   const baselineInputRef = useRef<HTMLInputElement>(null);
   const newInvoicesInputRef = useRef<HTMLInputElement>(null);
 
@@ -123,6 +128,22 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
     enabled: isAdmin,
   });
   const assignableEmployees = (usersData?.users ?? []).filter((u) => u.active && u.amisEmployeeCode);
+
+  // Cùng queryKey với CustomersPanel (dùng chung cache) — chỉ để biết khách nào chưa có email nhận thư
+  // nhắc, disable nút "Gửi ngay" + báo lý do thay vì để bấm rồi mới biết.
+  const { data: customersData } = useQuery({
+    queryKey: ["customers"],
+    queryFn: async () => {
+      const res = await fetch("/api/customers");
+      if (!res.ok) throw new Error("Không tải được danh sách khách hàng");
+      return res.json() as Promise<{ customers: { customerCode: string; email: string | null }[] }>;
+    },
+  });
+  const customerEmailByCode = useMemo(() => {
+    const map = new Map<string, string | null>();
+    for (const c of customersData?.customers ?? []) map.set(normalizeCustomerCode(c.customerCode), c.email);
+    return map;
+  }, [customersData]);
 
   async function handleImport(kind: "baseline" | "new-invoices", file: File) {
     const setUploading = kind === "baseline" ? setUploadingBaseline : setUploadingNewInvoices;
@@ -185,6 +206,39 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
     }
   }
 
+  // "Gửi ngay": worker vẫn tự kiểm tra DEBT_REMINDER_ENABLED + chống gửi trùng, nên kết quả có thể là
+  // 0 thư — thông báo rõ lý do cho người bấm, không im lặng.
+  async function handleSendReminder(row: InvoiceRow, milestone: DebtReminderMilestone) {
+    setBusyRow(row.id);
+    setUploadError(null);
+    try {
+      const res = await fetch("/api/debt/reminders/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customerCode: row.customerCode, milestone }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Gửi thư nhắc thất bại");
+      if (json.skippedReason) {
+        setUploadError(`Chưa gửi được thư nhắc: ${json.skippedReason}.`);
+      } else if (json.sent > 0) {
+        setToast(`Đã gửi ${json.sent} thư nhắc (${DEBT_REMINDER_MILESTONE_LABEL[milestone]}) cho ${row.customerName}`);
+      } else if (json.skippedNoEmail > 0) {
+        setUploadError("Khách hàng chưa có email hợp lệ — điền ở trang Khách hàng.");
+      } else {
+        setUploadError("Không gửi thêm thư nào: thư mốc này đã được gửi trước đó, hoặc hoá đơn không còn ở mốc nhắc.");
+      }
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["debt-invoices"] }),
+        queryClient.invalidateQueries({ queryKey: ["debt-reminders"] }),
+      ]);
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : "Có lỗi xảy ra");
+    } finally {
+      setBusyRow(null);
+    }
+  }
+
   function withStatus(invoices: InvoiceRow[]) {
     return invoices.map((inv) => {
       const original = Number(inv.originalAmount);
@@ -192,7 +246,9 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
       const remaining = remainingAmount(original, paid);
       const debtStatus = computeDebtStatus({ dueDate: inv.dueDate, originalAmount: original, paidAmount: paid });
       const daysOverdue = debtStatus === "PAID" ? null : overdueDays(inv.dueDate);
-      return { ...inv, remaining, debtStatus, daysOverdue };
+      // Dùng chung 1 định nghĩa mốc với server (lib/debt-reminder.ts), không tính lại tay.
+      const reminderMilestone = reminderMilestoneFor({ dueDate: inv.dueDate, originalAmount: original, paidAmount: paid });
+      return { ...inv, remaining, debtStatus, daysOverdue, reminderMilestone };
     });
   }
   const rowsWithStatus = useMemo(() => withStatus(data?.invoices ?? []), [data]);
@@ -528,6 +584,13 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
         )}
 
         <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/debt/reminders"
+            className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2 text-xs font-semibold text-ink hover:bg-white/[0.08] hover:border-white/20 transition-all"
+          >
+            <Mail className="h-4 w-4 text-amber-400" />
+            Lịch sử thư nhắc
+          </Link>
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value as DebtStatus | "")}
@@ -577,18 +640,19 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                 <th className="text-left font-medium px-4 py-3">Trạng thái</th>
                 <th className="text-left font-medium px-4 py-3">Ngày thanh toán / dự kiến</th>
                 {isAdmin && <th className="text-left font-medium px-4 py-3">Tiền về</th>}
+                <th className="text-left font-medium px-4 py-3">Thư nhắc</th>
               </tr>
               <tr className="bg-black/30 border-t border-white/5">
                 <th className="px-4 py-2 font-normal">
                   <FilterInput value={filterCustomer} onChange={setFilterCustomer} placeholder="Tìm khách hàng..." />
                 </th>
-                <th colSpan={isAdmin ? 10 : 9} />
+                <th colSpan={isAdmin ? 11 : 10} />
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {isLoading && (
                 <tr>
-                  <td colSpan={isAdmin ? 11 : 10} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={isAdmin ? 12 : 11} className="px-4 py-8 text-center text-muted-foreground">
                     <div className="inline-flex items-center gap-2">
                       <span className="h-2 w-2 rounded-full bg-amber-400 animate-ping" />
                       Đang tải danh sách công nợ...
@@ -598,7 +662,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
               )}
               {!isLoading && visibleRows.length === 0 && (
                 <tr>
-                  <td colSpan={isAdmin ? 11 : 10} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={isAdmin ? 12 : 11} className="px-4 py-8 text-center text-muted-foreground">
                     Không còn công nợ nào khớp bộ lọc.
                   </td>
                 </tr>
@@ -677,6 +741,31 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                       </button>
                     </td>
                   )}
+                  <td className="px-4 py-2.5">
+                    {r.reminderMilestone ? (
+                      (() => {
+                        // customersData chưa tải xong thì chưa disable — server vẫn báo thiếu email nếu có.
+                        const missingEmail = !!customersData && !customerEmailByCode.get(normalizeCustomerCode(r.customerCode));
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => handleSendReminder(r, r.reminderMilestone!)}
+                            disabled={busyRow === r.id || missingEmail}
+                            className="flex items-center gap-1 whitespace-nowrap rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-400 hover:bg-amber-500/20 disabled:opacity-40 transition-colors"
+                            title={
+                              missingEmail
+                                ? "Khách hàng chưa có email — điền ở trang Khách hàng"
+                                : `Gửi thư nhắc (${DEBT_REMINDER_MILESTONE_LABEL[r.reminderMilestone]}) cho khách hàng ngay`
+                            }
+                          >
+                            <Send className="h-3.5 w-3.5" /> {busyRow === r.id ? "Đang gửi..." : "Gửi ngay"}
+                          </button>
+                        );
+                      })()
+                    ) : (
+                      <span className="text-muted2">—</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

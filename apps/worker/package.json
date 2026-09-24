@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "tsx watch --env-file=.env src/index.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "node --env-file=.env dist/index.js"
+    "start": "node --env-file=.env dist/index.js",
+    "test": "vitest run"
   },
   "dependencies": {
     "@hoanggia/db": "*",
@@ -22,6 +23,7 @@
     "@types/nodemailer": "^6.4.16",
     "@types/web-push": "^3.6.4",
     "tsx": "^4.19.1",
-    "typescript": "^5.6.2"
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.1"
   }
 }

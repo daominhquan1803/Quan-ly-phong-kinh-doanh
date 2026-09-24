@@ -3,6 +3,7 @@ import { runAmisOrderSync } from "./sync/amis";
 import { runQuoteSync } from "./sync/quotes";
 import { runWeekPlanReminder } from "./notifications/weekPlanReminder";
 import { runKpiReminder } from "./notifications/kpiReminder";
+import { runDebtDueReminder } from "./notifications/debtDueReminder";
 import { logger } from "./logger";
 
 function checkInternalToken(req: FastifyRequest, reply: FastifyReply): boolean {
@@ -56,6 +57,26 @@ export function buildServer() {
     logger.info("Nhận yêu cầu kiểm tra nhắc việc KPI tháng thủ công");
     try {
       return await runKpiReminder();
+    } catch (err) {
+      reply.code(502);
+      return { error: err instanceof Error ? err.message : "Lỗi không xác định" };
+    }
+  });
+
+  // Web gọi vào đây khi admin/NVKD bấm "Gửi ngay" trên trang Công nợ; gọi không kèm body = chạy full
+  // như cron (để test thủ công). Vẫn tôn trọng DEBT_REMINDER_ENABLED — tắt thì không gửi, trả về
+  // skippedReason để web báo lý do.
+  app.post("/notify-debt-due", async (req, reply) => {
+    if (!checkInternalToken(req, reply)) return;
+    const body = (req.body as { customerCode?: string; milestone?: string; triggeredBy?: string } | undefined) ?? {};
+    const milestone = body.milestone === "D7" || body.milestone === "D0" || body.milestone === "OVERDUE" ? body.milestone : undefined;
+    logger.info(`Nhận yêu cầu gửi thư nhắc công nợ thủ công từ: ${body.triggeredBy ?? "MANUAL"}`);
+    try {
+      return await runDebtDueReminder({
+        customerCode: body.customerCode,
+        milestone,
+        triggeredBy: body.triggeredBy ?? "MANUAL",
+      });
     } catch (err) {
       reply.code(502);
       return { error: err instanceof Error ? err.message : "Lỗi không xác định" };

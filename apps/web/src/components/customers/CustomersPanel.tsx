@@ -31,6 +31,8 @@ interface CustomerRow {
   customerCode: string;
   customerName: string;
   contactPerson: string | null;
+  email: string | null;
+  manualOverdueReminderBase: number | null;
   salesEmployee: { id: string; name: string } | null;
   paymentTermType: PaymentTermType | null;
   paymentTermDays: number | null;
@@ -47,6 +49,8 @@ interface EmployeeOption {
 interface RowEdit {
   customerName: string;
   contactPerson: string;
+  email: string;
+  manualOverdueReminderBase: string;
   salesEmployeeId: string;
   paymentTermType: PaymentTermType | "";
   paymentTermValue: string;
@@ -56,6 +60,8 @@ function toRowEdit(c: CustomerRow): RowEdit {
   return {
     customerName: c.customerName,
     contactPerson: c.contactPerson ?? "",
+    email: c.email ?? "",
+    manualOverdueReminderBase: c.manualOverdueReminderBase == null ? "" : String(c.manualOverdueReminderBase),
     salesEmployeeId: c.salesEmployee?.id ?? "",
     paymentTermType: c.paymentTermType ?? "",
     paymentTermValue: String(
@@ -74,6 +80,7 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
     customerCode: "",
     customerName: "",
     contactPerson: "",
+    email: "",
     salesEmployeeId: "",
     paymentTermType: "" as PaymentTermType | "",
     paymentTermValue: "",
@@ -87,6 +94,7 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
   const [search, setSearch] = useState("");
   const [nvkdFilter, setNvkdFilter] = useState("");
   const [onlyWithTerms, setOnlyWithTerms] = useState<boolean | null>(null);
+  const [onlyMissingEmail, setOnlyMissingEmail] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(50);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -153,6 +161,9 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
     } else if (onlyWithTerms === false) {
       list = list.filter((c) => !c.paymentTermType);
     }
+    if (onlyMissingEmail) {
+      list = list.filter((c) => !c.email);
+    }
     if (search.trim()) {
       const q = normalizeVN(search);
       list = list.filter(
@@ -163,7 +174,7 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
       );
     }
     return list;
-  }, [data, search, nvkdFilter, onlyWithTerms]);
+  }, [data, search, nvkdFilter, onlyWithTerms, onlyMissingEmail]);
 
   // Phân trang
   const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / (pageSize || 50)));
@@ -174,7 +185,7 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
     return filteredCustomers.slice(start, start + pageSize);
   }, [filteredCustomers, currentPage, pageSize]);
 
-  function termPatch(edit: RowEdit) {
+  function termPatch(edit: Pick<RowEdit, "paymentTermType" | "paymentTermValue">) {
     const paymentTermType = edit.paymentTermType || null;
     const numValue = edit.paymentTermValue.trim() === "" ? null : Number(edit.paymentTermValue);
     return {
@@ -204,6 +215,8 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
         parts.push(
           `${json.unrecognizedTermCount} khách có thời hạn công nợ không nhận diện được (${json.unrecognizedTermSamples.join(", ")})`
         );
+      if (json.invalidEmailCount > 0)
+        parts.push(`bỏ qua ${json.invalidEmailCount} email sai định dạng (${json.invalidEmails.join(", ")})`);
       setImportMsg(parts.join("; ") + ".");
       await queryClient.invalidateQueries({ queryKey: ["customers"] });
     } catch (e) {
@@ -223,6 +236,7 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
           customerCode: form.customerCode,
           customerName: form.customerName,
           contactPerson: form.contactPerson || null,
+          email: form.email || null,
           salesEmployeeId: form.salesEmployeeId || null,
           ...termPatch(form),
         }),
@@ -233,6 +247,7 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
         customerCode: "",
         customerName: "",
         contactPerson: "",
+        email: "",
         salesEmployeeId: "",
         paymentTermType: "",
         paymentTermValue: "",
@@ -256,6 +271,8 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
         body: JSON.stringify({
           customerName: edit.customerName,
           contactPerson: edit.contactPerson || null,
+          email: edit.email || null,
+          manualOverdueReminderBase: edit.manualOverdueReminderBase.trim() === "" ? null : Number(edit.manualOverdueReminderBase),
           salesEmployeeId: edit.salesEmployeeId || null,
           ...termPatch(edit),
         }),
@@ -567,6 +584,20 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
               />
             </div>
 
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-ink2">
+                Email nhận thư nhắc công nợ
+              </label>
+              {/* type="text", KHÔNG type="email": trình duyệt chặn chuỗi nhiều địa chỉ. */}
+              <input
+                type="text"
+                placeholder="Email nhận thư nhắc công nợ (nhiều email cách nhau dấu phẩy)"
+                value={form.email}
+                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                className="w-full rounded-xl border border-gray-200/80 bg-navy-50/70 px-3.5 py-2.5 text-sm text-ink placeholder:text-muted2/60 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+              />
+            </div>
+
             <div className={isAdmin ? "" : "hidden"}>
               <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-ink2">
                 NVKD phụ trách
@@ -694,13 +725,28 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
             </select>
           </div>
 
+          {/* Lọc khách còn thiếu email nhận thư nhắc công nợ */}
+          <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-gray-200/80 bg-navy-50/80 px-3 py-2 text-sm text-ink">
+            <input
+              type="checkbox"
+              checked={onlyMissingEmail}
+              onChange={(e) => {
+                setOnlyMissingEmail(e.target.checked);
+                setPage(1);
+              }}
+              className="accent-amber-500"
+            />
+            Chưa có email
+          </label>
+
           {/* Reset Filters badge nếu đang lọc */}
-          {(nvkdFilter || search || onlyWithTerms !== null) && (
+          {(nvkdFilter || search || onlyWithTerms !== null || onlyMissingEmail) && (
             <button
               onClick={() => {
                 setSearch("");
                 setNvkdFilter("");
                 setOnlyWithTerms(null);
+                setOnlyMissingEmail(false);
                 setPage(1);
               }}
               className="flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300 px-2 py-1 rounded-lg border border-amber-500/20 bg-amber-500/10 transition-colors"
@@ -750,6 +796,8 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
               <tr className="border-b border-gray-200/80 bg-gray-50/90 text-xs font-semibold uppercase tracking-wider text-ink2/70">
                 <th className="px-5 py-3.5 text-left w-36">Mã khách hàng</th>
                 <th className="px-5 py-3.5 text-left min-w-[280px]">Tên khách hàng & Người liên hệ</th>
+                <th className="px-5 py-3.5 text-left min-w-[240px]">Email nhận thư nhắc</th>
+                <th className="px-5 py-3.5 text-left w-32">Đã nhắc tay</th>
                 <th className="px-5 py-3.5 text-left w-64">NVKD phụ trách</th>
                 <th className="px-5 py-3.5 text-left min-w-[240px]">Thời hạn công nợ</th>
                 <th className="px-5 py-3.5 text-right w-44">Thao tác</th>
@@ -802,6 +850,32 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
                           />
                         </div>
                       </div>
+                    </td>
+
+                    {/* Cột Email nhận thư nhắc công nợ (nhiều email cách nhau dấu phẩy) */}
+                    <td className="px-5 py-3.5 align-middle">
+                      <input
+                        type="text"
+                        value={edit.email}
+                        onChange={(e) => setEdit({ email: e.target.value })}
+                        placeholder="—"
+                        title="Email nhận thư nhắc công nợ (nhiều email cách nhau dấu phẩy)"
+                        className="w-full text-xs text-ink2/90 bg-transparent hover:bg-gray-50/80 focus:bg-gray-50 border border-transparent hover:border-gray-200/80 focus:border-amber-500 rounded-md px-1.5 py-0.5 transition-all focus:outline-none placeholder:text-muted2/50"
+                      />
+                    </td>
+
+                    {/* Cột "Đã nhắc tay" — số lần NVKD đã tự nhắc nợ quá hạn thủ công TRƯỚC khi dùng hệ
+                        thống (chỉ ảnh hưởng số "lần thứ N" in trong thư quá hạn, không đổi lịch gửi). */}
+                    <td className="px-5 py-3.5 align-middle">
+                      <input
+                        type="number"
+                        min={0}
+                        value={edit.manualOverdueReminderBase}
+                        onChange={(e) => setEdit({ manualOverdueReminderBase: e.target.value })}
+                        placeholder="—"
+                        title="Số lần đã nhắc nợ quá hạn thủ công trước khi dùng hệ thống — CHỈ áp cho nợ cũ. Để trống = hệ thống tự tính theo số ngày quá hạn (xoá về trống thì các hoá đơn nợ cũ in lại số theo lịch). Điền 0 = chỉ đếm thư hệ thống gửi."
+                        className="w-20 text-xs text-ink2/90 bg-transparent hover:bg-gray-50/80 focus:bg-gray-50 border border-transparent hover:border-gray-200/80 focus:border-amber-500 rounded-md px-1.5 py-0.5 transition-all focus:outline-none placeholder:text-muted2/50"
+                      />
                     </td>
 
                     {/* Cột NVKD phụ trách */}
@@ -931,7 +1005,7 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
 
               {filteredCustomers.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-5 py-12 text-center">
+                  <td colSpan={7} className="px-5 py-12 text-center">
                     <div className="flex flex-col items-center justify-center space-y-2 text-muted-foreground">
                       <Building2 className="h-10 w-10 text-muted2 opacity-50" />
                       <p className="text-sm font-medium text-ink">Không tìm thấy khách hàng nào</p>

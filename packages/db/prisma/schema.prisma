@@ -394,6 +394,15 @@ model Customer {
   customerCode  String  @unique
   customerName  String
   contactPerson String?
+  // Email nhận thư nhắc lịch thanh toán công nợ (thư gửi RA NGOÀI cho khách, xem
+  // apps/worker/src/notifications/debtDueReminder.ts). NHIỀU địa chỉ lưu trong cùng 1 chuỗi, cách
+  // nhau ", " — tách/validate ở apps/web/src/lib/debt-reminder.ts (parseEmailList). Trống = không gửi.
+  email         String?
+  // Số lần NVKD đã TỰ nhắc nợ quá hạn cho khách này TRƯỚC khi dùng hệ thống (vd nợ cũ BASELINE). null =
+  // không override: thư quá hạn in "lần thứ N" theo lịch (floor((d-1)/7)+1) như mặc định. Có giá trị =
+  // thư in "lần thứ (giá trị này + số thư quá hạn hệ thống đã gửi cho (các) hoá đơn trong thư + 1)".
+  // CHỈ đổi con số in trong thư, KHÔNG đổi lịch gửi. Xem apps/web/src/app/api/internal/debt-due-soon.
+  manualOverdueReminderBase Int?
 
   // NVKD phụ trách khách hàng này (khác với DebtInvoice.salesEmployeeId — đó là NVKD của TỪNG
   // hoá đơn, có thể đổi tay; đây là NVKD phụ trách khách hàng nói chung, theo file "Danh sách
@@ -439,7 +448,8 @@ model DebtInvoice {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  allocations DebtPaymentAllocation[]
+  allocations  DebtPaymentAllocation[]
+  reminderLogs DebtReminderLog[]
 
   @@unique([customerCode, invoiceNumber])
   @@index([customerCode])
@@ -516,6 +526,39 @@ model DebtImportBatch {
   payments DebtPayment[]
 
   @@map("debt_import_batches")
+}
+
+// Log từng lượt gửi thư nhắc thanh toán cho khách — vừa là lịch sử tra cứu (trang /debt/reminders)
+// vừa là khoá chống gửi trùng. Khoá gồm (invoiceId, milestone, dueDate, occurrence): `dueDate` để
+// gửi lại khi hạn bị tính lại (đổi thời hạn công nợ ở trang Khách hàng tính lại dueDate hàng loạt,
+// xem api/customers/[id] PATCH — hoá đơn lọt LẠI vào mốc với hạn MỚI thì phải được nhắc lại);
+// `occurrence` để phân biệt các lần nhắc quá hạn của CÙNG 1 hoá đơn (hạn không đổi khi quá hạn kéo
+// dài). Không dùng bảng Notification được vì Notification.userId trỏ tới User nội bộ, còn đây là
+// thư gửi cho KHÁCH HÀNG.
+model DebtReminderLog {
+  id        String      @id @default(cuid())
+  invoiceId String
+  invoice   DebtInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  // "D7" | "D0" | "OVERDUE". Xem DebtReminderMilestone ở apps/web/src/lib/debt-reminder.ts.
+  milestone String
+  // Hạn thanh toán TẠI THỜI ĐIỂM gửi (thành phần của khoá chống trùng, xem ghi chú trên).
+  dueDate   DateTime
+  // Lần nhắc: D7/D0 luôn 1; OVERDUE = floor((số ngày quá hạn − 1)/7) + 1 — xem reminderOccurrence ở
+  // apps/web/src/lib/debt-reminder.ts.
+  occurrence Int @default(1)
+  // Số "lần thứ N" THỰC SỰ in trong thư (khác occurrence nếu khách có Customer.manualOverdueReminderBase).
+  // null = bằng occurrence. KHÔNG thuộc khoá chống trùng.
+  displayOccurrence Int?
+  // Địa chỉ thực tế đã gửi, cách nhau ", " — ghi lại để đối chiếu khi khách đổi email về sau.
+  recipients   String
+  ccRecipients String?
+  // "CRON" hoặc User.id của người bấm nút "Gửi ngay".
+  triggeredBy  String
+  sentAt       DateTime @default(now())
+
+  @@unique([invoiceId, milestone, dueDate, occurrence])
+  @@index([sentAt])
+  @@map("debt_reminder_logs")
 }
 
 model SyncLog {
@@ -1003,6 +1046,7 @@ model WeekPlanResultEntry {
 enum NotificationType {
   WEEK_PLAN_REMINDER
   KPI_REMINDER
+  DEBT_DUE_DATE_MISSING
 }
 
 model Notification {

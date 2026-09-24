@@ -3,6 +3,7 @@ import { prisma, resolveEmployeeIdByName } from "@hoanggia/db";
 import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
 import { parseCustomerListExcel } from "@/lib/customer-import-parser";
 import { normalizeCustomerCode } from "@/lib/debt-customer-match";
+import { isValidEmail, parseEmailList } from "@/lib/debt-reminder";
 
 export const dynamic = "force-dynamic";
 
@@ -49,13 +50,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const existingCustomers = await prisma.customer.findMany({ select: { customerCode: true, contactPerson: true } });
+    const existingCustomers = await prisma.customer.findMany({ select: { customerCode: true, contactPerson: true, email: true } });
     const existingByCode = new Map(existingCustomers.map((c) => [c.customerCode, c]));
 
     let createdCount = 0;
     let updatedCount = 0;
     const unrecognizedTerms: string[] = [];
     const noNameFound: string[] = [];
+    const invalidEmails: string[] = [];
 
     const employeeCache = new Map<string, string | null>();
     async function resolveEmployee(nameRaw: string | null): Promise<string | null> {
@@ -76,6 +78,13 @@ export async function POST(req: NextRequest) {
 
       const salesEmployeeId = await resolveEmployee(row.employeeNameRaw);
       const existing = existingByCode.get(row.customerCode);
+
+      // Email sai định dạng thì BỎ QUA địa chỉ đó (vẫn giữ địa chỉ hợp lệ + import các trường còn
+      // lại), không làm fail cả file — thư gửi ra ngoài nên không nhận địa chỉ sai.
+      const emailParts = parseEmailList(row.email);
+      for (const addr of emailParts.filter((a) => !isValidEmail(a))) invalidEmails.push(`${row.customerCode}: "${addr}"`);
+      const validEmail = emailParts.filter(isValidEmail).join(", ");
+
       const data = {
         customerName,
         salesEmployeeId,
@@ -86,6 +95,8 @@ export async function POST(req: NextRequest) {
         ...((!existing || !existing.contactPerson) && fromOrder?.contactPerson
           ? { contactPerson: fromOrder.contactPerson }
           : {}),
+        // Cùng quy ước với Người liên hệ: không ghi đè email admin đã nhập tay, chỉ điền khi đang trống.
+        ...(validEmail && (!existing || !existing.email) ? { email: validEmail } : {}),
       };
 
       if (existing) {
@@ -106,6 +117,8 @@ export async function POST(req: NextRequest) {
       noNameSamples: noNameFound.slice(0, 20),
       unrecognizedTermCount: unrecognizedTerms.length,
       unrecognizedTermSamples: unrecognizedTerms.slice(0, 20),
+      invalidEmailCount: invalidEmails.length,
+      invalidEmails: invalidEmails.slice(0, 20),
     });
   } catch (err) {
     if (err instanceof UnauthorizedError) return NextResponse.json({ error: err.message }, { status: 401 });

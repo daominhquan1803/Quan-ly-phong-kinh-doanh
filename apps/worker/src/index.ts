@@ -4,6 +4,7 @@ import { runAmisOrderSync } from "./sync/amis";
 import { runQuoteSync } from "./sync/quotes";
 import { runWeekPlanReminder } from "./notifications/weekPlanReminder";
 import { runKpiReminder } from "./notifications/kpiReminder";
+import { runDebtDueReminder } from "./notifications/debtDueReminder";
 import { logger } from "./logger";
 
 const PORT = Number(process.env.WORKER_PORT || 4001);
@@ -54,13 +55,14 @@ async function main() {
   cron.schedule(
     NOTIFY_CRON,
     () => {
-      logger.info("Cron kích hoạt kiểm tra nhắc việc (Kế hoạch tuần + KPI tháng)");
+      logger.info("Cron kích hoạt kiểm tra nhắc việc (Kế hoạch tuần + KPI tháng + Công nợ tới hạn)");
       runWeekPlanReminder().catch((err) => logger.error("Lỗi nhắc việc Kế hoạch tuần:", err));
       runKpiReminder().catch((err) => logger.error("Lỗi nhắc việc KPI tháng:", err));
+      runDebtDueReminder().catch((err) => logger.error("Lỗi nhắc công nợ tới hạn:", err));
     },
     { timezone: NOTIFY_CRON_TIMEZONE }
   );
-  logger.info(`Đã lên lịch kiểm tra nhắc việc: "${NOTIFY_CRON}" (múi giờ ${NOTIFY_CRON_TIMEZONE})`);
+  logger.info(`Đã lên lịch kiểm tra nhắc việc + công nợ tới hạn: "${NOTIFY_CRON}" (múi giờ ${NOTIFY_CRON_TIMEZONE})`);
 }
 
 main().catch((err) => {

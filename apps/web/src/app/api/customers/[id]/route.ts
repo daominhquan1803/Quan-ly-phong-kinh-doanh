@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@hoanggia/db";
 import { requireSession, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
 import { computeDueDateFromTerm, PaymentTerm } from "@/lib/customer-payment-term";
+import { emailListField, normalizeEmailList } from "@/lib/debt-reminder";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -9,6 +10,10 @@ export const dynamic = "force-dynamic";
 const updateSchema = z.object({
   customerName: z.string().trim().min(1).optional(),
   contactPerson: z.string().trim().max(255).optional().nullable(),
+  email: emailListField,
+  // Số lần NVKD đã tự nhắc nợ quá hạn thủ công cho khách này TRƯỚC khi dùng hệ thống — xem
+  // Customer.manualOverdueReminderBase trong schema.prisma. 0 có nghĩa riêng (GIẢ ĐỊNH 14).
+  manualOverdueReminderBase: z.number().int().min(0).max(999).optional().nullable(),
   salesEmployeeId: z.string().trim().min(1).optional().nullable(),
   paymentTermType: z.enum(["DAYS_FROM_INVOICE", "END_OF_MONTH_OFFSET"]).optional().nullable(),
   paymentTermDays: z.number().int().min(0).optional().nullable(),
@@ -37,6 +42,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const data: Record<string, unknown> = {};
     if (fields.customerName !== undefined) data.customerName = fields.customerName;
     if (fields.contactPerson !== undefined) data.contactPerson = fields.contactPerson || null;
+    if (fields.email !== undefined) data.email = normalizeEmailList(fields.email);
+    if (fields.manualOverdueReminderBase !== undefined) data.manualOverdueReminderBase = fields.manualOverdueReminderBase;
     // Chỉ ADMIN được đổi NVKD phụ trách.
     if (isAdmin && fields.salesEmployeeId !== undefined) data.salesEmployeeId = fields.salesEmployeeId || null;
     if (fields.paymentTermType !== undefined) {

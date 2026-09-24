@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@hoanggia/db";
 import { requireAdmin, requireSession, scopeByOwner, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
+import { emailListField, normalizeEmailList } from "@/lib/debt-reminder";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -27,6 +28,7 @@ const createSchema = z.object({
   customerCode: z.string().trim().min(1, "Thiếu mã khách hàng"),
   customerName: z.string().trim().min(1, "Thiếu tên khách hàng"),
   contactPerson: z.string().trim().max(255).optional().nullable(),
+  email: emailListField,
   salesEmployeeId: z.string().trim().min(1).optional().nullable(),
   paymentTermType: z.enum(["DAYS_FROM_INVOICE", "END_OF_MONTH_OFFSET"]).optional().nullable(),
   paymentTermDays: z.number().int().min(0).optional().nullable(),
@@ -41,7 +43,7 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Dữ liệu không hợp lệ" }, { status: 400 });
     }
-    const { customerCode, customerName, contactPerson, paymentTermType, paymentTermDays, paymentTermMonthOffset } = parsed.data;
+    const { customerCode, customerName, contactPerson, email, paymentTermType, paymentTermDays, paymentTermMonthOffset } = parsed.data;
 
     // NVKD tạo khách thì tự là người phụ trách; chỉ ADMIN được chọn NVKD khác.
     const salesEmployeeId = session.user.role === "ADMIN" ? parsed.data.salesEmployeeId : session.user.id;
@@ -54,6 +56,7 @@ export async function POST(req: NextRequest) {
         customerCode,
         customerName,
         contactPerson: contactPerson || null,
+        email: normalizeEmailList(email),
         salesEmployeeId: salesEmployeeId || null,
         paymentTermType: paymentTermType || null,
         paymentTermDays: paymentTermType === "DAYS_FROM_INVOICE" ? paymentTermDays ?? null : null,

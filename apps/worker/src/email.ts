@@ -24,9 +24,18 @@ export function isEmailConfigured(): boolean {
   return transporter !== null;
 }
 
-export async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
+export async function sendEmail(
+  to: string | string[],
+  subject: string,
+  html: string,
+  options?: {
+    cc?: string[];
+    attachments?: { filename: string; content: Buffer }[];
+  }
+): Promise<boolean> {
+  const toLabel = Array.isArray(to) ? to.join(", ") : to;
   if (!transporter) {
-    logger.warn(`Chưa cấu hình SMTP_USER/SMTP_PASSWORD — bỏ qua gửi email tới ${to}: "${subject}"`);
+    logger.warn(`Chưa cấu hình SMTP_USER/SMTP_PASSWORD — bỏ qua gửi email tới ${toLabel}: "${subject}"`);
     return false;
   }
   try {
@@ -35,10 +44,13 @@ export async function sendEmail(to: string, subject: string, html: string): Prom
       to,
       subject,
       html,
+      // Chỉ truyền khi có giá trị — mảng rỗng bỏ hẳn key.
+      ...(options?.cc?.length ? { cc: options.cc } : {}),
+      ...(options?.attachments?.length ? { attachments: options.attachments } : {}),
     });
     return true;
   } catch (err) {
-    logger.error(`Gửi email thất bại tới ${to}:`, err instanceof Error ? err.message : err);
+    logger.error(`Gửi email thất bại tới ${toLabel}:`, err instanceof Error ? err.message : err);
     return false;
   }
 }

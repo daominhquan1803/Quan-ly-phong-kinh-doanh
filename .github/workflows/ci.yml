@@ -40,3 +40,6 @@ jobs:
 
       - name: Unit tests
         run: npm run test --workspace=apps/web
+
+      - name: Unit tests (worker)
+        run: npm run test --workspace=apps/worker
