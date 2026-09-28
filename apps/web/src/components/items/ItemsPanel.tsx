@@ -16,6 +16,7 @@ interface ItemRow {
   totalValue: number;
   lineCount: number;
   lastOrderDate: string | null;
+  inventoryQty: number | null;
 }
 
 interface ItemLine {
@@ -158,6 +159,7 @@ export function ItemsPanel() {
                 <th className="px-3 py-2 text-left font-medium">Khách hàng</th>
                 <th className="px-3 py-2 text-right font-medium">Tổng SL</th>
                 <th className="px-3 py-2 text-right font-medium">Tổng giá trị</th>
+                <th className="px-3 py-2 text-right font-medium">Tồn kho</th>
                 <th className="px-3 py-2 text-left font-medium">Đơn gần nhất</th>
               </tr>
             </thead>
@@ -180,6 +182,7 @@ export function ItemsPanel() {
                   </td>
                   <td className="px-3 py-2 text-right text-ink">{it.totalQuantity}</td>
                   <td className="px-3 py-2 text-right font-mono text-ink">{formatCurrencyVND(it.totalValue)}</td>
+                  <td className="px-3 py-2 text-right text-ink">{it.inventoryQty ?? "—"}</td>
                   <td className="px-3 py-2 text-muted-foreground">{formatDateVN(it.lastOrderDate)}</td>
                 </tr>
               ))}

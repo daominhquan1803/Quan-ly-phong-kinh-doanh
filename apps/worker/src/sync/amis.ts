@@ -60,6 +60,20 @@ interface AmisListResponse {
   error_message?: string | null;
 }
 
+interface AmisProductLedger {
+  product_code: string | null;
+  product_category_name: string | null;
+  usage_unit_name: string | null;
+  main_stock_quantity: number; // Số tồn theo đơn vị tính chính
+}
+
+interface AmisProductLedgerPageResponse {
+  success: boolean;
+  total_pages: number;
+  data: AmisProductLedger[] | null;
+  error_message?: string | null;
+}
+
 /** Đăng nhập bằng AppID + mã bảo mật, trả về Bearer token — xem crmconnect.misa.vn/docs-v2. */
 async function getAmisToken(appId: string, clientSecret: string): Promise<string> {
   const res = await fetch(`${AMIS_BASE_URL}/api/v2/Account`, {
@@ -89,6 +103,70 @@ async function fetchSaleOrdersPage(
     throw new Error(json.error_message || `Gọi AMIS SaleOrders thất bại (HTTP ${res.status})`);
   }
   return json.data ?? [];
+}
+
+async function fetchProductLedgerPage(
+  token: string,
+  appId: string,
+  page: number,
+  pageSize: number
+): Promise<{ rows: AmisProductLedger[]; totalPages: number }> {
+  const url = `${AMIS_BASE_URL}/api/v2/Stocks/product_ledger?page=${page}&pageSize=${pageSize}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}`, Clientid: appId },
+  });
+  const json = (await res.json()) as AmisProductLedgerPageResponse;
+  // Endpoint này trả "success": false ngay cả khi HTTP 200 và data hợp lệ (đã xác nhận thật
+  // qua gọi trực tiếp, xem scripts/inspect-amis-inventory.ts) — quirk riêng của AMIS cho API
+  // này, khác với SaleOrders. Chỉ coi là lỗi khi HTTP không OK hoặc data null (API báo lỗi
+  // thật thì data luôn null).
+  if (!res.ok || json.data == null) {
+    throw new Error(json.error_message || `Gọi AMIS Stocks/product_ledger thất bại (HTTP ${res.status})`);
+  }
+  return { rows: json.data, totalPages: json.total_pages };
+}
+
+/**
+ * Đồng bộ tồn kho từ AMIS ("GET /api/v2/Stocks/product_ledger", cùng API CRM đang dùng cho đơn
+ * hàng — không cần credential riêng của AMIS Kế Toán). Ghi đè toàn bộ bảng mỗi lần chạy — chỉ
+ * cần số dư MỚI NHẤT, gộp theo product_code trên toàn công ty (không tách theo từng kho, vì
+ * trang Hàng hoá chỉ cần 1 cột tồn kho chung).
+ */
+async function syncProductInventory(token: string, appId: string): Promise<number> {
+  const pageSize = 50; // max cho phép của API này
+  const byCode = new Map<string, AmisProductLedger>();
+
+  const first = await fetchProductLedgerPage(token, appId, 0, pageSize);
+  for (const r of first.rows) if (r.product_code) byCode.set(r.product_code, r);
+  const totalPages = Math.min(first.totalPages, 500); // giới hạn an toàn ~25.000 mã hàng
+
+  // ~20.000 mã hàng / 50 mỗi trang ≈ 400 trang — gọi tuần tự sẽ rất chậm (nhiều phút), gộp
+  // 8 trang/đợt chạy song song để đồng bộ thủ công qua nút "Đồng bộ ngay" không bị timeout.
+  const CONCURRENCY = 8;
+  for (let batchStart = 1; batchStart < totalPages; batchStart += CONCURRENCY) {
+    const pages = Array.from(
+      { length: Math.min(CONCURRENCY, totalPages - batchStart) },
+      (_, i) => batchStart + i
+    );
+    const results = await Promise.all(pages.map((p) => fetchProductLedgerPage(token, appId, p, pageSize)));
+    for (const { rows } of results) {
+      for (const r of rows) if (r.product_code) byCode.set(r.product_code, r);
+    }
+  }
+
+  await prisma.$transaction([
+    prisma.productInventory.deleteMany({}),
+    prisma.productInventory.createMany({
+      data: Array.from(byCode.values()).map((r) => ({
+        itemCode: r.product_code!,
+        quantity: r.main_stock_quantity ?? 0,
+        unit: r.usage_unit_name || null,
+        categoryName: r.product_category_name || null,
+      })),
+    }),
+  ]);
+
+  return byCode.size;
 }
 
 /**
@@ -363,7 +441,32 @@ export async function runAmisOrderSync(triggeredBy: string): Promise<SyncOutcome
       poTrackingMessage = `Tiến độ giao hàng: đồng bộ thất bại (${poMessage}).`;
     }
 
-    const combinedMessage = `Đã quét ${scanned} đơn trên AMIS, đồng bộ ${processed} đơn thuộc phạm vi quản lý. ${poTrackingMessage}`;
+    // Đồng bộ tồn kho (bảng ProductInventory) — cùng API CRM, không cần lần gọi/đăng nhập riêng.
+    // Lỗi ở bước này không làm hỏng kết quả đồng bộ Đơn hàng/Tiến độ giao hàng đã thành công ở
+    // trên, chỉ gộp vào message chung.
+    const inventoryLog = await prisma.syncLog.create({
+      data: { jobType: "AMIS_INVENTORY_SYNC", status: "RUNNING", triggeredBy },
+    });
+    let inventoryMessage: string;
+    try {
+      const count = await syncProductInventory(token, appId);
+      inventoryMessage = `Tồn kho: đồng bộ ${count} mã hàng.`;
+      await prisma.syncLog.update({
+        where: { id: inventoryLog.id },
+        data: { status: "SUCCESS", finishedAt: new Date(), recordsSynced: count, message: inventoryMessage },
+      });
+      logger.info(`Đồng bộ Tồn kho từ AMIS thành công: ${count} mã hàng`);
+    } catch (invErr) {
+      const invMessage = invErr instanceof Error ? invErr.message : "Lỗi không xác định";
+      logger.error("Đồng bộ Tồn kho từ AMIS thất bại:", invMessage);
+      await prisma.syncLog.update({
+        where: { id: inventoryLog.id },
+        data: { status: "FAILED", finishedAt: new Date(), message: invMessage },
+      });
+      inventoryMessage = `Tồn kho: đồng bộ thất bại (${invMessage}).`;
+    }
+
+    const combinedMessage = `Đã quét ${scanned} đơn trên AMIS, đồng bộ ${processed} đơn thuộc phạm vi quản lý. ${poTrackingMessage} ${inventoryMessage}`;
     await prisma.syncLog.update({
       where: { id: syncLog.id },
       data: {

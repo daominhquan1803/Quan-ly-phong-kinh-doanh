@@ -1143,3 +1143,18 @@ model PickingSlipItem {
   @@index([pickingSlipId])
   @@map("picking_slip_items")
 }
+
+// Tồn kho hàng hoá — đồng bộ từ AMIS CRM API "GET /api/v2/Stocks/product_ledger" (cùng job với
+// AMIS_ORDER_SYNC, xem apps/worker/src/sync/amis.ts). Ghi đè toàn bộ mỗi lần đồng bộ — chỉ cần số
+// dư MỚI NHẤT, không cần lịch sử. Gộp theo product_code (đại diện toàn công ty, không tách kho —
+// theo yêu cầu trang Hàng hoá chỉ cần "tồn kho" chung).
+model ProductInventory {
+  id           String   @id @default(cuid())
+  itemCode     String   @unique
+  quantity     Decimal  @default(0) @db.Decimal(14, 2)
+  unit         String?
+  categoryName String?
+  syncedAt     DateTime @default(now())
+
+  @@map("product_inventory")
+}

@@ -13,13 +13,16 @@ interface ItemGroupRow {
   totalValue: string;
   lineCount: number;
   lastOrderDate: Date | null;
+  inventoryQty: string | null;
 }
 
 /**
  * Danh sách mã hàng gộp từ OrderItem (đồng bộ sẵn từ AMIS qua Order) — mỗi mã hàng 1 dòng, kèm
- * các khách từng mua + tổng SL/giá trị luỹ kế. Nhóm theo itemCode; đơn không có itemCode thì
- * nhóm theo itemName (ponytail: lấy MAX(itemName) đại diện cho tên hiển thị, không xử lý lệch
- * chính tả giữa các lần nhập — nếu sai lệch nhiều, thêm bước chuẩn hoá tên sau).
+ * các khách từng mua + tổng SL/giá trị luỹ kế + tồn kho hiện tại (bảng ProductInventory, đồng
+ * bộ từ AMIS "Stocks/product_ledger" — xem apps/worker/src/sync/amis.ts). Nhóm theo itemCode;
+ * đơn không có itemCode thì nhóm theo itemName (ponytail: lấy MAX(itemName) đại diện cho tên
+ * hiển thị, không xử lý lệch chính tả giữa các lần nhập — nếu sai lệch nhiều, thêm bước chuẩn
+ * hoá tên sau). Tồn kho null nếu mã hàng chưa từng thấy trong lần đồng bộ tồn kho gần nhất.
  */
 export async function GET() {
   try {
@@ -34,9 +37,11 @@ export async function GET() {
         SUM(oi.quantity) AS "totalQuantity",
         SUM(oi."totalPrice") AS "totalValue",
         COUNT(*)::int AS "lineCount",
-        MAX(o."orderDate") AS "lastOrderDate"
+        MAX(o."orderDate") AS "lastOrderDate",
+        MAX(pi.quantity) AS "inventoryQty"
       FROM order_items oi
       JOIN orders o ON o.id = oi."orderId"
+      LEFT JOIN product_inventory pi ON pi."itemCode" = oi."itemCode"
       GROUP BY "itemKey"
       ORDER BY "lastOrderDate" DESC NULLS LAST
     `);
@@ -50,6 +55,7 @@ export async function GET() {
       totalValue: Number(r.totalValue),
       lineCount: r.lineCount,
       lastOrderDate: r.lastOrderDate,
+      inventoryQty: r.inventoryQty == null ? null : Number(r.inventoryQty),
     }));
 
     return NextResponse.json({ items });

@@ -32,7 +32,7 @@ export async function POST() {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Internal-Token": token },
       body: JSON.stringify({ triggeredBy: session.user.id }),
-      signal: AbortSignal.timeout(120_000), // đồng bộ AMIS có thể mất hơn debt sync nếu nhiều đơn
+      signal: AbortSignal.timeout(240_000), // đơn hàng + tiến độ giao hàng + tồn kho (~400 trang) có thể mất vài phút
     });
     const json = await res.json();
 
