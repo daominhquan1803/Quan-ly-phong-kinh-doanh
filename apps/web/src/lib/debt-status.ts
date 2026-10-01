@@ -32,13 +32,18 @@ export function overdueDays(dueDate: Date | string | null, today: Date = new Dat
   return Math.round((t.getTime() - due.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-export function computeDebtStatus(invoice: {
-  dueDate: Date | string | null;
-  originalAmount: number;
-  paidAmount: number;
-}): DebtStatus {
+/** `asOf`: mốc ngày để tính "quá hạn bao nhiêu ngày" — mặc định hôm nay; truyền ngày khác để xem
+ * công nợ "tại thời điểm" quá khứ (vd xem công nợ như thế nào vào ngày 30/09). */
+export function computeDebtStatus(
+  invoice: {
+    dueDate: Date | string | null;
+    originalAmount: number;
+    paidAmount: number;
+  },
+  asOf: Date = new Date()
+): DebtStatus {
   if (remainingAmount(invoice.originalAmount, invoice.paidAmount) <= 0) return "PAID";
-  const days = overdueDays(invoice.dueDate);
+  const days = overdueDays(invoice.dueDate, asOf);
   if (days === null) return "NO_DUE_DATE";
   if (days > DEBT_BAD_DEBT_DAYS) return "BAD_DEBT";
   if (days > 0) return "OVERDUE";

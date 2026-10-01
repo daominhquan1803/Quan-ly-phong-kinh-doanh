@@ -14,7 +14,7 @@ import { ManualPaymentModal, type ManualPaymentInvoice } from "./ManualPaymentMo
 import { DebtUnmatchedPaymentsPanel } from "./DebtUnmatchedPaymentsPanel";
 import { EmployeeFilterSelect } from "@/components/shared/EmployeeFilterSelect";
 import { FilterInput, SortableTh, toggleSort, type SortState } from "@/components/shared/SortableFilterableTable";
-import { UploadCloud, ChevronLeft, ChevronRight, X, CheckCircle2, Banknote, Mail, Send } from "lucide-react";
+import { UploadCloud, ChevronLeft, ChevronRight, X, CheckCircle2, Banknote, Mail, Send, CalendarClock, FileSpreadsheet } from "lucide-react";
 
 interface InvoiceRow {
   id: string;
@@ -97,23 +97,37 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
     if (!res.ok) throw new Error("Không tải được danh sách công nợ");
     return (await res.json()) as { invoices: InvoiceRow[] };
   };
-  const fetchSummary = (empId: string) => async () => {
+  const fetchSummary = (empId: string, opts?: { asOfDate?: string; year?: number; month?: number }) => async () => {
     const params = new URLSearchParams();
     if (empId) params.set("employeeId", empId);
+    if (opts?.asOfDate) params.set("asOfDate", opts.asOfDate);
+    if (opts?.year) params.set("year", String(opts.year));
+    if (opts?.month) params.set("month", String(opts.month));
     const res = await fetch(`/api/debt/summary?${params.toString()}`);
     if (!res.ok) throw new Error("Không tải được tổng kết công nợ");
     return (await res.json()) as SummaryResponse;
   };
 
+  // "Xem công nợ tại ngày" — rỗng = xem hiện tại (mặc định). Chỉ ảnh hưởng khối tổng quan (5 thẻ +
+  // công nợ theo NVKD), KHÔNG ảnh hưởng khối "Kế hoạch thu" bên dưới (có bộ lọc tháng riêng).
+  const [asOfDate, setAsOfDate] = useState("");
   const { data, isLoading } = useQuery({ queryKey: ["debt-invoices", employeeId], queryFn: fetchInvoices(employeeId) });
-  const { data: summary } = useQuery({ queryKey: ["debt-summary", employeeId], queryFn: fetchSummary(employeeId) });
+  const { data: summary } = useQuery({
+    queryKey: ["debt-summary", employeeId, asOfDate],
+    queryFn: fetchSummary(employeeId, { asOfDate: asOfDate || undefined }),
+  });
 
-  // Khối "Kế hoạch thu hồi công nợ tháng này" có bộ lọc riêng (Cả phòng / từng nhân viên) — mặc định
-  // theo bộ lọc "Xem theo" ở trên nhưng đổi độc lập được. Cùng queryKey với 2 query trên nên khi
-  // trùng phạm vi thì dùng chung cache, không gọi thêm.
+  // Khối "Kế hoạch thu hồi công nợ" có bộ lọc riêng (Cả phòng / từng nhân viên + THÁNG xem) — mặc
+  // định theo bộ lọc "Xem theo" ở trên + tháng hiện tại, đổi độc lập được.
   const [weekEmployeeId, setWeekEmployeeId] = useState("");
   useEffect(() => setWeekEmployeeId(employeeId), [employeeId]);
-  const { data: weekSummary } = useQuery({ queryKey: ["debt-summary", weekEmployeeId], queryFn: fetchSummary(weekEmployeeId) });
+  const now = new Date();
+  const [planYear, setPlanYear] = useState(now.getFullYear());
+  const [planMonth, setPlanMonth] = useState(now.getMonth() + 1);
+  const { data: weekSummary } = useQuery({
+    queryKey: ["debt-summary", weekEmployeeId, planYear, planMonth],
+    queryFn: fetchSummary(weekEmployeeId, { year: planYear, month: planMonth }),
+  });
   const { data: weekData } = useQuery({ queryKey: ["debt-invoices", weekEmployeeId], queryFn: fetchInvoices(weekEmployeeId) });
 
   // Cùng queryKey với EmployeeFilterSelect (dùng chung cache react-query) — cần danh sách nhân
@@ -330,11 +344,38 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
         </div>
       )}
 
-      {isAdmin && (
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2.5">
+        {isAdmin && (
+          <div className="flex items-center gap-2.5">
+            <span className="text-xs uppercase tracking-wider text-muted2 font-medium">Xem theo nhân viên:</span>
+            <EmployeeFilterSelect value={employeeId} onChange={setEmployeeId} />
+          </div>
+        )}
         <div className="flex items-center gap-2.5">
-          <span className="text-xs uppercase tracking-wider text-muted2 font-medium">Xem theo nhân viên:</span>
-          <EmployeeFilterSelect value={employeeId} onChange={setEmployeeId} />
+          <span className="text-xs uppercase tracking-wider text-muted2 font-medium flex items-center gap-1.5">
+            <CalendarClock className="h-3.5 w-3.5" /> Xem công nợ tại ngày:
+          </span>
+          <input
+            type="date"
+            value={asOfDate}
+            onChange={(e) => setAsOfDate(e.target.value)}
+            className="text-xs bg-card text-ink rounded-lg border border-white/10 py-1.5 px-2 focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono"
+          />
+          {asOfDate && (
+            <button
+              type="button"
+              onClick={() => setAsOfDate("")}
+              className="text-xs text-amber-400 hover:text-amber-300 underline underline-offset-2"
+            >
+              Về hiện tại
+            </button>
+          )}
         </div>
+      </div>
+      {asOfDate && (
+        <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+          Đang xem công nợ TẠI NGÀY {formatDateVN(asOfDate)} — không phải số liệu hiện tại.
+        </p>
       )}
 
       {summary && (
@@ -387,11 +428,24 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
           <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-white/5 pb-3">
             <div>
               <p className="font-semibold text-ink text-sm">
-                Kế hoạch thu hồi công nợ tháng này
+                Kế hoạch thu hồi công nợ tháng {planMonth}/{planYear}
               </p>
               <p className="text-xs text-muted2 mt-0.5">Dựa trên ngày dự kiến thanh toán nhân viên kinh doanh cập nhật</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="month"
+                value={`${planYear}-${String(planMonth).padStart(2, "0")}`}
+                onChange={(e) => {
+                  const [y, m] = e.target.value.split("-").map(Number);
+                  if (y && m) {
+                    setPlanYear(y);
+                    setPlanMonth(m);
+                  }
+                }}
+                aria-label="Chọn tháng xem kế hoạch thu"
+                className="text-xs bg-card text-ink rounded-lg border border-white/10 py-1.5 px-2 focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono"
+              />
               {isAdmin && (
                 <select
                   value={weekEmployeeId}
@@ -407,6 +461,13 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                   ))}
                 </select>
               )}
+              <a
+                href={`/api/debt/export/plan?year=${planYear}&month=${planMonth}${weekEmployeeId ? `&employeeId=${weekEmployeeId}` : ""}`}
+                className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-medium text-emerald-400 hover:bg-emerald-500/20 transition-colors"
+                title="Xuất Excel kế hoạch thu tháng này (đúng form file gốc)"
+              >
+                <FileSpreadsheet className="h-3.5 w-3.5" /> Xuất Excel
+              </a>
               <div className="text-xs font-mono text-muted2 bg-white/5 px-3 py-1.5 rounded-lg border border-white/5">
                 Cả tháng:{" "}
                 <span className="text-emerald-400 font-semibold">{formatCurrencyVND(weekSummary?.monthlyPlan.collected ?? 0)}</span> /{" "}

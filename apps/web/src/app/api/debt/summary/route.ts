@@ -19,6 +19,13 @@ export async function GET(req: NextRequest) {
     const year = Number(searchParams.get("year")) || now.getFullYear();
     const month = Number(searchParams.get("month")) || now.getMonth() + 1; // 1-12
 
+    // "Xem công nợ tại ngày" — tính lại từ dữ liệu thật thay vì lưu snapshot: chỉ tính hoá đơn đã
+    // có chứng từ tới ngày này, "đã thu" = tổng tiền về THẬT có ngày <= ngày này (không phải cột
+    // paidAmount hiện tại), quá hạn/nợ xấu so với ngày này thay vì hôm nay. null = xem hiện tại
+    // (hành vi cũ, dùng thẳng paidAmount cho nhanh + khớp tuyệt đối với các trang khác).
+    const asOfParam = searchParams.get("asOfDate");
+    const asOfDate = asOfParam ? new Date(`${asOfParam}T00:00:00+07:00`) : null;
+
     const where: Prisma.DebtInvoiceWhereInput = { ...scopeByOwner(session, "salesEmployeeId") };
     // ADMIN xem được số liệu riêng 1 nhân viên (bộ lọc "Xem theo" trên trang Công nợ) — SALES đã bị
     // scopeByOwner giới hạn chỉ của mình nên bỏ qua tham số này nếu không phải ADMIN.
@@ -28,6 +35,8 @@ export async function GET(req: NextRequest) {
     const invoices = await prisma.debtInvoice.findMany({
       where,
       select: {
+        id: true,
+        invoiceDate: true,
         originalAmount: true,
         paidAmount: true,
         dueDate: true,
@@ -36,6 +45,22 @@ export async function GET(req: NextRequest) {
         salesEmployee: { select: { name: true } },
       },
     });
+
+    // Tiền đã thu TÍNH TỚI asOfDate cho từng hoá đơn — gộp theo invoiceId từ các khoản Tiền về đã
+    // khớp (payment.paymentDate <= asOfDate). Khoản chưa rõ ngày tiền về thì không tính (coi như
+    // chưa xác nhận là đã về trước ngày này) — khác 1 chút so với cột paidAmount sống (luôn cộng
+    // dồn bất kể có ngày hay không), chấp nhận được vì chỉ ảnh hưởng xem lại quá khứ.
+    let paidAsOfByInvoice: Map<string, number> | null = null;
+    if (asOfDate) {
+      const allocs = await prisma.debtPaymentAllocation.findMany({
+        where: { invoiceId: { in: invoices.map((i) => i.id) }, payment: { paymentDate: { lte: asOfDate } } },
+        select: { invoiceId: true, amount: true },
+      });
+      paidAsOfByInvoice = new Map();
+      for (const a of allocs) {
+        paidAsOfByInvoice.set(a.invoiceId, (paidAsOfByInvoice.get(a.invoiceId) ?? 0) + Number(a.amount));
+      }
+    }
 
     let totalOriginal = 0;
     let totalPaid = 0;
@@ -46,13 +71,17 @@ export async function GET(req: NextRequest) {
     const perEmployee = new Map<string, { employeeId: string; employeeName: string; totalDebt: number; overdueDebt: number; badDebt: number }>();
 
     for (const inv of invoices) {
+      // Hoá đơn chưa phát sinh tại thời điểm asOfDate (chứng từ sau ngày đang xem) — bỏ qua khỏi
+      // tổng kết "tại ngày đó". Hoá đơn không rõ ngày chứng từ thì vẫn tính (không đủ căn cứ loại).
+      if (asOfDate && inv.invoiceDate && inv.invoiceDate > asOfDate) continue;
+
       const original = Number(inv.originalAmount);
-      const paid = Number(inv.paidAmount);
+      const paid = asOfDate ? paidAsOfByInvoice!.get(inv.id) ?? 0 : Number(inv.paidAmount);
       const remaining = remainingAmount(original, paid);
       totalOriginal += original;
       totalPaid += paid;
       totalDebt += remaining;
-      const status = computeDebtStatus({ dueDate: inv.dueDate, originalAmount: original, paidAmount: paid });
+      const status = computeDebtStatus({ dueDate: inv.dueDate, originalAmount: original, paidAmount: paid }, asOfDate ?? undefined);
       if (status === "OVERDUE" || status === "BAD_DEBT") overdueDebt += remaining;
       if (status === "BAD_DEBT") badDebt += remaining;
 
