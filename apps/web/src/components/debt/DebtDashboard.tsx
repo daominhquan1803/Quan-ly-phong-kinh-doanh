@@ -48,7 +48,7 @@ interface SummaryResponse {
   recoveryRate: number;
   perEmployee: { employeeId: string; employeeName: string; totalDebt: number; overdueDebt: number; badDebt: number }[] | null;
   weeklyPlan: { weekIndex: number; start: string; end: string; planned: number; collected: number; rate: number | null }[];
-  monthlyPlan: { planned: number; collected: number; rate: number | null };
+  monthlyPlan: { planned: number; collected: number; rate: number | null; totalReceived: number };
 }
 
 type SortField = "dueDate" | "remaining";
@@ -477,6 +477,13 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                     ({pct(weekSummary.monthlyPlan.rate)} đạt)
                   </span>
                 )}
+              </div>
+              <div
+                className="text-xs font-mono text-muted2 bg-white/5 px-3 py-1.5 rounded-lg border border-white/5"
+                title="Tổng toàn bộ tiền về trong tháng (kể cả khoản chưa khớp hoá đơn) — khác với số 'Cả tháng' bên cạnh chỉ tính khoản đã khớp kế hoạch"
+              >
+                Tổng tiền về trong tháng:{" "}
+                <span className="text-emerald-400 font-semibold">{formatCurrencyVND(weekSummary?.monthlyPlan.totalReceived ?? 0)}</span>
               </div>
             </div>
           </div>

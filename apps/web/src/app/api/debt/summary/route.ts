@@ -141,6 +141,17 @@ export async function GET(req: NextRequest) {
     const monthlyPlanned = weeks.reduce((s, w) => s + w.planned, 0);
     const monthlyCollected = weeks.reduce((s, w) => s + w.collected, 0);
 
+    // Tổng TẤT CẢ tiền về trong tháng (không lọc theo NVKD/kế hoạch) — khác với monthlyCollected
+    // ở trên (chỉ tính khoản đã khớp vào đúng hoá đơn trong phạm vi đang xem). Khoản "Chưa khớp"
+    // không gắn được với 1 NVKD cụ thể nên con số này luôn tính TOÀN CÔNG TY, không theo bộ lọc
+    // nhân viên — là tổng tiền thực tế vào tài khoản tháng này, không phải tiền đã khớp kế hoạch.
+    // Bỏ khoản đã đánh dấu IGNORED (admin xác nhận không phải tiền thật/đã ghi nhận chỗ khác).
+    const totalReceivedAgg = await prisma.debtPayment.aggregate({
+      where: { paymentDate: { gte: monthStart, lte: monthEnd }, matchStatus: { not: "IGNORED" } },
+      _sum: { amount: true },
+    });
+    const monthlyTotalReceived = Number(totalReceivedAgg._sum.amount ?? 0);
+
     return NextResponse.json({
       totalOriginal,
       totalPaid,
@@ -163,6 +174,7 @@ export async function GET(req: NextRequest) {
         planned: monthlyPlanned,
         collected: monthlyCollected,
         rate: monthlyPlanned > 0 ? monthlyCollected / monthlyPlanned : null,
+        totalReceived: monthlyTotalReceived,
       },
     });
   } catch (err) {
