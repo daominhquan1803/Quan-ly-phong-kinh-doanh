@@ -1,15 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma } from "@hoanggia/db";
 import { requireSession, scopeByOwner, UnauthorizedError } from "@/lib/rbac";
-import { remainingAmount, computeDebtStatus, mondayOfWeek } from "@/lib/debt-status";
+import { remainingAmount, computeDebtStatus, monthWeekBuckets } from "@/lib/debt-status";
 
 export const dynamic = "force-dynamic";
-
-function addDays(d: Date, n: number): Date {
-  const r = new Date(d);
-  r.setDate(r.getDate() + n);
-  return r;
-}
 
 export async function GET(req: NextRequest) {
   try {
@@ -111,14 +105,7 @@ export async function GET(req: NextRequest) {
     // "Tuần 1-5" như file Công nợ gốc anh Quân gửi).
     const monthStart = new Date(year, month - 1, 1);
     const monthEnd = new Date(year, month, 0);
-    const weeks: { weekIndex: number; start: Date; end: Date; planned: number; collected: number }[] = [];
-    let cursor = mondayOfWeek(monthStart);
-    let weekIndex = 1;
-    while (cursor <= monthEnd && weekIndex <= 5) {
-      weeks.push({ weekIndex, start: cursor, end: addDays(cursor, 6), planned: 0, collected: 0 });
-      cursor = addDays(cursor, 7);
-      weekIndex++;
-    }
+    const weeks = monthWeekBuckets(year, month).map((b) => ({ ...b, planned: 0, collected: 0 }));
     for (const inv of invoices) {
       if (!inv.expectedPaymentDate) continue;
       const d = new Date(inv.expectedPaymentDate);

@@ -71,3 +71,33 @@ export function monthWeekMonday(year: number, month: number, weekIndex: number):
   monday.setDate(monday.getDate() + (weekIndex - 1) * 7);
   return monday;
 }
+
+function addDays(d: Date, n: number): Date {
+  const r = new Date(d);
+  r.setDate(r.getDate() + n);
+  return r;
+}
+
+/** Chia 1 tháng thành tối đa 5 "tuần" để khớp cột "Tuần 1-5" của file Công nợ gốc — tuần giữa là
+ * tuần dương lịch đầy đủ (Thứ 2 - Chủ nhật), nhưng tuần ĐẦU và tuần CUỐI bị CẮT đúng theo ranh
+ * giới tháng (không tràn sang tháng trước/sau). Trước đây tuần 1 lấy nguyên tuần dương lịch chứa
+ * ngày 1 (có thể bắt đầu từ cuối tháng trước) — anh Quân báo lỗi: "Tuần 1 tháng 10" hiện sai
+ * thành 28/09-04/10, đúng phải là 01/10-04/10 (và phần 28-30/09 đó thuộc "Tuần 5 tháng 9"). */
+export function monthWeekBuckets(year: number, month: number): { weekIndex: number; start: Date; end: Date }[] {
+  const monthStart = new Date(year, month - 1, 1);
+  const monthEnd = new Date(year, month, 0);
+  const buckets: { weekIndex: number; start: Date; end: Date }[] = [];
+  let cursor = mondayOfWeek(monthStart);
+  let weekIndex = 1;
+  while (cursor <= monthEnd && weekIndex <= 5) {
+    const rawEnd = addDays(cursor, 6);
+    buckets.push({
+      weekIndex,
+      start: cursor < monthStart ? monthStart : cursor,
+      end: rawEnd > monthEnd ? monthEnd : rawEnd,
+    });
+    cursor = addDays(cursor, 7);
+    weekIndex++;
+  }
+  return buckets;
+}

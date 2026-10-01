@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { computeDebtStatus, monthWeekMonday, mondayOfWeek } from "./debt-status";
+import { computeDebtStatus, monthWeekMonday, mondayOfWeek, monthWeekBuckets } from "./debt-status";
+
+function ymd(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 describe("computeDebtStatus", () => {
   it("hết nợ (remaining<=0) -> PAID, không còn là CURRENT", () => {
@@ -20,5 +24,26 @@ describe("monthWeekMonday", () => {
     const w3 = monthWeekMonday(2026, 9, 3);
     const diffDays = (w3.getTime() - w1.getTime()) / (1000 * 60 * 60 * 24);
     expect(diffDays).toBe(14);
+  });
+});
+
+describe("monthWeekBuckets", () => {
+  it("tuần 1 CẮT đúng ngày 1 đầu tháng, không lấy phần cuối tháng trước (tháng 10/2026, Thứ 2 của tuần là 28/09)", () => {
+    const buckets = monthWeekBuckets(2026, 10);
+    expect(ymd(buckets[0].start)).toBe("2026-10-01");
+    expect(ymd(buckets[0].end)).toBe("2026-10-04");
+  });
+
+  it("tuần cuối CẮT đúng ngày cuối tháng, không tràn sang tháng sau (tháng 9/2026, Chủ nhật của tuần là 04/10)", () => {
+    const buckets = monthWeekBuckets(2026, 9);
+    const last = buckets[buckets.length - 1];
+    expect(ymd(last.start)).toBe("2026-09-28");
+    expect(ymd(last.end)).toBe("2026-09-30");
+  });
+
+  it("tuần giữa vẫn là tuần dương lịch đầy đủ Thứ 2 - Chủ nhật", () => {
+    const buckets = monthWeekBuckets(2026, 10);
+    expect(ymd(buckets[1].start)).toBe("2026-10-05");
+    expect(ymd(buckets[1].end)).toBe("2026-10-11");
   });
 });

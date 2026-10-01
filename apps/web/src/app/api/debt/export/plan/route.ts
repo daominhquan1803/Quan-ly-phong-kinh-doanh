@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { prisma, Prisma } from "@hoanggia/db";
 import { requireSession, scopeByOwner, UnauthorizedError } from "@/lib/rbac";
-import { remainingAmount, computeDebtStatus, overdueDays, mondayOfWeek, type DebtStatus } from "@/lib/debt-status";
+import { remainingAmount, computeDebtStatus, overdueDays, monthWeekBuckets, type DebtStatus } from "@/lib/debt-status";
 import { embedLogo, addCompanyHeaderLines, NAVY, HEADER_FILL, THIN_BOX } from "@/lib/excel-brand";
 
 export const dynamic = "force-dynamic";
@@ -21,12 +21,6 @@ const ORIGINAL_STATUS_LABEL: Record<DebtStatus, string> = {
 const CURRENCY_FMT = '_-* #,##0_-;-* #,##0_-;_-* "-"??_-;_-@_-';
 const DATE_FMT = "d/m/yyyy";
 const BODY_FONT = { name: "Times New Roman", size: 12 };
-
-function addDays(d: Date, n: number): Date {
-  const r = new Date(d);
-  r.setDate(r.getDate() + n);
-  return r;
-}
 
 interface Bucket {
   weekIndex: number;
@@ -83,16 +77,7 @@ export async function GET(req: NextRequest) {
       allocByInvoice.set(a.invoiceId, arr);
     }
 
-    const monthStart = new Date(year, month - 1, 1);
-    const monthEnd = new Date(year, month, 0);
-    const buckets: Bucket[] = [];
-    let cursor = mondayOfWeek(monthStart);
-    let wi = 1;
-    while (cursor <= monthEnd && wi <= 5) {
-      buckets.push({ weekIndex: wi, start: cursor, end: addDays(cursor, 6) });
-      cursor = addDays(cursor, 7);
-      wi++;
-    }
+    const buckets: Bucket[] = monthWeekBuckets(year, month);
 
     const rows = invoices.map((inv) => {
       const original = Number(inv.originalAmount);
