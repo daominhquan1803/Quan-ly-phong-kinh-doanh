@@ -21,8 +21,13 @@ export async function POST(req: NextRequest) {
 
     // Quy tắc thời hạn công nợ theo khách hàng (trang Khách hàng) — hoá đơn mới cuối tháng KHÔNG
     // có cột hạn thanh toán trong file AMIS, tự tính thay vì để trống chờ nhập tay.
-    const customers = await prisma.customer.findMany({ where: { paymentTermType: { not: null } } });
-    const termByCode = new Map(customers.map((c) => [c.customerCode, c]));
+    const allCustomers = await prisma.customer.findMany();
+    const termByCode = new Map(allCustomers.filter((c) => c.paymentTermType).map((c) => [c.customerCode, c]));
+    // NVKD phụ trách theo mã khách (trang Khách hàng) — dùng làm phương án dự phòng khi cột "Mã
+    // nhân viên" của file hoá đơn AMIS trống/không khớp được ai (gặp thật: cả file "HĐ T9.xlsx"
+    // 148 dòng không dòng nào khớp được NVKD, khiến NVKD không thấy hoá đơn của mình dù khách đã
+    // có NVKD phụ trách rõ ràng ở trang Khách hàng — anh Quân báo 02/10/2026).
+    const employeeByCustomerCode = new Map(allCustomers.map((c) => [c.customerCode, c.salesEmployeeId]));
 
     const employeeCache = new Map<string, string | null>();
     async function resolveEmployee(code: string | null): Promise<string | null> {
@@ -43,7 +48,7 @@ export async function POST(req: NextRequest) {
     let updatedCount = 0;
 
     for (const row of rows) {
-      const salesEmployeeId = await resolveEmployee(row.amisEmployeeCode);
+      const salesEmployeeId = (await resolveEmployee(row.amisEmployeeCode)) ?? employeeByCustomerCode.get(row.customerCode) ?? null;
       const data = {
         customerCode: row.customerCode,
         customerName: row.customerName || row.customerCodeRaw,
