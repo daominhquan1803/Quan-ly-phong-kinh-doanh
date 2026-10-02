@@ -74,6 +74,9 @@ function ImportResultToast({ message, onClose }: { message: string; onClose: () 
 export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<DebtStatus | "">("");
+  // Lọc theo tháng chứng từ ("YYYY-MM", rỗng = tất cả) — lọc theo invoiceDate, không phải hạn
+  // thanh toán (bảng vốn sort theo hạn nên hoá đơn mới up dễ bị đẩy xuống cuối trang, khó tìm).
+  const [invoiceMonthFilter, setInvoiceMonthFilter] = useState("");
   const [employeeId, setEmployeeId] = useState("");
   const [nvkdFilter, setNvkdFilter] = useState("");
   const [filterCustomer, setFilterCustomer] = useState("");
@@ -272,6 +275,9 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
     let list = rowsWithStatus;
     if (status) list = list.filter((r) => r.debtStatus === status);
     if (nvkdFilter) list = list.filter((r) => r.salesEmployee?.id === nvkdFilter);
+    if (invoiceMonthFilter) {
+      list = list.filter((r) => r.invoiceDate && toDateInputValueVN(r.invoiceDate).slice(0, 7) === invoiceMonthFilter);
+    }
     if (filterCustomer.trim()) {
       const q = normalizeVN(filterCustomer);
       list = list.filter((r) => normalizeVN(r.customerName).includes(q) || normalizeVN(r.customerCode).includes(q));
@@ -295,7 +301,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
       });
     }
     return list;
-  }, [rowsWithStatus, status, nvkdFilter, filterCustomer, sort]);
+  }, [rowsWithStatus, status, nvkdFilter, invoiceMonthFilter, filterCustomer, sort]);
 
   const nvkdOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -311,7 +317,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
 
   useEffect(() => {
     setPage(1);
-  }, [status, nvkdFilter, employeeId, filterCustomer, sort]);
+  }, [status, nvkdFilter, invoiceMonthFilter, employeeId, filterCustomer, sort]);
 
   const expandedWeekInvoices = useMemo(() => {
     if (expandedWeek === null || !weekSummary) return [];
@@ -671,6 +677,23 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
               </option>
             ))}
           </select>
+          <input
+            type="month"
+            value={invoiceMonthFilter}
+            onChange={(e) => setInvoiceMonthFilter(e.target.value)}
+            aria-label="Lọc hoá đơn theo tháng chứng từ"
+            title="Lọc theo tháng chứng từ (ngày hoá đơn phát sinh)"
+            className="text-xs bg-card text-ink rounded-xl border border-white/10 py-2 px-3 focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono"
+          />
+          {invoiceMonthFilter && (
+            <button
+              type="button"
+              onClick={() => setInvoiceMonthFilter("")}
+              className="text-xs text-amber-400 hover:text-amber-300 underline underline-offset-2"
+            >
+              Bỏ lọc tháng
+            </button>
+          )}
           {isAdmin && nvkdOptions.length > 0 && (
             <select
               value={nvkdFilter}
