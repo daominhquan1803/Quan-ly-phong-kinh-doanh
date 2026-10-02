@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@hoanggia/db";
 import { requireAdmin, requireSession, scopeByOwner, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
 import { emailListField, normalizeEmailList } from "@/lib/debt-reminder";
+import { normalizeCustomerCode } from "@/lib/debt-customer-match";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -43,7 +44,13 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Dữ liệu không hợp lệ" }, { status: 400 });
     }
-    const { customerCode, customerName, contactPerson, email, paymentTermType, paymentTermDays, paymentTermMonthOffset } = parsed.data;
+    const { customerName, contactPerson, email, paymentTermType, paymentTermDays, paymentTermMonthOffset } = parsed.data;
+    // Chuẩn hoá mã khách hàng khi tạo — bỏ tiền tố 1 chữ cái + dấu chấm (vd "T.", "C.") và dấu
+    // chấm cuối, CÙNG quy tắc với mã lấy từ AMIS (xem lib/debt-customer-match.ts) — tránh lệch mã
+    // giữa Khách hàng và Công nợ khi admin gõ tay kèm tiền tố quen dùng ở ghi chú riêng (lỗi thật
+    // gặp nhiều lần: "T.TRANGAN", "C.INDUSTRIAL", "MARUKOH.").
+    const customerCode = normalizeCustomerCode(parsed.data.customerCode);
+    if (!customerCode) return NextResponse.json({ error: "Mã khách hàng không hợp lệ" }, { status: 400 });
 
     // NVKD tạo khách thì tự là người phụ trách; chỉ ADMIN được chọn NVKD khác.
     const salesEmployeeId = session.user.role === "ADMIN" ? parsed.data.salesEmployeeId : session.user.id;

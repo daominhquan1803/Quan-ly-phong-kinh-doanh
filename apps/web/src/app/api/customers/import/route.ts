@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
       if (row.unrecognizedTermRaw) unrecognizedTerms.push(`${row.customerCode}: "${row.unrecognizedTermRaw}"`);
 
       const salesEmployeeId = await resolveEmployee(row.employeeNameRaw);
-      const existing = existingByCode.get(row.customerCode);
+      const existing = existingByCode.get(normCode);
 
       // Email sai định dạng thì BỎ QUA địa chỉ đó (vẫn giữ địa chỉ hợp lệ + import các trường còn
       // lại), không làm fail cả file — thư gửi ra ngoài nên không nhận địa chỉ sai.
@@ -100,10 +100,10 @@ export async function POST(req: NextRequest) {
       };
 
       if (existing) {
-        await prisma.customer.update({ where: { customerCode: row.customerCode }, data });
+        await prisma.customer.update({ where: { customerCode: normCode }, data });
         updatedCount++;
       } else {
-        await prisma.customer.create({ data: { customerCode: row.customerCode, ...data } });
+        await prisma.customer.create({ data: { customerCode: normCode, ...data } });
         createdCount++;
       }
     }
