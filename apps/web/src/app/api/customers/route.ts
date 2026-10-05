@@ -3,6 +3,7 @@ import { prisma } from "@hoanggia/db";
 import { requireAdmin, requireSession, scopeByOwner, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
 import { emailListField, normalizeEmailList } from "@/lib/debt-reminder";
 import { normalizeCustomerCode } from "@/lib/debt-customer-match";
+import { assignCustomerToUnassignedInvoices } from "@/lib/customer-invoice-sync";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -70,6 +71,8 @@ export async function POST(req: NextRequest) {
         paymentTermMonthOffset: paymentTermType === "END_OF_MONTH_OFFSET" ? paymentTermMonthOffset ?? null : null,
       },
     });
+
+    await assignCustomerToUnassignedInvoices(customer.customerCode, customer.salesEmployeeId);
 
     return NextResponse.json({ customer }, { status: 201 });
   } catch (err) {

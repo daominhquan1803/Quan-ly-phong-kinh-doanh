@@ -15,7 +15,11 @@ const h = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/auth", () => ({ auth: h.auth }));
 vi.mock("@hoanggia/db", () => ({
-  prisma: { order: { findMany: h.orderFindMany }, customer: { findMany: h.customerFindMany, create: h.create, update: h.update } },
+  prisma: {
+    order: { findMany: h.orderFindMany },
+    customer: { findMany: h.customerFindMany, create: h.create, update: h.update },
+    debtInvoice: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+  },
   resolveEmployeeIdByName: h.resolveEmployee,
 }));
 

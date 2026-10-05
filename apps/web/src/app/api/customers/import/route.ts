@@ -4,6 +4,7 @@ import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
 import { parseCustomerListExcel } from "@/lib/customer-import-parser";
 import { normalizeCustomerCode } from "@/lib/debt-customer-match";
 import { isValidEmail, parseEmailList } from "@/lib/debt-reminder";
+import { assignCustomerToUnassignedInvoices } from "@/lib/customer-invoice-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -106,6 +107,7 @@ export async function POST(req: NextRequest) {
         await prisma.customer.create({ data: { customerCode: normCode, ...data } });
         createdCount++;
       }
+      await assignCustomerToUnassignedInvoices(normCode, salesEmployeeId);
     }
 
     return NextResponse.json({

@@ -3,6 +3,7 @@ import { prisma } from "@hoanggia/db";
 import { requireSession, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
 import { computeDueDateFromTerm, PaymentTerm } from "@/lib/customer-payment-term";
 import { emailListField, normalizeEmailList } from "@/lib/debt-reminder";
+import { assignCustomerToUnassignedInvoices } from "@/lib/customer-invoice-sync";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -56,6 +57,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
 
     const customer = await prisma.customer.update({ where: { id: params.id }, data });
+
+    // Hoá đơn công nợ của khách còn trống NVKD (up trước khi khách có NVKD) → gán theo NVKD của khách.
+    // Chạy mọi lần lưu/"đồng bộ" khách để tự vá cả dữ liệu cũ.
+    await assignCustomerToUnassignedInvoices(customer.customerCode, customer.salesEmployeeId);
 
     // Quy tắc hạn nợ của khách là nguồn chuẩn: đổi quy tắc (hoặc bấm "tính lại") thì áp lại hạn thanh
     // toán cho MỌI hoá đơn còn nợ của khách — kể cả hoá đơn đã có hạn từ file gốc/nhập tay trước đó

@@ -3,12 +3,12 @@ import { NextRequest } from "next/server";
 
 // PATCH /api/customers/[id]: sửa Customer.email; NVKD sửa được email khách của MÌNH, không sửa của người khác.
 
-const h = vi.hoisted(() => ({ auth: vi.fn(), findUnique: vi.fn(), update: vi.fn(), invoiceFindMany: vi.fn(), invoiceUpdate: vi.fn() }));
+const h = vi.hoisted(() => ({ auth: vi.fn(), findUnique: vi.fn(), update: vi.fn(), invoiceFindMany: vi.fn(), invoiceUpdate: vi.fn(), invoiceUpdateMany: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ auth: h.auth }));
 vi.mock("@hoanggia/db", () => ({
   prisma: {
     customer: { findUnique: h.findUnique, update: h.update, delete: vi.fn() },
-    debtInvoice: { findMany: h.invoiceFindMany, update: h.invoiceUpdate },
+    debtInvoice: { findMany: h.invoiceFindMany, update: h.invoiceUpdate, updateMany: h.invoiceUpdateMany },
   },
 }));
 
@@ -23,7 +23,26 @@ beforeEach(() => {
   h.findUnique.mockResolvedValue(TARGET);
   h.update.mockImplementation(async ({ data }: { data: object }) => ({ ...TARGET, ...data }));
   h.invoiceFindMany.mockResolvedValue([]);
+  h.invoiceUpdateMany.mockResolvedValue({ count: 0 });
   vi.spyOn(console, "error").mockImplementation(() => {});
+});
+
+describe("PATCH /api/customers/[id] - gán NVKD cho hoá đơn công nợ trống", () => {
+  it("lưu khách có NVKD -> hoá đơn cùng mã đang trống NVKD được gán theo NVKD của khách", async () => {
+    await patch({ contactPerson: "Chị Lan" });
+    expect(h.invoiceUpdateMany).toHaveBeenCalledWith({
+      where: { customerCode: "KH1", salesEmployeeId: null },
+      data: { salesEmployeeId: "u-tung" },
+    });
+  });
+
+  it("khách chưa có NVKD -> không đụng tới hoá đơn", async () => {
+    h.findUnique.mockResolvedValue({ ...TARGET, salesEmployeeId: null });
+    h.update.mockResolvedValue({ ...TARGET, salesEmployeeId: null });
+    h.auth.mockResolvedValue({ user: { id: "u-admin", role: "ADMIN" } });
+    await patch({ contactPerson: "Chị Lan" });
+    expect(h.invoiceUpdateMany).not.toHaveBeenCalled();
+  });
 });
 
 describe("PATCH /api/customers/[id] - email", () => {

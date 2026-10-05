@@ -3,9 +3,14 @@ import { NextRequest } from "next/server";
 
 // POST /api/customers: nhận Customer.email (nhiều địa chỉ), validate TỪNG địa chỉ ở biên.
 
-const h = vi.hoisted(() => ({ auth: vi.fn(), findUnique: vi.fn(), create: vi.fn() }));
+const h = vi.hoisted(() => ({ auth: vi.fn(), findUnique: vi.fn(), create: vi.fn(), invoiceUpdateMany: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ auth: h.auth }));
-vi.mock("@hoanggia/db", () => ({ prisma: { customer: { findUnique: h.findUnique, create: h.create, findMany: vi.fn() } } }));
+vi.mock("@hoanggia/db", () => ({
+  prisma: {
+    customer: { findUnique: h.findUnique, create: h.create, findMany: vi.fn() },
+    debtInvoice: { updateMany: h.invoiceUpdateMany },
+  },
+}));
 
 import { POST } from "./route";
 
@@ -16,8 +21,24 @@ beforeEach(() => {
   vi.clearAllMocks();
   h.auth.mockResolvedValue({ user: { id: "u-admin", role: "ADMIN" } });
   h.findUnique.mockResolvedValue(null);
+  h.invoiceUpdateMany.mockResolvedValue({ count: 0 });
   h.create.mockImplementation(async ({ data }: { data: unknown }) => ({ id: "c1", ...(data as object) }));
   vi.spyOn(console, "error").mockImplementation(() => {});
+});
+
+describe("POST /api/customers - gán NVKD cho hoá đơn công nợ đã có", () => {
+  it("tạo khách có NVKD -> hoá đơn cùng mã đang trống NVKD được gán, KHÔNG ghi đè hoá đơn đã gán", async () => {
+    await post({ ...base, salesEmployeeId: "u-dung" });
+    expect(h.invoiceUpdateMany).toHaveBeenCalledWith({
+      where: { customerCode: "KH1", salesEmployeeId: null },
+      data: { salesEmployeeId: "u-dung" },
+    });
+  });
+
+  it("tạo khách không có NVKD -> không đụng tới hoá đơn", async () => {
+    await post(base);
+    expect(h.invoiceUpdateMany).not.toHaveBeenCalled();
+  });
 });
 
 describe("POST /api/customers - email nhận thư nhắc", () => {
