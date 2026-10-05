@@ -299,7 +299,12 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
     }
     if (filterCustomer.trim()) {
       const q = normalizeVN(filterCustomer);
-      list = list.filter((r) => normalizeVN(r.customerName).includes(q) || normalizeVN(r.customerCode).includes(q));
+      list = list.filter(
+        (r) =>
+          normalizeVN(r.customerName).includes(q) ||
+          normalizeVN(r.customerCode).includes(q) ||
+          normalizeVN(r.invoiceNumber ?? "").includes(q),
+      );
     }
     if (sort.field) {
       const dir = sort.dir === "asc" ? 1 : -1;
@@ -760,7 +765,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
               </tr>
               <tr className="bg-black/30 border-t border-white/5">
                 <th className="px-4 py-2 font-normal">
-                  <FilterInput value={filterCustomer} onChange={setFilterCustomer} placeholder="Tìm khách hàng..." />
+                  <FilterInput value={filterCustomer} onChange={setFilterCustomer} placeholder="Tìm số HĐ, mã khách..." />
                 </th>
                 <th colSpan={isAdmin ? 11 : 10} />
               </tr>
