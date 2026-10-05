@@ -571,7 +571,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                   )}
                   {expandedWeekInvoices.map((r) => (
                     <tr key={r.id} className="hover:bg-white/[0.02]">
-                      <td className="px-3.5 py-2 text-ink font-medium">{r.customerName}</td>
+                      <td className="px-3.5 py-2 text-ink font-medium whitespace-nowrap" title={r.customerName}>{r.customerCode}</td>
                       <td className="px-3.5 py-2 font-mono text-amber-300/90">{r.invoiceNumber ?? "—"}</td>
                       <td className="px-3.5 py-2 text-right font-mono font-semibold text-ink">{formatCurrencyVND(Number(r.originalAmount))}</td>
                       <td className="px-3.5 py-2">
@@ -785,7 +785,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
               )}
               {pagedRows.map((r) => (
                 <tr key={r.id} className="hover:bg-white/[0.02] transition-colors">
-                  <td className="px-4 py-2.5 font-medium text-ink">{r.customerName}</td>
+                  <td className="px-4 py-2.5 font-medium text-ink whitespace-nowrap" title={r.customerName}>{r.customerCode}</td>
                   <td className="px-4 py-2.5 font-mono text-amber-300/90 font-semibold">{r.invoiceNumber ?? "—"}</td>
                   <td className="px-4 py-2.5 font-mono text-muted2">{formatDateVN(r.invoiceDate)}</td>
                   <td className="px-4 py-2.5">
