@@ -67,3 +67,32 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: "Không cập nhật được công nợ" }, { status: 500 });
   }
 }
+
+/** Xoá hoá đơn công nợ không thuộc phòng (file AMIS xuất cả hoá đơn của phòng/công ty khác) — chỉ
+ * ADMIN. Hoá đơn đã có khoản Tiền về gắn vào thì KHÔNG xoá (xoá sẽ làm mất liên kết tiền thật):
+ * phải chuyển các khoản đó về "chưa về" trước. Thư nhắc (DebtReminderLog) tự xoá theo (cascade).
+ * Lưu ý: up lại đúng file hoá đơn cũ chứa hoá đơn này sẽ tạo lại nó. */
+export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const session = await requireSession();
+    if (session.user.role !== "ADMIN") throw new ForbiddenError("Chỉ quản trị viên được xoá hoá đơn");
+    const invoice = await prisma.debtInvoice.findUnique({
+      where: { id: params.id },
+      select: { id: true, _count: { select: { allocations: true } } },
+    });
+    if (!invoice) return NextResponse.json({ error: "Không tìm thấy hoá đơn" }, { status: 404 });
+    if (invoice._count.allocations > 0) {
+      return NextResponse.json(
+        { error: `Hoá đơn đang có ${invoice._count.allocations} khoản tiền về gắn vào — bấm "Chưa về" cho từng khoản ở nút Tiền về trước khi xoá.` },
+        { status: 409 }
+      );
+    }
+    await prisma.debtInvoice.delete({ where: { id: params.id } });
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    if (err instanceof UnauthorizedError) return NextResponse.json({ error: err.message }, { status: 401 });
+    if (err instanceof ForbiddenError) return NextResponse.json({ error: err.message }, { status: 403 });
+    console.error("debt/[id] DELETE error", err);
+    return NextResponse.json({ error: "Không xoá được hoá đơn" }, { status: 500 });
+  }
+}

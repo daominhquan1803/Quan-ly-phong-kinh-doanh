@@ -14,7 +14,7 @@ import { ManualPaymentModal, type ManualPaymentInvoice } from "./ManualPaymentMo
 import { DebtUnmatchedPaymentsPanel } from "./DebtUnmatchedPaymentsPanel";
 import { EmployeeFilterSelect } from "@/components/shared/EmployeeFilterSelect";
 import { FilterInput, SortableTh, toggleSort, type SortState } from "@/components/shared/SortableFilterableTable";
-import { UploadCloud, ChevronLeft, ChevronRight, X, CheckCircle2, Banknote, Mail, Send, CalendarClock, FileSpreadsheet } from "lucide-react";
+import { UploadCloud, ChevronLeft, ChevronRight, X, CheckCircle2, Banknote, Mail, Send, CalendarClock, FileSpreadsheet, Trash2 } from "lucide-react";
 
 interface InvoiceRow {
   id: string;
@@ -74,7 +74,8 @@ function ImportResultToast({ message, onClose }: { message: string; onClose: () 
 
 export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
   const queryClient = useQueryClient();
-  const [status, setStatus] = useState<DebtStatus | "">("");
+  // "NO_SCHEDULE" = còn nợ nhưng NVKD chưa điền ngày dự kiến thanh toán (chưa có lịch thanh toán).
+  const [status, setStatus] = useState<DebtStatus | "NO_SCHEDULE" | "">("");
   // Lọc theo tháng chứng từ ("YYYY-MM", rỗng = tất cả) — lọc theo invoiceDate, không phải hạn
   // thanh toán (bảng vốn sort theo hạn nên hoá đơn mới up dễ bị đẩy xuống cuối trang, khó tìm).
   const [invoiceMonthFilter, setInvoiceMonthFilter] = useState("");
@@ -188,6 +189,22 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
     }
   }
 
+  async function handleDeleteInvoice(row: InvoiceRow) {
+    if (!window.confirm(`Xoá hoá đơn ${row.invoiceNumber ?? "—"} của ${row.customerName}? Dùng cho hoá đơn không thuộc phòng. Không hoàn tác được.`)) return;
+    setUploadError(null);
+    const res = await fetch(`/api/debt/${row.id}`, { method: "DELETE" });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setUploadError(json.error ?? "Không xoá được hoá đơn");
+      return;
+    }
+    setToast(`Đã xoá hoá đơn ${row.invoiceNumber ?? ""} của ${row.customerName}`);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["debt-invoices"] }),
+      queryClient.invalidateQueries({ queryKey: ["debt-summary"] }),
+    ]);
+  }
+
   async function handleExpectedDateChange(invoiceId: string, value: string) {
     try {
       const res = await fetch(`/api/debt/${invoiceId}`, {
@@ -274,7 +291,8 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
 
   const visibleRows = useMemo(() => {
     let list = rowsWithStatus;
-    if (status) list = list.filter((r) => r.debtStatus === status);
+    if (status === "NO_SCHEDULE") list = list.filter((r) => r.debtStatus !== "PAID" && !r.expectedPaymentDate);
+    else if (status) list = list.filter((r) => r.debtStatus === status);
     if (nvkdFilter) list = list.filter((r) => r.salesEmployee?.id === nvkdFilter);
     if (invoiceMonthFilter) {
       list = list.filter((r) => r.invoiceDate && toDateInputValueVN(r.invoiceDate).slice(0, 7) === invoiceMonthFilter);
@@ -673,7 +691,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
           </Link>
           <select
             value={status}
-            onChange={(e) => setStatus(e.target.value as DebtStatus | "")}
+            onChange={(e) => setStatus(e.target.value as DebtStatus | "NO_SCHEDULE" | "")}
             className="text-xs bg-card text-ink rounded-xl border border-white/10 py-2 px-3 focus:outline-none focus:ring-1 focus:ring-amber-500"
           >
             <option value="">Tất cả trạng thái</option>
@@ -682,6 +700,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                 {v}
               </option>
             ))}
+            <option value="NO_SCHEDULE">Chưa có lịch thanh toán</option>
           </select>
           <input
             type="month"
@@ -835,6 +854,14 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                         title="Nhập tay tiền về + ngày về, xem lịch sử tiền về"
                       >
                         <Banknote className="h-3.5 w-3.5" /> Tiền về
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteInvoice(r)}
+                        className="mt-1 flex items-center gap-1 whitespace-nowrap rounded-lg border border-white/10 px-2.5 py-1 text-xs text-muted2 hover:border-alert/40 hover:text-alert transition-colors"
+                        title="Xoá hoá đơn không thuộc phòng"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" /> Xoá
                       </button>
                     </td>
                   )}
