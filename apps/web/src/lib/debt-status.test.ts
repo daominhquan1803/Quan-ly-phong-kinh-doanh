@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeDebtStatus, monthWeekMonday, mondayOfWeek, monthWeekBuckets } from "./debt-status";
+import { computeDebtStatus, monthWeekMonday, mondayOfWeek, monthWeekBuckets, previousMonthRange, isSlippedFromPrevMonth } from "./debt-status";
 
 function ymd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -45,5 +45,25 @@ describe("monthWeekBuckets", () => {
     const buckets = monthWeekBuckets(2026, 10);
     expect(ymd(buckets[1].start)).toBe("2026-10-05");
     expect(ymd(buckets[1].end)).toBe("2026-10-11");
+  });
+});
+
+describe("trượt kế hoạch tháng trước", () => {
+  const prev = previousMonthRange(2026, 10); // tháng 9/2026
+  it("previousMonthRange: 01/09 -> 30/09, nhãn 09/2026; tháng 1 lùi sang 12 năm trước", () => {
+    expect(ymd(prev.start)).toBe("2026-09-01");
+    expect(ymd(prev.end)).toBe("2026-09-30");
+    expect(prev.label).toBe("09/2026");
+    expect(previousMonthRange(2026, 1).label).toBe("12/2025");
+  });
+  it("hẹn thu trong tháng trước + còn nợ -> trượt (kể cả đúng ngày 30/09 và 01/09)", () => {
+    expect(isSlippedFromPrevMonth(new Date(2026, 8, 30), 100, prev)).toBe(true);
+    expect(isSlippedFromPrevMonth(new Date(2026, 8, 1), 100, prev)).toBe(true);
+  });
+  it("không trượt: đã thu hết, hẹn tháng khác, hoặc chưa có ngày hẹn", () => {
+    expect(isSlippedFromPrevMonth(new Date(2026, 8, 15), 0, prev)).toBe(false);
+    expect(isSlippedFromPrevMonth(new Date(2026, 9, 1), 100, prev)).toBe(false);
+    expect(isSlippedFromPrevMonth(new Date(2026, 7, 31), 100, prev)).toBe(false);
+    expect(isSlippedFromPrevMonth(null, 100, prev)).toBe(false);
   });
 });

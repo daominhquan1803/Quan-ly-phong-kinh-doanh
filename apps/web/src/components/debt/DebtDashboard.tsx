@@ -46,7 +46,7 @@ interface SummaryResponse {
   noDueDebt: number;
   overdueRate: number;
   badDebtRate: number;
-  recoveryRate: number;
+  slippedPrevMonth: { amount: number; count: number; label: string };
   perEmployee: { employeeId: string; employeeName: string; totalDebt: number; overdueDebt: number; badDebt: number }[] | null;
   weeklyPlan: { weekIndex: number; start: string; end: string; planned: number; collected: number; rate: number | null }[];
   monthlyPlan: { planned: number; collected: number; rate: number | null; totalReceived: number };
@@ -449,10 +449,16 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
 
           <div className="glass-card border border-emerald-500/30 bg-emerald-500/[0.04] p-4 relative overflow-hidden group hover:shadow-[0_0_20px_rgba(16,185,129,0.15)] transition-all">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-emerald-400 tracking-wider uppercase">Tỉ lệ thu hồi</p>
+              <p className="text-xs font-medium text-emerald-400 tracking-wider uppercase">Trượt kế hoạch tháng trước</p>
               <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.8)]" />
             </div>
-            <p className="text-2xl font-bold font-mono text-emerald-400 mt-2">{pct(summary.recoveryRate)}</p>
+            <p className="text-2xl font-bold font-mono text-emerald-400 mt-2">{formatCurrencyVND(summary.slippedPrevMonth.amount)}</p>
+            <p
+              className="text-xs text-muted2 mt-1"
+              title="Còn phải thu của các hoá đơn có ngày dự kiến thanh toán trong tháng trước mà đến nay vẫn chưa thu đủ"
+            >
+              {summary.slippedPrevMonth.count} hoá đơn hẹn thu T{summary.slippedPrevMonth.label} còn nợ
+            </p>
             <div className="h-0.5 w-12 bg-emerald-500/40 mt-3 group-hover:w-full group-hover:bg-emerald-500 transition-all duration-300" />
           </div>
         </div>

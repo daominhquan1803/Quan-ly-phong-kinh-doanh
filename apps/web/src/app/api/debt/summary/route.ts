@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma } from "@hoanggia/db";
 import { requireSession, scopeByOwner, UnauthorizedError } from "@/lib/rbac";
-import { remainingAmount, computeDebtStatus, monthWeekBuckets } from "@/lib/debt-status";
+import { remainingAmount, computeDebtStatus, monthWeekBuckets, previousMonthRange, isSlippedFromPrevMonth } from "@/lib/debt-status";
 
 export const dynamic = "force-dynamic";
 
@@ -81,6 +81,13 @@ export async function GET(req: NextRequest) {
     let badDebt = 0;
     let noDueDebt = 0; // còn nợ nhưng chưa có hạn thanh toán — KHÔNG thể xếp quá hạn, nằm trong mẫu số tỉ lệ
 
+    // "Trượt kế hoạch kỳ trước" = còn phải thu của hoá đơn hẹn thu trong THÁNG TRƯỚC (so với tháng của
+    // ngày đang xem; xem hiện tại thì so với tháng này).
+    const refDate = asOfDate ?? now;
+    const prevMonth = previousMonthRange(refDate.getFullYear(), refDate.getMonth() + 1);
+    let slippedAmount = 0;
+    let slippedCount = 0;
+
     const perEmployee = new Map<string, { employeeId: string; employeeName: string; totalDebt: number; overdueDebt: number; badDebt: number }>();
 
     for (const inv of invoices) {
@@ -98,6 +105,10 @@ export async function GET(req: NextRequest) {
       if (status === "OVERDUE" || status === "BAD_DEBT") overdueDebt += remaining;
       if (status === "BAD_DEBT") badDebt += remaining;
       if (status === "NO_DUE_DATE") noDueDebt += remaining;
+      if (isSlippedFromPrevMonth(inv.expectedPaymentDate, remaining, prevMonth)) {
+        slippedAmount += remaining;
+        slippedCount++;
+      }
 
       if (session.user.role === "ADMIN" && inv.salesEmployeeId) {
         const key = inv.salesEmployeeId;
@@ -168,7 +179,7 @@ export async function GET(req: NextRequest) {
       noDueDebt,
       overdueRate: totalDebt > 0 ? overdueDebt / totalDebt : 0,
       badDebtRate: totalDebt > 0 ? badDebt / totalDebt : 0,
-      recoveryRate: totalOriginal > 0 ? totalPaid / totalOriginal : 0,
+      slippedPrevMonth: { amount: slippedAmount, count: slippedCount, label: prevMonth.label },
       perEmployee: session.user.role === "ADMIN" ? Array.from(perEmployee.values()) : null,
       weeklyPlan: weeks.map((w) => ({
         weekIndex: w.weekIndex,

@@ -83,6 +83,27 @@ function addDays(d: Date, n: number): Date {
  * giới tháng (không tràn sang tháng trước/sau). Trước đây tuần 1 lấy nguyên tuần dương lịch chứa
  * ngày 1 (có thể bắt đầu từ cuối tháng trước) — anh Quân báo lỗi: "Tuần 1 tháng 10" hiện sai
  * thành 28/09-04/10, đúng phải là 01/10-04/10 (và phần 28-30/09 đó thuộc "Tuần 5 tháng 9"). */
+/** Khoảng ngày của THÁNG TRƯỚC so với tháng (1-12) đã cho, theo giờ máy chủ (VN). */
+export function previousMonthRange(year: number, month: number): { start: Date; end: Date; label: string } {
+  const start = new Date(year, month - 2, 1);
+  const end = new Date(year, month - 1, 0, 23, 59, 59, 999);
+  return { start, end, label: `${String(start.getMonth() + 1).padStart(2, "0")}/${start.getFullYear()}` };
+}
+
+/**
+ * "Trượt kế hoạch kỳ trước": hoá đơn NVKD hẹn thu trong THÁNG TRƯỚC nhưng tới nay vẫn còn nợ.
+ * Chỉ đúng với ngày dự kiến đang lưu — nếu NVKD đã dời lịch sang tháng này thì không còn tính là trượt.
+ */
+export function isSlippedFromPrevMonth(
+  expectedPaymentDate: Date | string | null,
+  remaining: number,
+  prev: { start: Date; end: Date },
+): boolean {
+  if (!expectedPaymentDate || remaining <= 0) return false;
+  const d = new Date(expectedPaymentDate);
+  return d >= prev.start && d <= prev.end;
+}
+
 export function monthWeekBuckets(year: number, month: number): { weekIndex: number; start: Date; end: Date }[] {
   const monthStart = new Date(year, month - 1, 1);
   const monthEnd = new Date(year, month, 0);
