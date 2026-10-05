@@ -6,15 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn, formatCurrencyVND, formatDateVN, toDateInputValueVN } from "@/lib/utils";
 import { normalizeVN } from "@/lib/text-normalize";
 import { normalizeCustomerCode } from "@/lib/debt-customer-match";
-import {
-  computeDebtStatus,
-  remainingAmount,
-  overdueDays,
-  previousMonthRange,
-  isSlippedFromPrevMonth,
-  DEBT_STATUS_LABEL,
-  DebtStatus,
-} from "@/lib/debt-status";
+import { computeDebtStatus, remainingAmount, overdueDays, DEBT_STATUS_LABEL, DebtStatus } from "@/lib/debt-status";
 import { reminderMilestoneFor, DEBT_REMINDER_MILESTONE_LABEL, DebtReminderMilestone } from "@/lib/debt-reminder";
 import { DebtStatusBadge } from "./DebtStatusBadge";
 import { DebtPaymentsImportWizard } from "./DebtPaymentsImportWizard";
@@ -54,7 +46,6 @@ interface SummaryResponse {
   noDueDebt: number;
   overdueRate: number;
   badDebtRate: number;
-  slippedPrevMonth: { amount: number; count: number; label: string };
   perEmployee: { employeeId: string; employeeName: string; totalDebt: number; overdueDebt: number; badDebt: number }[] | null;
   weeklyPlan: { weekIndex: number; start: string; end: string; planned: number; collected: number; rate: number | null }[];
   monthlyPlan: { planned: number; collected: number; rate: number | null; totalReceived: number };
@@ -82,9 +73,8 @@ function ImportResultToast({ message, onClose }: { message: string; onClose: () 
 
 export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
   const queryClient = useQueryClient();
-  // "SLIPPED" = hẹn thu trong THÁNG TRƯỚC mà còn nợ (cùng định nghĩa thẻ "Trượt kế hoạch tháng trước").
   // "NO_SCHEDULE" = còn nợ nhưng NVKD chưa điền ngày dự kiến thanh toán (chưa có lịch thanh toán).
-  const [status, setStatus] = useState<DebtStatus | "NO_SCHEDULE" | "SLIPPED" | "">("");
+  const [status, setStatus] = useState<DebtStatus | "NO_SCHEDULE" | "">("");
   // Lọc theo tháng chứng từ ("YYYY-MM", rỗng = tất cả) — lọc theo invoiceDate, không phải hạn
   // thanh toán (bảng vốn sort theo hạn nên hoá đơn mới up dễ bị đẩy xuống cuối trang, khó tìm).
   const [invoiceMonthFilter, setInvoiceMonthFilter] = useState("");
@@ -298,19 +288,9 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
   const rowsWithStatus = useMemo(() => withStatus(data?.invoices ?? []), [data]);
   const weekRows = useMemo(() => withStatus(weekData?.invoices ?? []), [weekData]);
 
-  // Bấm thẻ "Trượt kế hoạch tháng trước" -> lọc bảng hoá đơn bên dưới theo trạng thái SLIPPED rồi cuộn xuống.
-  function showSlippedInvoices() {
-    setStatus("SLIPPED");
-    setTimeout(() => document.getElementById("debt-invoice-table")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
-  }
-
   const visibleRows = useMemo(() => {
     let list = rowsWithStatus;
-    if (status === "SLIPPED") {
-      const ref = asOfDate ? new Date(`${asOfDate}T00:00:00+07:00`) : new Date();
-      const prev = previousMonthRange(ref.getFullYear(), ref.getMonth() + 1);
-      list = list.filter((r) => isSlippedFromPrevMonth(r.expectedPaymentDate, r.remaining, prev));
-    } else if (status === "NO_SCHEDULE") list = list.filter((r) => r.debtStatus !== "PAID" && !r.expectedPaymentDate);
+    if (status === "NO_SCHEDULE") list = list.filter((r) => r.debtStatus !== "PAID" && !r.expectedPaymentDate);
     else if (status) list = list.filter((r) => r.debtStatus === status);
     if (nvkdFilter) list = list.filter((r) => r.salesEmployee?.id === nvkdFilter);
     if (invoiceMonthFilter) {
@@ -344,7 +324,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
       });
     }
     return list;
-  }, [rowsWithStatus, status, asOfDate, nvkdFilter, invoiceMonthFilter, filterCustomer, sort]);
+  }, [rowsWithStatus, status, nvkdFilter, invoiceMonthFilter, filterCustomer, sort]);
 
   const nvkdOptions = useMemo(() => {
     const map = new Map<string, string>();
@@ -353,6 +333,16 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
     }
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1], "vi"));
   }, [rowsWithStatus]);
+
+  // Tổng tiền của TOÀN BỘ hoá đơn đang lọc (không chỉ trang đang xem).
+  const filteredTotals = useMemo(
+    () =>
+      visibleRows.reduce(
+        (acc, r) => ({ original: acc.original + Number(r.originalAmount), remaining: acc.remaining + r.remaining }),
+        { original: 0, remaining: 0 },
+      ),
+    [visibleRows],
+  );
 
   const totalPages = Math.max(1, Math.ceil(visibleRows.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -428,7 +418,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
       )}
 
       {summary && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
           <div className="glass-card border border-white/10 p-4 relative overflow-hidden group hover:border-amber-500/30 transition-all">
             <p className="text-xs font-medium text-muted2 tracking-wider uppercase">Tổng công nợ</p>
             <p className="text-2xl font-bold font-mono text-ink mt-2">{formatCurrencyVND(summary.totalDebt)}</p>
@@ -464,28 +454,6 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
             <p className="text-2xl font-bold font-mono text-alert mt-2">{formatCurrencyVND(summary.badDebt)}</p>
             <p className="text-xs text-muted2 mt-1">{pct(summary.badDebtRate)} tổng công nợ</p>
             <div className="h-0.5 w-12 bg-brandRed-500/50 mt-3 group-hover:w-full group-hover:bg-brandRed-500 transition-all duration-300" />
-          </div>
-
-          <div
-            role="button"
-            tabIndex={0}
-            title="Bấm để xem danh sách hoá đơn trượt"
-            onClick={showSlippedInvoices}
-            onKeyDown={(e) => e.key === "Enter" && showSlippedInvoices()}
-            className="glass-card border border-emerald-500/30 bg-emerald-500/[0.04] p-4 relative overflow-hidden group hover:shadow-[0_0_20px_rgba(16,185,129,0.15)] transition-all cursor-pointer"
-          >
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-emerald-400 tracking-wider uppercase">Trượt kế hoạch tháng trước</p>
-              <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.8)]" />
-            </div>
-            <p className="text-2xl font-bold font-mono text-emerald-400 mt-2">{formatCurrencyVND(summary.slippedPrevMonth.amount)}</p>
-            <p
-              className="text-xs text-muted2 mt-1"
-              title="Còn phải thu của các hoá đơn có ngày dự kiến thanh toán trong tháng trước mà đến nay vẫn chưa thu đủ"
-            >
-              {summary.slippedPrevMonth.count} hoá đơn hẹn thu T{summary.slippedPrevMonth.label} còn nợ
-            </p>
-            <div className="h-0.5 w-12 bg-emerald-500/40 mt-3 group-hover:w-full group-hover:bg-emerald-500 transition-all duration-300" />
           </div>
         </div>
       )}
@@ -728,7 +696,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
           </Link>
           <select
             value={status}
-            onChange={(e) => setStatus(e.target.value as DebtStatus | "NO_SCHEDULE" | "SLIPPED" | "")}
+            onChange={(e) => setStatus(e.target.value as DebtStatus | "NO_SCHEDULE" | "")}
             className="text-xs bg-card text-ink rounded-xl border border-white/10 py-2 px-3 focus:outline-none focus:ring-1 focus:ring-amber-500"
           >
             <option value="">Tất cả trạng thái</option>
@@ -737,7 +705,6 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                 {v}
               </option>
             ))}
-            <option value="SLIPPED">Trượt kế hoạch tháng trước</option>
             <option value="NO_SCHEDULE">Chưa có lịch thanh toán</option>
           </select>
           <input
@@ -774,7 +741,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
         </div>
       </div>
 
-      <div id="debt-invoice-table" className="glass-card border border-white/10 overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
+      <div className="glass-card border border-white/10 overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
         <div className="overflow-x-auto">
           <table className="min-w-full text-xs">
             <thead className="bg-white/[0.04] text-muted-foreground border-b border-white/5 backdrop-blur-md">
@@ -800,7 +767,12 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                 <th className="px-4 py-2 font-normal">
                   <FilterInput value={filterCustomer} onChange={setFilterCustomer} placeholder="Tìm số HĐ, mã khách..." />
                 </th>
-                <th colSpan={isAdmin ? 11 : 10} />
+                <th colSpan={5} className="px-4 py-2 text-right font-normal text-xs text-muted2">
+                  Tổng {visibleRows.length} hoá đơn đang lọc
+                </th>
+                <th className="px-4 py-2 text-right font-mono text-ink">{formatCurrencyVND(filteredTotals.original)}</th>
+                <th className="px-4 py-2 text-right font-mono text-alert">{formatCurrencyVND(filteredTotals.remaining)}</th>
+                <th colSpan={isAdmin ? 4 : 3} />
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">

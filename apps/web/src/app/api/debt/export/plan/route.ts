@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { prisma, Prisma } from "@hoanggia/db";
 import { requireSession, scopeByOwner, UnauthorizedError } from "@/lib/rbac";
-import { remainingAmount, computeDebtStatus, overdueDays, monthWeekBuckets, previousMonthRange, isSlippedFromPrevMonth, type DebtStatus } from "@/lib/debt-status";
+import { remainingAmount, computeDebtStatus, overdueDays, monthWeekBuckets, type DebtStatus } from "@/lib/debt-status";
 import { embedLogo, addCompanyHeaderLines, NAVY, HEADER_FILL, THIN_BOX } from "@/lib/excel-brand";
 
 export const dynamic = "force-dynamic";
@@ -129,9 +129,6 @@ export async function GET(req: NextRequest) {
     }
     const overdueRate = totalDebt > 0 ? overdueDebt / totalDebt : 0;
     const badDebtRate = totalDebt > 0 ? badDebt / totalDebt : 0;
-    const prevMonth = previousMonthRange(year, month);
-    const slipped = rows.filter((r) => isSlippedFromPrevMonth(r.inv.expectedPaymentDate, r.remaining, prevMonth));
-    const slippedAmount = slipped.reduce((s, r) => s + r.remaining, 0);
 
     // ---------------------------------------------------------------------------------------
     const workbook = new ExcelJS.Workbook();
@@ -165,7 +162,6 @@ export async function GET(req: NextRequest) {
     kpiCell(kpiRow, 3, "QUÁ HẠN", overdueDebt.toLocaleString("vi-VN") + " đ", "FFC8102E");
     kpiCell(kpiRow, 4, "TỈ LỆ QUÁ HẠN", (overdueRate * 100).toFixed(1) + "%", "FFC8102E");
     kpiCell(kpiRow, 5, "NỢ XẤU (>180 NGÀY)", badDebt.toLocaleString("vi-VN") + " đ", "FFC8102E");
-    kpiCell(kpiRow, 6, `TRƯỢT KH THÁNG ${prevMonth.label}`, slippedAmount.toLocaleString("vi-VN") + " đ", "FF10B981");
     r = kpiRow + 2;
 
     summarySheet.getCell(r, 2).value = "Công nợ theo trạng thái";
