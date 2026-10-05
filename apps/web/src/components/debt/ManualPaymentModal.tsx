@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Trash2, X } from "lucide-react";
+import { Undo2, X } from "lucide-react";
 import { formatCurrencyVND, formatDateVN } from "@/lib/utils";
 
 export interface ManualPaymentInvoice {
@@ -86,16 +86,19 @@ export function ManualPaymentModal({ invoice, onClose }: { invoice: ManualPaymen
     }
   }
 
-  async function handleDelete(allocationId: string) {
-    if (!window.confirm("Xoá khoản tiền về nhập tay này?")) return;
+  async function handleRevert(p: PaymentRow) {
+    const msg = p.isManual
+      ? "Xoá khoản tiền về nhập tay này? Hoá đơn sẽ quay về chưa về phần tiền này."
+      : "Chuyển khoản tiền về từ file này về CHƯA VỀ? Tiền không bị xoá — khoản này chuyển sang mục \"Tiền về chưa khớp công nợ\" để gắn lại đúng hoá đơn (hoặc xoá).";
+    if (!window.confirm(msg)) return;
     setError(null);
-    const res = await fetch(`/api/debt/${invoice.id}/payments/${allocationId}`, { method: "DELETE" });
+    const res = await fetch(`/api/debt/${invoice.id}/payments/${p.allocationId}`, { method: "DELETE" });
     if (!res.ok) {
       const json = await res.json().catch(() => ({}));
-      setError(json.error ?? "Không xoá được");
+      setError(json.error ?? "Không chuyển được về chưa về");
       return;
     }
-    await refreshAll();
+    await Promise.all([refreshAll(), queryClient.invalidateQueries({ queryKey: ["debt-unmatched-payments"] })]);
   }
 
   return createPortal(
@@ -191,11 +194,13 @@ export function ManualPaymentModal({ invoice, onClose }: { invoice: ManualPaymen
                     </p>
                     {p.note && <p className="text-[11px] text-muted2">{p.note}</p>}
                   </div>
-                  {p.isManual && (
-                    <button onClick={() => handleDelete(p.allocationId)} className="text-muted2 hover:text-alert" title="Xoá khoản nhập tay">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  )}
+                  <button
+                    onClick={() => handleRevert(p)}
+                    className="flex shrink-0 items-center gap-1 rounded-lg border border-white/10 px-2 py-1 text-[11px] text-muted2 hover:border-alert/40 hover:text-alert"
+                    title={p.isManual ? "Xoá khoản nhập tay (về chưa về)" : "Chuyển khoản này về chưa về"}
+                  >
+                    <Undo2 className="h-3 w-3" /> Chưa về
+                  </button>
                 </li>
               ))}
             </ul>

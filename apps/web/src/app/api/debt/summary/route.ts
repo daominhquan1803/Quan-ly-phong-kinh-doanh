@@ -44,15 +44,28 @@ export async function GET(req: NextRequest) {
     // khớp (payment.paymentDate <= asOfDate). Khoản chưa rõ ngày tiền về thì không tính (coi như
     // chưa xác nhận là đã về trước ngày này) — khác 1 chút so với cột paidAmount sống (luôn cộng
     // dồn bất kể có ngày hay không), chấp nhận được vì chỉ ảnh hưởng xem lại quá khứ.
+    // Phần đã thu KHÔNG có khoản Tiền về nào đứng sau (nhập thẳng cột "Số tiền đã thu" từ file Công nợ
+    // gốc — không có allocation/ngày) = paidAmount − tổng allocation; coi như đã thu từ TRƯỚC mọi mốc
+    // ngày đang xem. Thiếu bước này thì xem tại ngày quá khứ sẽ coi mọi khoản đã thu từ file gốc là
+    // chưa thu → công nợ/tỉ lệ thu hồi sai (anh Quân báo số liệu Tùng, Dung lệch 05/10/2026).
     let paidAsOfByInvoice: Map<string, number> | null = null;
     if (asOfDate) {
       const allocs = await prisma.debtPaymentAllocation.findMany({
-        where: { invoiceId: { in: invoices.map((i) => i.id) }, payment: { paymentDate: { lte: asOfDate } } },
-        select: { invoiceId: true, amount: true },
+        where: { invoiceId: { in: invoices.map((i) => i.id) } },
+        select: { invoiceId: true, amount: true, payment: { select: { paymentDate: true } } },
       });
-      paidAsOfByInvoice = new Map();
+      const allAlloc = new Map<string, number>();
+      const allocAsOf = new Map<string, number>();
       for (const a of allocs) {
-        paidAsOfByInvoice.set(a.invoiceId, (paidAsOfByInvoice.get(a.invoiceId) ?? 0) + Number(a.amount));
+        const amt = Number(a.amount);
+        allAlloc.set(a.invoiceId, (allAlloc.get(a.invoiceId) ?? 0) + amt);
+        const d = a.payment.paymentDate;
+        if (d && d <= asOfDate) allocAsOf.set(a.invoiceId, (allocAsOf.get(a.invoiceId) ?? 0) + amt);
+      }
+      paidAsOfByInvoice = new Map();
+      for (const inv of invoices) {
+        const untracked = Math.max(0, Number(inv.paidAmount) - (allAlloc.get(inv.id) ?? 0));
+        paidAsOfByInvoice.set(inv.id, untracked + (allocAsOf.get(inv.id) ?? 0));
       }
     }
 
