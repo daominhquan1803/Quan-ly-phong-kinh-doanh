@@ -74,6 +74,7 @@ export async function GET(req: NextRequest) {
     let totalDebt = 0;
     let overdueDebt = 0;
     let badDebt = 0;
+    let noDueDebt = 0; // còn nợ nhưng chưa có hạn thanh toán — KHÔNG thể xếp quá hạn, nằm trong mẫu số tỉ lệ
 
     const perEmployee = new Map<string, { employeeId: string; employeeName: string; totalDebt: number; overdueDebt: number; badDebt: number }>();
 
@@ -91,6 +92,7 @@ export async function GET(req: NextRequest) {
       const status = computeDebtStatus({ dueDate: inv.dueDate, originalAmount: original, paidAmount: paid }, asOfDate ?? undefined);
       if (status === "OVERDUE" || status === "BAD_DEBT") overdueDebt += remaining;
       if (status === "BAD_DEBT") badDebt += remaining;
+      if (status === "NO_DUE_DATE") noDueDebt += remaining;
 
       if (session.user.role === "ADMIN" && inv.salesEmployeeId) {
         const key = inv.salesEmployeeId;
@@ -158,6 +160,7 @@ export async function GET(req: NextRequest) {
       totalDebt,
       overdueDebt,
       badDebt,
+      noDueDebt,
       overdueRate: totalDebt > 0 ? overdueDebt / totalDebt : 0,
       badDebtRate: totalDebt > 0 ? badDebt / totalDebt : 0,
       recoveryRate: totalOriginal > 0 ? totalPaid / totalOriginal : 0,

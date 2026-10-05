@@ -43,6 +43,7 @@ interface SummaryResponse {
   totalDebt: number;
   overdueDebt: number;
   badDebt: number;
+  noDueDebt: number;
   overdueRate: number;
   badDebtRate: number;
   recoveryRate: number;
@@ -405,6 +406,11 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
           <div className="glass-card border border-brandRed-500/25 bg-brandRed-500/[0.02] p-4 relative overflow-hidden group hover:shadow-[0_0_20px_rgba(200,16,46,0.15)] transition-all">
             <p className="text-xs font-medium text-alert/80 tracking-wider uppercase">Tỉ lệ nợ quá hạn</p>
             <p className="text-2xl font-bold font-mono text-alert mt-2">{pct(summary.overdueRate)}</p>
+            {summary.noDueDebt > 0 && (
+              <p className="text-xs text-amber-400 mt-1" title="Hoá đơn còn nợ nhưng chưa có hạn thanh toán — không thể tính quá hạn, tỉ lệ thực có thể cao hơn">
+                {formatCurrencyVND(summary.noDueDebt)} chưa có hạn
+              </p>
+            )}
             <div className="h-0.5 w-12 bg-brandRed-500/30 mt-3 group-hover:w-full transition-all duration-300" />
           </div>
 
