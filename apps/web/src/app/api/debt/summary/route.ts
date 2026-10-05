@@ -20,6 +20,11 @@ export async function GET(req: NextRequest) {
     const asOfParam = searchParams.get("asOfDate");
     const asOfDate = asOfParam ? new Date(`${asOfParam}T00:00:00+07:00`) : null;
 
+    // Xem tại ngày = CHỐT CUỐI NGÀY đó: hoá đơn hạn đúng ngày chọn mà chưa thu tính là quá hạn 1 ngày
+    // (mốc tính quá hạn lùi sang 00:00 ngày kế tiếp), còn tiền về/hoá đơn phát sinh vẫn tính tới hết
+    // ngày chọn. Anh Quân xác nhận 05/10/2026 (khách NHUAYTEVN hạn 30/09 phải vào quá hạn tại 30/09).
+    const overdueRefDate = asOfDate ? new Date(asOfDate.getTime() + 24 * 60 * 60 * 1000) : undefined;
+
     const where: Prisma.DebtInvoiceWhereInput = { ...scopeByOwner(session, "salesEmployeeId") };
     // ADMIN xem được số liệu riêng 1 nhân viên (bộ lọc "Xem theo" trên trang Công nợ) — SALES đã bị
     // scopeByOwner giới hạn chỉ của mình nên bỏ qua tham số này nếu không phải ADMIN.
@@ -89,7 +94,7 @@ export async function GET(req: NextRequest) {
       totalOriginal += original;
       totalPaid += paid;
       totalDebt += remaining;
-      const status = computeDebtStatus({ dueDate: inv.dueDate, originalAmount: original, paidAmount: paid }, asOfDate ?? undefined);
+      const status = computeDebtStatus({ dueDate: inv.dueDate, originalAmount: original, paidAmount: paid }, overdueRefDate);
       if (status === "OVERDUE" || status === "BAD_DEBT") overdueDebt += remaining;
       if (status === "BAD_DEBT") badDebt += remaining;
       if (status === "NO_DUE_DATE") noDueDebt += remaining;

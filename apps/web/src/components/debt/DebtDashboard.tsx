@@ -381,7 +381,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
       </div>
       {asOfDate && (
         <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-          Đang xem công nợ TẠI NGÀY {formatDateVN(asOfDate)} — không phải số liệu hiện tại.
+          Đang xem công nợ chốt cuối ngày {formatDateVN(asOfDate)} (hoá đơn hạn đúng ngày này mà chưa thu tính là quá hạn) — không phải số liệu hiện tại.
         </p>
       )}
 
