@@ -11,6 +11,19 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const q = searchParams.get("q")?.trim();
 
+    // Tìm theo mã hàng / tên hàng / số PO bán / mã PO (đơn hàng gắn với phiếu) của DÒNG HÀNG trong phiếu,
+    // ngoài số phiếu và tên khách.
+    const itemMatch = q
+      ? {
+          OR: [
+            { itemCode: { contains: q, mode: "insensitive" as const } },
+            { itemName: { contains: q, mode: "insensitive" as const } },
+            { poSaleNumber: { contains: q, mode: "insensitive" as const } },
+            { poCustomerItemCode: { contains: q, mode: "insensitive" as const } },
+          ],
+        }
+      : undefined;
+
     const slips = await prisma.shipmentSlip.findMany({
       where: {
         ...scopeByOwner(session, "createdById"),
@@ -19,6 +32,8 @@ export async function GET(req: NextRequest) {
               OR: [
                 { slipNumber: { contains: q, mode: "insensitive" } },
                 { customerName: { contains: q, mode: "insensitive" } },
+                { order: { orderCode: { contains: q, mode: "insensitive" } } },
+                { items: { some: itemMatch } },
               ],
             }
           : {}),
@@ -34,6 +49,10 @@ export async function GET(req: NextRequest) {
         imageThumbPath: true,
         createdBy: { select: { name: true } },
         order: { select: { orderCode: true } },
+        // Khi tìm: trả kèm các dòng hàng khớp để hiện trên thẻ phiếu (biết khớp ở mã hàng/PO nào).
+        ...(itemMatch
+          ? { items: { where: itemMatch, take: 3, select: { itemCode: true, itemName: true, poSaleNumber: true } } }
+          : {}),
       },
     });
 

@@ -15,6 +15,7 @@ interface SlipRow {
   imageThumbPath: string | null;
   createdBy: { name: string };
   order: { orderCode: string } | null;
+  items?: { itemCode: string | null; itemName: string; poSaleNumber: string | null }[];
 }
 
 interface ResyncResult {
@@ -80,7 +81,7 @@ export function SlipTable({ isAdmin }: { isAdmin: boolean }) {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Tìm số phiếu, tên khách hàng..."
+            placeholder="Tìm số phiếu, khách hàng, mã hàng, số PO..."
             className="w-full rounded-xl border border-gray-200/80 bg-navy-50/80 pl-9 pr-8 py-2 text-xs sm:text-sm text-ink placeholder:text-muted2/60 transition-all focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
           />
           {q && (
@@ -206,6 +207,12 @@ export function SlipTable({ isAdmin }: { isAdmin: boolean }) {
                     PO: {s.order.orderCode}
                   </p>
                 )}
+                {q && s.items?.map((it, i) => (
+                  <p key={i} className="text-[10px] font-mono text-amber-400/90 mt-0.5 truncate" title={it.itemName}>
+                    {it.itemCode ?? it.itemName}
+                    {it.poSaleNumber ? ` · PO ${it.poSaleNumber}` : ""}
+                  </p>
+                ))}
               </div>
               <div className="flex items-center justify-between mt-3 pt-2 border-t border-gray-200/40 text-[11px] text-muted-foreground">
                 <span>{formatDateVN(s.slipDate)}</span>
