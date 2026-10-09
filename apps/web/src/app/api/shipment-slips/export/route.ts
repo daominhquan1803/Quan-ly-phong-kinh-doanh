@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
     const COLS = [
       { header: "STT", width: 6 },
       { header: "Ngày đi", width: 12 },
-      { header: "Số phiếu", width: 16 },
+      { header: "Số phiếu giao hàng", width: 20 },
       { header: "Mã hàng", width: 18 },
       { header: "Tên hàng", width: 44 },
       { header: "ĐVT", width: 8 },

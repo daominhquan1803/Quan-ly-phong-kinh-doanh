@@ -15,7 +15,7 @@ const get = (qs: string) => GET(new NextRequest(`http://localhost/api/shipment-s
 // Ngày lưu = 0h giờ VN quy ra UTC (01/10/2026 VN = 30/09 17:00 UTC).
 const SLIPS = [
   {
-    slipNumber: "PX001",
+    slipNumber: "BH04215",
     slipDate: new Date("2026-09-30T17:00:00.000Z"),
     customerName: "Khách A",
     order: { orderCode: "PO-A" },
@@ -25,7 +25,7 @@ const SLIPS = [
     ],
   },
   {
-    slipNumber: "PX002",
+    slipNumber: "BH04216",
     slipDate: new Date("2026-10-08T17:00:00.000Z"),
     customerName: "Khách B",
     order: null,
@@ -60,13 +60,13 @@ describe("GET /api/shipment-slips/export", () => {
     const sheet = (await readWorkbook(res)).getWorksheet("Chi tiết")!;
     let headerRow = 0;
     sheet.eachRow((row, n) => {
-      if (row.getCell(3).value === "Số phiếu") headerRow = n;
+      if (row.getCell(3).value === "Số phiếu giao hàng") headerRow = n;
     });
     expect(headerRow).toBeGreaterThan(0);
     const row1 = sheet.getRow(headerRow + 1);
     expect(row1.getCell(1).value).toBe(1);
     expect((row1.getCell(2).value as Date).toISOString().slice(0, 10)).toBe("2026-10-01");
-    expect(row1.getCell(3).value).toBe("PX001");
+    expect(row1.getCell(3).value).toBe("BH04215");
     expect(row1.getCell(4).value).toBe("H1");
     expect(row1.getCell(5).value).toBe("Hộp 1");
     expect(row1.getCell(7).value).toBe(10); // thực xuất
