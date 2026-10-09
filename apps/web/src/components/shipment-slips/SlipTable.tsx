@@ -3,8 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { formatDateVN } from "@/lib/utils";
-import { Search, Plus, Upload, RefreshCw, CheckCircle2, AlertTriangle, FileText, Camera, Sparkles, X } from "lucide-react";
+import { formatDateVN, toDateInputValueVN } from "@/lib/utils";
+import { Search, Plus, Upload, Download, RefreshCw, CheckCircle2, AlertTriangle, FileText, Camera, Sparkles, X } from "lucide-react";
 
 interface SlipRow {
   id: string;
@@ -30,6 +30,11 @@ export function SlipTable({ isAdmin }: { isAdmin: boolean }) {
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<ResyncResult | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  // Khoảng ngày xuất Excel thống kê đi hàng — mặc định từ đầu tháng tới hôm nay.
+  const today = toDateInputValueVN(new Date());
+  const [exportFrom, setExportFrom] = useState(`${today.slice(0, 8)}01`);
+  const [exportTo, setExportTo] = useState(today);
+  const exportValid = !!exportFrom && !!exportTo && exportFrom <= exportTo;
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -95,6 +100,32 @@ export function SlipTable({ isAdmin }: { isAdmin: boolean }) {
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
+          <div className="flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1.5">
+            <input
+              type="date"
+              value={exportFrom}
+              onChange={(e) => setExportFrom(e.target.value)}
+              aria-label="Xuất thống kê từ ngày"
+              className="text-xs bg-transparent text-ink focus:outline-none font-mono"
+            />
+            <span className="text-xs text-muted2">→</span>
+            <input
+              type="date"
+              value={exportTo}
+              onChange={(e) => setExportTo(e.target.value)}
+              aria-label="Xuất thống kê đến ngày"
+              className="text-xs bg-transparent text-ink focus:outline-none font-mono"
+            />
+            <a
+              href={exportValid ? `/api/shipment-slips/export?from=${exportFrom}&to=${exportTo}` : undefined}
+              aria-disabled={!exportValid}
+              className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold text-emerald-400 ${exportValid ? "hover:bg-emerald-500/20" : "opacity-40 pointer-events-none"}`}
+              title="Xuất Excel thống kê đi hàng: số phiếu, mã hàng, tên hàng, ngày đi, số lượng (cả 2 ngày đầu cuối)"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Xuất Excel đi hàng
+            </a>
+          </div>
           {isAdmin && (
             <button
               onClick={handleResync}
