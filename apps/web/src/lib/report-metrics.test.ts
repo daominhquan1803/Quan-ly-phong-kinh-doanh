@@ -26,7 +26,8 @@ vi.mock("@hoanggia/db", () => ({
 vi.mock("@/lib/debt-snapshot", () => ({ getDebtSnapshot: h.snapshot, getCollectionPlan: h.plan }));
 
 import { getReportData } from "./report-metrics";
-import { buildReportWorkbook } from "./report-workbook";
+import { buildReportWorkbook, buildReportFile } from "./report-workbook";
+import JSZip from "jszip";
 import { resolveReportPeriods } from "./report-period";
 
 const d = (ymd: string) => new Date(`${ymd}T00:00:00+07:00`);
@@ -220,5 +221,25 @@ describe("buildReportWorkbook", () => {
     // HĐ quá hạn + khách mới
     expect(wb.getWorksheet("HĐ quá hạn")!.getRow(2).getCell(5).value).toBe("HD1");
     expect(wb.getWorksheet("Khách hàng mới")!.getRow(2).getCell(3).value).toBe("K1");
+  });
+});
+
+describe("buildReportFile - biểu đồ", () => {
+  it("admin: 4 biểu đồ gốc Excel trên Dashboard, tiêu đề trỏ ô, tham chiếu đúng sheet", async () => {
+    const zip = await JSZip.loadAsync(await buildReportFile(await monthReport()));
+    const charts = Object.keys(zip.files).filter((f) => /^xl\/charts\/chart\d+\.xml$/.test(f)).sort();
+    expect(charts).toHaveLength(4);
+    const xml = await Promise.all(charts.map((c) => zip.file(c)!.async("string")));
+    expect(xml[0]).toContain("Dashboard!$B$"); // doanh số theo chỉ số của nhân viên đã chọn
+    expect(xml[1]).toContain("Dashboard!$I$"); // xếp hạng theo nhân viên
+    expect(xml[2]).toContain("'Công nợ'!");
+    expect(xml[3]).toContain("'Kế hoạch thu'!");
+    for (const x of xml) expect(x).toMatch(/<c:title><c:tx><c:strRef><c:f>Dashboard!\$[A-Z]+\$\d+<\/c:f>/);
+  });
+
+  it("NVKD (1 người, không có Cả phòng): vẫn dựng được file và biểu đồ", async () => {
+    h.users.mockResolvedValue([{ id: "u1", name: "Tùng" }]);
+    const zip = await JSZip.loadAsync(await buildReportFile(await monthReport("u1")));
+    expect(Object.keys(zip.files).filter((f) => /^xl\/charts\/chart\d+\.xml$/.test(f)).length).toBeGreaterThanOrEqual(3);
   });
 });

@@ -24,7 +24,7 @@ ADMIN: Cả phòng + từng nhân viên. SALES: chỉ chính mình (không có d
 
 ## File Excel
 Sheet Dashboard (ô chọn Nhân viên + Chỉ số, công thức SUMIFS lên sheet Dữ liệu, thanh dữ liệu, % tăng giảm tô màu), Dữ liệu (bảng thô, lọc được), Công nợ (tổng hợp + HĐ quá hạn), Kế hoạch thu (tuần × nhân viên), Khách hàng mới, Cách tính.
-Thư viện ExcelJS không tạo biểu đồ gốc nên dùng thanh dữ liệu/tô màu.
+Biểu đồ (10/10/2026, anh Quân yêu cầu thêm): ExcelJS không tạo được biểu đồ nên `lib/excel-charts.ts` chèn 4 biểu đồ cột GỐC của Excel vào file sau khi ghi (JSZip: chart XML + drawing + rels + content-type). Biểu đồ trỏ vào ô nên đổi theo ô chọn: (1) doanh số của nhân viên đã chọn qua 3 kỳ, (2) xếp hạng nhân viên theo chỉ số đã chọn, (3) công nợ theo nhân viên, (4) kế hoạch thu vs đã thu. Dashboard dùng tô thang màu thay thanh dữ liệu (ExcelJS ghi thanh dữ liệu kèm khối mở rộng rỗng, dễ làm Excel báo lỗi).
 
 ## Kỹ thuật
 - `lib/report-period.ts`: tính kỳ (tháng/tuần) + 2 kỳ trước.

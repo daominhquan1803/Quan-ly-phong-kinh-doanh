@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireSession, UnauthorizedError } from "@/lib/rbac";
 import { resolveReportPeriods, type ReportType } from "@/lib/report-period";
 import { getReportData } from "@/lib/report-metrics";
-import { buildReportWorkbook } from "@/lib/report-workbook";
+import { buildReportFile } from "@/lib/report-workbook";
 
 export const dynamic = "force-dynamic";
 // Gom nhiều nguồn (PO, giao hàng, công nợ) nên cho phép chạy lâu hơn mặc định.
@@ -28,10 +28,9 @@ export async function GET(req: NextRequest) {
       periods,
       scopeEmployeeId: session.user.role === "ADMIN" ? undefined : session.user.id,
     });
-    const workbook = await buildReportWorkbook(data);
-    const buffer = await workbook.xlsx.writeBuffer();
+    const buffer = await buildReportFile(data);
     const fileName = `Bao-cao-${type === "week" ? "tuan" : "thang"}-${period}.xlsx`;
-    return new NextResponse(buffer as ArrayBuffer, {
+    return new NextResponse(new Uint8Array(buffer), {
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"`,

@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 import { embedLogo, addCompanyHeaderLines, NAVY, HEADER_FILL, THIN_BOX } from "@/lib/excel-brand";
 import { DEBT_STATUS_LABEL } from "@/lib/debt-status";
+import { injectCharts, type ChartSpec } from "@/lib/excel-charts";
 import type { ReportData, ReportMetricDef } from "@/lib/report-metrics";
 
 const VND_FMT = "#,##0";
@@ -47,7 +48,8 @@ function changeRules(sheet: ExcelJS.Worksheet, ref: string, priority = 1) {
  * Dashboard là công thức SUMIFS lên sheet "Dữ liệu" nên đổi ô chọn là số đổi theo (Excel tự tính lại
  * khi mở, `fullCalcOnLoad`); kèm giá trị tính sẵn cho trình xem không chạy công thức.
  */
-export async function buildReportWorkbook(data: ReportData): Promise<ExcelJS.Workbook> {
+async function buildWorkbookAndCharts(data: ReportData): Promise<{ workbook: ExcelJS.Workbook; charts: ChartSpec[] }> {
+  const charts: ChartSpec[] = [];
   const wb = new ExcelJS.Workbook();
   wb.calcProperties = { fullCalcOnLoad: true };
   const { periods, metrics, rows } = data;
@@ -246,6 +248,111 @@ export async function buildReportWorkbook(data: ReportData): Promise<ExcelJS.Wor
   }
   dash.getCell(Math.max(t1Last, t2Last) + 2, 1).value = "Ô xanh đậm = giá trị cao hơn giữa các nhân viên (không tính dòng Cả phòng). Xem định nghĩa từng chỉ số ở sheet \"Cách tính\".";
   dash.getCell(Math.max(t1Last, t2Last) + 2, 1).font = { italic: true, color: { argb: "FF6B7280" } };
+  // ---- Biểu đồ (chèn vào file sau khi ghi — xem lib/excel-charts.ts). Tiêu đề lấy từ 1 ô nằm ngay dưới
+  // biểu đồ (bị biểu đồ che) nên tiêu đề biểu đồ đổi theo ô chọn nhân viên/chỉ số. ----
+  const chartRow1 = Math.max(t1Last, t2Last) + 4; // dòng (1-based) đặt ô tiêu đề + đầu biểu đồ hàng 1
+  const chartRow2 = chartRow1 + 20;
+  const CHART_ROWS = 18;
+  const titleCell = (row: number, col: number, formula: string | null, text: string) => {
+    const c = dash.getCell(row, col);
+    c.value = formula ? { formula, result: text } : text;
+    c.font = { bold: true, color: { argb: NAVY } };
+    return `Dashboard!$${colLetter(col)}$${row}`;
+  };
+  const anchor = (row: number, right: boolean) => ({
+    fromCol: right ? 8 : 0,
+    fromRow: row - 1,
+    toCol: right ? 14 : 7,
+    toRow: row - 1 + CHART_ROWS,
+  });
+  const periodColors = ["1D4ED8", "60A5FA", "BFDBFE"];
+  const periodNames = periods.map((p) => p.label);
+
+  // 1) Doanh số của nhân viên đã chọn qua 3 kỳ (4 chỉ số doanh số đầu bảng 1)
+  const salesMetrics = metrics.slice(0, 4);
+  const salesTitle = `DOANH SỐ — ${defaultEmployee}`;
+  charts.push({
+    title: { ref: titleCell(chartRow1, 1, `"DOANH SỐ — "&${EMP}`, salesTitle), text: salesTitle },
+    categoriesRef: `Dashboard!$B$${t1Head + 1}:$B$${t1Head + salesMetrics.length}`,
+    categories: salesMetrics.map((m) => m.label),
+    series: [0, 1, 2].map((i) => ({
+      name: periodNames[i],
+      nameRef: `Dashboard!$${colLetter(3 + i)}$${t1Head}`,
+      valuesRef: `Dashboard!$${colLetter(3 + i)}$${t1Head + 1}:$${colLetter(3 + i)}$${t1Head + salesMetrics.length}`,
+      values: salesMetrics.map((m) => valueOf(defaultEmployee, m.key, i)),
+      color: periodColors[i],
+    })),
+    anchor: anchor(chartRow1, false),
+  });
+
+  // 2) Xếp hạng nhân viên theo chỉ số đã chọn (bỏ dòng Cả phòng)
+  const rankFirst = t1Head + 1 + (data.totalLabel ? 1 : 0);
+  if (rankFirst <= t2Last) {
+    const rankTitle = `XẾP HẠNG — ${defaultMetric.label}`;
+    charts.push({
+      title: { ref: titleCell(chartRow1, 9, `"XẾP HẠNG — "&${MET}`, rankTitle), text: rankTitle },
+      categoriesRef: `Dashboard!$I$${rankFirst}:$I$${t2Last}`,
+      categories: data.employeeNames,
+      series: [0, 1, 2].map((i) => ({
+        name: periodNames[i],
+        nameRef: `Dashboard!$${colLetter(10 + i)}$${t1Head}`,
+        valuesRef: `Dashboard!$${colLetter(10 + i)}$${rankFirst}:$${colLetter(10 + i)}$${t2Last}`,
+        values: data.employeeNames.map((n) => valueOf(n, defaultMetric.key, i)),
+        color: periodColors[i],
+      })),
+      anchor: anchor(chartRow1, true),
+    });
+  }
+
+  // 3) Công nợ theo nhân viên (tổng nợ / quá hạn / nợ xấu) và 4) Kế hoạch thu vs đã thu
+  const debtFirst = 2 + (data.totalLabel ? 1 : 0);
+  const debtLast = employeeOptions.length + 1;
+  if (debtFirst <= debtLast) {
+    const debtSeries: [string, string, string, string][] = [
+      ["debt_total", "B", "1D4ED8", "Tổng công nợ"],
+      ["debt_overdue", "C", "C8102E", "Công nợ quá hạn"],
+      ["debt_bad", "E", "7F1D1D", "Nợ xấu (>180 ngày)"],
+    ];
+    const debtTitle = `CÔNG NỢ THEO NHÂN VIÊN (${asOfText})`;
+    charts.push({
+      title: { ref: titleCell(chartRow2, 1, null, debtTitle), text: debtTitle },
+      categoriesRef: `'Công nợ'!$A$${debtFirst}:$A$${debtLast}`,
+      categories: data.employeeNames,
+      series: debtSeries.map(([key, col, color, name]) => ({
+        name,
+        nameRef: `'Công nợ'!$${col}$1`,
+        valuesRef: `'Công nợ'!$${col}$${debtFirst}:$${col}$${debtLast}`,
+        values: data.employeeNames.map((n) => valueOf(n, key, 0)),
+        color,
+      })),
+      anchor: anchor(chartRow2, false),
+    });
+
+    const nbk = data.plan.bucketLabels.length;
+    const planFirst = 3 + (data.totalLabel ? 1 : 0);
+    const planLast = 2 + data.plan.rows.length;
+    const sumOf = (a: number[]) => a.reduce((x, y) => x + y, 0);
+    const planByName = new Map(data.plan.rows.map((r) => [r.employee, r]));
+    const planSeries: [number, string, string, (n: string) => number][] = [
+      [2 + nbk * 2, "Tổng kế hoạch", "1D4ED8", (n) => sumOf(planByName.get(n)?.planned ?? [])],
+      [3 + nbk * 2, "Tổng đã thu", "15803D", (n) => sumOf(planByName.get(n)?.collected ?? [])],
+    ];
+    const planTitle = "KẾ HOẠCH THU THEO NHÂN VIÊN";
+    charts.push({
+      title: { ref: titleCell(chartRow2, 9, null, planTitle), text: planTitle },
+      categoriesRef: `'Kế hoạch thu'!$A$${planFirst}:$A$${planLast}`,
+      categories: data.employeeNames,
+      series: planSeries.map(([col, name, color, valueFor]) => ({
+        name,
+        nameRef: `'Kế hoạch thu'!$${colLetter(col)}$1`,
+        valuesRef: `'Kế hoạch thu'!$${colLetter(col)}$${planFirst}:$${colLetter(col)}$${planLast}`,
+        values: data.employeeNames.map(valueFor),
+        color,
+      })),
+      anchor: anchor(chartRow2, true),
+    });
+  }
+
   dash.views = [{ showGridLines: false, state: "frozen", ySplit: selMetricRow }];
 
   // ========== Sheet Công nợ (tổng hợp theo nhân viên) ==========
@@ -396,5 +503,17 @@ export async function buildReportWorkbook(data: ReportData): Promise<ExcelJS.Wor
     notesSheet.getCell(k + 2, 1).alignment = { vertical: "top" };
   });
 
-  return wb;
+  return { workbook: wb, charts };
+}
+
+/** Workbook chưa có biểu đồ (dùng cho test đọc số liệu). */
+export async function buildReportWorkbook(data: ReportData): Promise<ExcelJS.Workbook> {
+  return (await buildWorkbookAndCharts(data)).workbook;
+}
+
+/** File .xlsx hoàn chỉnh: workbook + biểu đồ gốc Excel chèn vào sheet Dashboard. */
+export async function buildReportFile(data: ReportData): Promise<Buffer> {
+  const { workbook, charts } = await buildWorkbookAndCharts(data);
+  const raw = (await workbook.xlsx.writeBuffer()) as ArrayBuffer;
+  return injectCharts(raw, "Dashboard", charts);
 }

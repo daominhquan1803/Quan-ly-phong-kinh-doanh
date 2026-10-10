@@ -6,7 +6,7 @@ import { NextRequest } from "next/server";
 const h = vi.hoisted(() => ({ auth: vi.fn(), getReportData: vi.fn(), build: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ auth: h.auth }));
 vi.mock("@/lib/report-metrics", () => ({ getReportData: h.getReportData }));
-vi.mock("@/lib/report-workbook", () => ({ buildReportWorkbook: h.build }));
+vi.mock("@/lib/report-workbook", () => ({ buildReportFile: h.build }));
 
 import { GET } from "./route";
 
@@ -16,7 +16,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   h.auth.mockResolvedValue({ user: { id: "u-admin", role: "ADMIN" } });
   h.getReportData.mockResolvedValue({});
-  h.build.mockResolvedValue({ xlsx: { writeBuffer: async () => new ArrayBuffer(8) } });
+  h.build.mockResolvedValue(Buffer.alloc(8));
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
