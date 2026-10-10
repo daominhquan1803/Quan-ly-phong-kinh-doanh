@@ -11,6 +11,7 @@ const h = vi.hoisted(() => ({
   poAgg: vi.fn(),
   snapshot: vi.fn(),
   plan: vi.fn(),
+  oihAsOf: vi.fn(),
 }));
 vi.mock("@hoanggia/db", () => ({
   prisma: {
@@ -23,6 +24,7 @@ vi.mock("@hoanggia/db", () => ({
   },
   getPoAggregates: h.poAgg,
 }));
+vi.mock("@/lib/dashboard-metrics", () => ({ getOihAsOf: h.oihAsOf }));
 vi.mock("@/lib/debt-snapshot", () => ({ getDebtSnapshot: h.snapshot, getCollectionPlan: h.plan }));
 
 import { getReportData } from "./report-metrics";
@@ -56,6 +58,7 @@ beforeEach(() => {
     { employeeId: "u1", year: 2026, month: 10, targetRevenue: 2000 },
     { employeeId: "u1", year: 2026, month: 9, targetRevenue: 1500 },
   ]);
+  h.oihAsOf.mockResolvedValue(new Map([["u1", 111]]));
   h.poAgg.mockResolvedValue([
     { salesEmployeeId: "u1", isOpen: true, remainingValue: 700 },
     { salesEmployeeId: "u1", isOpen: false, remainingValue: 0 },
@@ -157,6 +160,17 @@ describe("getReportData - công nợ & kế hoạch thu", () => {
     expect(h.snapshot.mock.calls[0][0].asOfDate.toISOString()).toBe("2026-09-29T17:00:00.000Z"); // 30/09 0h VN
     await monthReport();
     expect(h.snapshot.mock.calls[1][0].asOfDate).toBeNull();
+  });
+
+  it("OIH: kỳ đã kết thúc tính ngược về cuối kỳ (không dùng số hiện tại); kỳ đang diễn ra dùng số hiện tại", async () => {
+    const past = await getReportData({ type: "month", periods: resolveReportPeriods("month", "2026-09")!, now: NOW });
+    expect(h.oihAsOf).toHaveBeenCalledWith(d("2026-10-01"), undefined);
+    expect(h.poAgg).not.toHaveBeenCalled();
+    expect(val(past, "Tùng", "oih")[0]).toBe(111);
+    h.oihAsOf.mockClear();
+    await monthReport();
+    expect(h.oihAsOf).not.toHaveBeenCalled();
+    expect(h.poAgg).toHaveBeenCalledTimes(1);
   });
 });
 

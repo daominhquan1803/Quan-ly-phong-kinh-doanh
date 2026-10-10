@@ -6,6 +6,41 @@ export function monthRange(year: number, month: number) {
   return { start, end };
 }
 
+/**
+ * OIH tính ngược về thời điểm `asOfEnd` (loại trừ — vd đầu tháng sau = cuối ngày cuối tháng), theo nhân viên.
+ * Mỗi dòng PO: đã đặt (poDate < asOfEnd; không có poDate coi như đã đặt từ trước) và còn mở tại mốc đó;
+ * còn lại = G.Trị PO − tổng đợt giao có eventDate < asOfEnd (kẹp ≥ 0). Dòng hiện "Kết thúc":
+ *  - đã giao đủ giá trị -> tại mốc vẫn mở nếu chưa giao đủ theo các đợt giao đến mốc (tự ra 0 khi đã đủ);
+ *  - chưa giao đủ (đóng/huỷ) -> không biết ngày đóng; chỉ tính nếu đóng thủ công SAU mốc, còn lại bỏ.
+ * Giới hạn: không có lịch sử trạng thái nên huỷ qua file Excel không biết ngày — coi như đã đóng từ trước mốc.
+ */
+export async function getOihAsOf(asOfEnd: Date, onlyEmployeeId?: string): Promise<Map<string, number>> {
+  const lines = await prisma.poTrackingLine.findMany({
+    where: { salesEmployeeId: onlyEmployeeId ?? { not: null } },
+    select: {
+      salesEmployeeId: true,
+      poValue: true,
+      poDate: true,
+      deliveredValue: true,
+      statusRaw: true,
+      manuallyClosedAt: true,
+      deliveryEvents: { select: { value: true, eventDate: true } },
+    },
+  });
+  const oih = new Map<string, number>();
+  for (const l of lines) {
+    if (!l.salesEmployeeId) continue;
+    if (l.poDate && l.poDate >= asOfEnd) continue;
+    const poValue = Number(l.poValue);
+    const closedNow = (l.statusRaw ?? "").trim().toLowerCase() === "kết thúc";
+    if (closedNow && Number(l.deliveredValue) + 1 < poValue && !(l.manuallyClosedAt && l.manuallyClosedAt >= asOfEnd)) continue;
+    const delivered = l.deliveryEvents.reduce((s, e) => (e.eventDate < asOfEnd ? s + Number(e.value) : s), 0);
+    const remaining = Math.max(0, poValue - delivered);
+    if (remaining > 0) oih.set(l.salesEmployeeId, (oih.get(l.salesEmployeeId) ?? 0) + remaining);
+  }
+  return oih;
+}
+
 export interface EmployeeTargetVsActual {
   employeeId: string;
   employeeName: string;
@@ -56,7 +91,10 @@ export async function getEmployeeTargetVsActual(
     select: { id: true, name: true },
   });
 
-  const [targets, deliveredByEmployee, poLines, poAggregates] = await Promise.all([
+  // Tháng đã kết thúc -> OIH tính ngược về cuối ngày cuối tháng; tháng đang chạy/tương lai -> số hiện tại.
+  const isPastMonth = end.getTime() <= Date.now();
+
+  const [targets, deliveredByEmployee, poLines, poAggregates, oihPast] = await Promise.all([
     prisma.salesTarget.findMany({ where: { year, month } }),
     // "Doanh số" = tổng giá trị các đợt giao THẬT trong tháng này (PoDeliveryEvent — nhập tay
     // từ file theo dõi PO độc lập, không qua AMIS). Mỗi đợt giao có ngày riêng nên đơn giao
@@ -75,14 +113,15 @@ export async function getEmployeeTargetVsActual(
     }),
     // OIH — TOÀN BỘ PO đang mở của nhân viên, không lọc theo poDate (xem giải thích ở
     // EmployeeTargetVsActual.oihValue).
-    getPoAggregates(onlyEmployeeId ? { salesEmployeeId: onlyEmployeeId } : {}),
+    isPastMonth ? Promise.resolve([]) : getPoAggregates(onlyEmployeeId ? { salesEmployeeId: onlyEmployeeId } : {}),
+    isPastMonth ? getOihAsOf(end, onlyEmployeeId) : Promise.resolve(new Map<string, number>()),
   ]);
 
   const targetMap = new Map(targets.map((t) => [t.employeeId, Number(t.targetRevenue)]));
   const revenueMap = new Map(deliveredByEmployee.map((r) => [r.salesEmployeeId as string, Number(r._sum.value ?? 0)]));
   const poMap = new Map(poLines.map((r) => [r.salesEmployeeId as string, Number(r._sum.poValue ?? 0)]));
 
-  const oihMap = new Map<string, number>();
+  const oihMap = new Map<string, number>(oihPast);
   for (const p of poAggregates) {
     if (!p.isOpen || !p.salesEmployeeId) continue;
     oihMap.set(p.salesEmployeeId, (oihMap.get(p.salesEmployeeId) ?? 0) + p.remainingValue);

@@ -1,6 +1,7 @@
 import { prisma, getPoAggregates, Prisma } from "@hoanggia/db";
 import { monthWeekBuckets } from "@/lib/debt-status";
 import { getDebtSnapshot, getCollectionPlan, type DebtOverdueInvoice } from "@/lib/debt-snapshot";
+import { getOihAsOf } from "@/lib/dashboard-metrics";
 import { asOfDateForPeriod, type ReportPeriod, type ReportType } from "@/lib/report-period";
 
 export const TOTAL_LABEL = "Cả phòng";
@@ -24,7 +25,7 @@ export const REPORT_METRICS: ReportMetricDef[] = [
   { key: "delivered", label: "Doanh số đi hàng", group: "Doanh số", unit: "vnd", multi: true },
   { key: "po_sx", label: "Doanh số đơn hàng sản xuất", group: "Doanh số", unit: "vnd", multi: true },
   { key: "delivered_sx", label: "Doanh số đi hàng sản xuất", group: "Doanh số", unit: "vnd", multi: true },
-  { key: "oih", label: "OIH (hàng chưa giao, tại lúc xuất file)", group: "Doanh số", unit: "vnd", multi: false },
+  { key: "oih", label: "OIH (hàng chưa giao, cuối kỳ)", group: "Doanh số", unit: "vnd", multi: false },
   { key: "target", label: "Chỉ tiêu doanh số tháng", group: "Doanh số", unit: "vnd", multi: true, monthOnly: true },
   { key: "completion", label: "Hoàn thành chỉ tiêu (%)", group: "Doanh số", unit: "pct", multi: true, monthOnly: true },
   { key: "new_customers", label: "Khách hàng mới (số khách)", group: "Khách hàng", unit: "count", multi: true },
@@ -87,7 +88,7 @@ const ratePct = (num: number, den: number) => (den > 0 ? (num / den) * 100 : nul
  * Gom số liệu báo cáo tuần/tháng. Dùng đúng định nghĩa của các trang hiện có (xem dashboard-metrics.ts,
  * debt-snapshot.ts) để số khớp: Doanh số đi hàng = PoDeliveryEvent trong kỳ; Doanh số đơn hàng =
  * G.Trị PO theo ngày đặt PO; "sản xuất" = mã hàng bắt đầu SI/SB (dòng không có mã hàng không phân
- * loại được); OIH = PO đang mở tại lúc xuất file. `scopeEmployeeId` = chỉ lấy dữ liệu của 1 người
+ * loại được); OIH = PO đang mở (kỳ đã kết thúc: tính ngược về cuối kỳ; kỳ đang chạy: tại lúc xuất file). `scopeEmployeeId` = chỉ lấy dữ liệu của 1 người
  * (NVKD) — khi đó không có dòng "Cả phòng".
  */
 export async function getReportData(opts: {
@@ -116,7 +117,9 @@ export async function getReportData(opts: {
   const empIds = employees.map((e) => e.id);
   const nameById = new Map(employees.map((e) => [e.id, e.name]));
 
-  const [poLines, events, targets, poAgg, customers] = await Promise.all([
+  // Kỳ đã kết thúc -> OIH tính ngược về cuối kỳ; kỳ đang chạy -> số hiện tại.
+  const oihAsOfEnd = now >= current.end;
+  const [poLines, events, targets, poAgg, customers, oihPast] = await Promise.all([
     prisma.poTrackingLine.findMany({
       where: { poDate: { gte: rangeStart, lt: rangeEnd }, salesEmployeeId: { in: empIds } },
       select: { salesEmployeeId: true, itemCode: true, poValue: true, poDate: true },
@@ -130,12 +133,13 @@ export async function getReportData(opts: {
           where: { employeeId: { in: empIds }, OR: periods.map((p) => ({ year: p.start.getFullYear(), month: p.start.getMonth() + 1 })) },
         })
       : Promise.resolve([]),
-    getPoAggregates(scopeEmployeeId ? { salesEmployeeId: scopeEmployeeId } : {}),
+    oihAsOfEnd ? Promise.resolve([]) : getPoAggregates(scopeEmployeeId ? { salesEmployeeId: scopeEmployeeId } : {}),
     prisma.customer.findMany({
       where: { createdAt: { gte: rangeStart, lt: rangeEnd }, ...(scopeEmployeeId ? { salesEmployeeId: scopeEmployeeId } : {}) },
       select: { customerCode: true, customerName: true, createdAt: true, salesEmployeeId: true, salesEmployee: { select: { name: true } } },
       orderBy: { createdAt: "asc" },
     }),
+    oihAsOfEnd ? getOihAsOf(current.end, scopeEmployeeId) : Promise.resolve(new Map<string, number>()),
   ]);
 
   // ---- Gom số theo (nhân viên, chỉ số, kỳ) ----
@@ -164,7 +168,7 @@ export async function getReportData(opts: {
     const i = periods.findIndex((p) => p.start.getFullYear() === t.year && p.start.getMonth() + 1 === t.month);
     if (i >= 0) add(t.employeeId, "target", i, Number(t.targetRevenue));
   }
-  const oih = new Map<string, number>();
+  const oih = new Map<string, number>(oihPast);
   for (const p of poAgg) {
     if (!p.isOpen || !p.salesEmployeeId) continue;
     oih.set(p.salesEmployeeId, (oih.get(p.salesEmployeeId) ?? 0) + p.remainingValue);

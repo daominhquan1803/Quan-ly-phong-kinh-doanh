@@ -482,7 +482,7 @@ async function buildWorkbookAndCharts(data: ReportData): Promise<{ workbook: Exc
     ["Doanh số đơn hàng", "Tổng G.Trị PO của các dòng PO có ngày đặt PO nằm trong kỳ (theo dõi PO)."],
     ["Doanh số đi hàng", "Tổng giá trị các đợt giao hàng thật có ngày giao nằm trong kỳ (file theo dõi PO + Phiếu đi hàng)."],
     ["Đơn hàng / Đi hàng sản xuất", "Như hai chỉ số trên nhưng chỉ tính dòng có mã hàng bắt đầu bằng SI hoặc SB. Dòng chưa có mã hàng không phân loại được nên không nằm trong số sản xuất."],
-    ["OIH", "Giá trị còn lại của mọi PO đang mở (không giới hạn theo kỳ). Là số tại lúc xuất file, không tính ngược về quá khứ được nên không có cột so sánh."],
+    ["OIH", "Giá trị còn lại của mọi PO đang mở (không giới hạn theo kỳ). Kỳ đã kết thúc: tính ngược về cuối kỳ (G.Trị PO trừ các đợt giao đến hết kỳ; PO đã đóng/huỷ không rõ ngày thì coi như đóng từ trước). Kỳ đang chạy: số tại lúc xuất file. Chỉ có cột kỳ hiện tại."],
     ["Chỉ tiêu / Hoàn thành (%)", "Chỉ có ở báo cáo tháng: chỉ tiêu doanh số tháng và Doanh số đi hàng ÷ chỉ tiêu."],
     ["Khách hàng mới", "Số khách hàng được tạo trên trang Khách hàng trong kỳ, theo NVKD phụ trách (dòng Cả phòng gồm cả khách chưa gán NVKD)."],
     ["Công nợ", `Chốt ${asOfText}. Quá hạn so với hạn thanh toán; nợ xấu = quá hạn trên 180 ngày. "Cả phòng" tính toàn bộ hoá đơn, kể cả hoá đơn chưa gán NVKD, nên có thể lớn hơn tổng các nhân viên.`],
