@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma } from "@hoanggia/db";
 import { requireSession, scopeByOwner, UnauthorizedError } from "@/lib/rbac";
-import { remainingAmount, computeDebtStatus, monthWeekBuckets } from "@/lib/debt-status";
+import { monthWeekBuckets } from "@/lib/debt-status";
+import { getDebtSnapshot } from "@/lib/debt-snapshot";
 
 export const dynamic = "force-dynamic";
 
@@ -13,17 +14,10 @@ export async function GET(req: NextRequest) {
     const year = Number(searchParams.get("year")) || now.getFullYear();
     const month = Number(searchParams.get("month")) || now.getMonth() + 1; // 1-12
 
-    // "Xem công nợ tại ngày" — tính lại từ dữ liệu thật thay vì lưu snapshot: chỉ tính hoá đơn đã
-    // có chứng từ tới ngày này, "đã thu" = tổng tiền về THẬT có ngày <= ngày này (không phải cột
-    // paidAmount hiện tại), quá hạn/nợ xấu so với ngày này thay vì hôm nay. null = xem hiện tại
-    // (hành vi cũ, dùng thẳng paidAmount cho nhanh + khớp tuyệt đối với các trang khác).
+    // "Xem công nợ tại ngày" — tính lại từ dữ liệu thật thay vì lưu snapshot (cách tính nằm ở
+    // lib/debt-snapshot.ts, dùng chung với báo cáo tuần/tháng). null = xem hiện tại.
     const asOfParam = searchParams.get("asOfDate");
     const asOfDate = asOfParam ? new Date(`${asOfParam}T00:00:00+07:00`) : null;
-
-    // Xem tại ngày = CHỐT CUỐI NGÀY đó: hoá đơn hạn đúng ngày chọn mà chưa thu tính là quá hạn 1 ngày
-    // (mốc tính quá hạn lùi sang 00:00 ngày kế tiếp), còn tiền về/hoá đơn phát sinh vẫn tính tới hết
-    // ngày chọn. Anh Quân xác nhận 05/10/2026 (khách NHUAYTEVN hạn 30/09 phải vào quá hạn tại 30/09).
-    const overdueRefDate = asOfDate ? new Date(asOfDate.getTime() + 24 * 60 * 60 * 1000) : undefined;
 
     const where: Prisma.DebtInvoiceWhereInput = { ...scopeByOwner(session, "salesEmployeeId") };
     // ADMIN xem được số liệu riêng 1 nhân viên (bộ lọc "Xem theo" trên trang Công nợ) — SALES đã bị
@@ -31,89 +25,18 @@ export async function GET(req: NextRequest) {
     const employeeId = searchParams.get("employeeId");
     if (employeeId && session.user.role === "ADMIN") where.salesEmployeeId = employeeId;
 
-    const invoices = await prisma.debtInvoice.findMany({
-      where,
-      select: {
-        id: true,
-        invoiceDate: true,
-        originalAmount: true,
-        paidAmount: true,
-        dueDate: true,
-        expectedPaymentDate: true,
-        salesEmployeeId: true,
-        salesEmployee: { select: { name: true } },
-      },
-    });
-
-    // Tiền đã thu TÍNH TỚI asOfDate cho từng hoá đơn — gộp theo invoiceId từ các khoản Tiền về đã
-    // khớp (payment.paymentDate <= asOfDate). Khoản chưa rõ ngày tiền về thì không tính (coi như
-    // chưa xác nhận là đã về trước ngày này) — khác 1 chút so với cột paidAmount sống (luôn cộng
-    // dồn bất kể có ngày hay không), chấp nhận được vì chỉ ảnh hưởng xem lại quá khứ.
-    // Phần đã thu KHÔNG có khoản Tiền về nào đứng sau (nhập thẳng cột "Số tiền đã thu" từ file Công nợ
-    // gốc — không có allocation/ngày) = paidAmount − tổng allocation; coi như đã thu từ TRƯỚC mọi mốc
-    // ngày đang xem. Thiếu bước này thì xem tại ngày quá khứ sẽ coi mọi khoản đã thu từ file gốc là
-    // chưa thu → công nợ/tỉ lệ thu hồi sai (anh Quân báo số liệu Tùng, Dung lệch 05/10/2026).
-    let paidAsOfByInvoice: Map<string, number> | null = null;
-    if (asOfDate) {
-      const allocs = await prisma.debtPaymentAllocation.findMany({
-        where: { invoiceId: { in: invoices.map((i) => i.id) } },
-        select: { invoiceId: true, amount: true, payment: { select: { paymentDate: true } } },
-      });
-      const allAlloc = new Map<string, number>();
-      const allocAsOf = new Map<string, number>();
-      for (const a of allocs) {
-        const amt = Number(a.amount);
-        allAlloc.set(a.invoiceId, (allAlloc.get(a.invoiceId) ?? 0) + amt);
-        const d = a.payment.paymentDate;
-        if (d && d <= asOfDate) allocAsOf.set(a.invoiceId, (allocAsOf.get(a.invoiceId) ?? 0) + amt);
-      }
-      paidAsOfByInvoice = new Map();
-      for (const inv of invoices) {
-        const untracked = Math.max(0, Number(inv.paidAmount) - (allAlloc.get(inv.id) ?? 0));
-        paidAsOfByInvoice.set(inv.id, untracked + (allocAsOf.get(inv.id) ?? 0));
-      }
-    }
-
-    let totalOriginal = 0;
-    let totalPaid = 0;
-    let totalDebt = 0;
-    let overdueDebt = 0;
-    let badDebt = 0;
-    let noDueDebt = 0; // còn nợ nhưng chưa có hạn thanh toán — KHÔNG thể xếp quá hạn, nằm trong mẫu số tỉ lệ
-
-    const perEmployee = new Map<string, { employeeId: string; employeeName: string; totalDebt: number; overdueDebt: number; badDebt: number }>();
-
-    for (const inv of invoices) {
-      // Hoá đơn chưa phát sinh tại thời điểm asOfDate (chứng từ sau ngày đang xem) — bỏ qua khỏi
-      // tổng kết "tại ngày đó". Hoá đơn không rõ ngày chứng từ thì vẫn tính (không đủ căn cứ loại).
-      if (asOfDate && inv.invoiceDate && inv.invoiceDate > asOfDate) continue;
-
-      const original = Number(inv.originalAmount);
-      const paid = asOfDate ? paidAsOfByInvoice!.get(inv.id) ?? 0 : Number(inv.paidAmount);
-      const remaining = remainingAmount(original, paid);
-      totalOriginal += original;
-      totalPaid += paid;
-      totalDebt += remaining;
-      const status = computeDebtStatus({ dueDate: inv.dueDate, originalAmount: original, paidAmount: paid }, overdueRefDate);
-      if (status === "OVERDUE" || status === "BAD_DEBT") overdueDebt += remaining;
-      if (status === "BAD_DEBT") badDebt += remaining;
-      if (status === "NO_DUE_DATE") noDueDebt += remaining;
-
-      if (session.user.role === "ADMIN" && inv.salesEmployeeId) {
-        const key = inv.salesEmployeeId;
-        const entry = perEmployee.get(key) ?? {
-          employeeId: key,
-          employeeName: inv.salesEmployee?.name ?? "—",
-          totalDebt: 0,
-          overdueDebt: 0,
-          badDebt: 0,
-        };
-        entry.totalDebt += remaining;
-        if (status === "OVERDUE" || status === "BAD_DEBT") entry.overdueDebt += remaining;
-        if (status === "BAD_DEBT") entry.badDebt += remaining;
-        perEmployee.set(key, entry);
-      }
-    }
+    const snap = await getDebtSnapshot({ where, asOfDate });
+    const { totalOriginal, totalPaid, totalDebt, overdueDebt, badDebt, noDueDebt } = snap;
+    const perEmployee =
+      session.user.role === "ADMIN"
+        ? Array.from(snap.perEmployee.values()).map((e) => ({
+            employeeId: e.employeeId,
+            employeeName: e.employeeName,
+            totalDebt: e.totalDebt,
+            overdueDebt: e.overdueDebt,
+            badDebt: e.badDebt,
+          }))
+        : null;
 
     // Kế hoạch thu theo tuần dương lịch (Thứ 2 - Chủ nhật) trong tháng được chọn — "Kế hoạch" =
     // TOÀN BỘ originalAmount của các hoá đơn có NVKD điền expectedPaymentDate rơi vào đúng tuần
@@ -126,7 +49,11 @@ export async function GET(req: NextRequest) {
     const monthStart = new Date(year, month - 1, 1);
     const monthEnd = new Date(year, month, 0);
     const weeks = monthWeekBuckets(year, month).map((b) => ({ ...b, planned: 0, collected: 0 }));
-    for (const inv of invoices) {
+    const planInvoices = await prisma.debtInvoice.findMany({
+      where,
+      select: { originalAmount: true, expectedPaymentDate: true },
+    });
+    for (const inv of planInvoices) {
       if (!inv.expectedPaymentDate) continue;
       const d = new Date(inv.expectedPaymentDate);
       const bucket = weeks.find((w) => d >= w.start && d <= w.end);
@@ -168,7 +95,7 @@ export async function GET(req: NextRequest) {
       noDueDebt,
       overdueRate: totalDebt > 0 ? overdueDebt / totalDebt : 0,
       badDebtRate: totalDebt > 0 ? badDebt / totalDebt : 0,
-      perEmployee: session.user.role === "ADMIN" ? Array.from(perEmployee.values()) : null,
+      perEmployee,
       weeklyPlan: weeks.map((w) => ({
         weekIndex: w.weekIndex,
         start: w.start,

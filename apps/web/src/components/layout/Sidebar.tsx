@@ -18,6 +18,7 @@ import {
   PackageCheck,
   Contact,
   Package,
+  FileBarChart,
 } from "lucide-react";
 import { SidebarBanner } from "./SidebarBanner";
 
@@ -32,6 +33,7 @@ export const NAV_ITEMS = [
   { href: "/debt", label: "Công nợ", icon: Wallet, adminOnly: false },
   { href: "/customers", label: "Khách hàng", icon: Contact, adminOnly: false },
   { href: "/hang-hoa", label: "Hàng hóa", icon: Package, adminOnly: false },
+  { href: "/reports", label: "Báo cáo", icon: FileBarChart, adminOnly: false },
   { href: "/targets", label: "Kế hoạch kinh doanh", icon: Target, adminOnly: false },
   { href: "/kpi", label: "Đánh giá KPI", icon: Award, adminOnly: false },
   { href: "/business-trips", label: "Đăng ký đi công tác", icon: Briefcase, adminOnly: false },
