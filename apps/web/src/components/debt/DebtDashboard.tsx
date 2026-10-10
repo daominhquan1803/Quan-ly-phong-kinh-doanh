@@ -6,12 +6,13 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn, formatCurrencyVND, formatDateVN, toDateInputValueVN } from "@/lib/utils";
 import { normalizeVN } from "@/lib/text-normalize";
 import { normalizeCustomerCode } from "@/lib/debt-customer-match";
-import { computeDebtStatus, remainingAmount, overdueDays, DEBT_STATUS_LABEL, DebtStatus } from "@/lib/debt-status";
+import { computeDebtStatus, remainingAmount, overdueDays, mondayOfWeek, DEBT_STATUS_LABEL, DebtStatus } from "@/lib/debt-status";
 import { reminderMilestoneFor, DEBT_REMINDER_MILESTONE_LABEL, DebtReminderMilestone } from "@/lib/debt-reminder";
 import { DebtStatusBadge } from "./DebtStatusBadge";
 import { DebtPaymentsImportWizard } from "./DebtPaymentsImportWizard";
 import { ManualPaymentModal, type ManualPaymentInvoice } from "./ManualPaymentModal";
 import { DebtUnmatchedPaymentsPanel } from "./DebtUnmatchedPaymentsPanel";
+import { DebtFollowUpPanel } from "./DebtFollowUpPanel";
 import { EmployeeFilterSelect } from "@/components/shared/EmployeeFilterSelect";
 import { FilterInput, SortableTh, toggleSort, type SortState } from "@/components/shared/SortableFilterableTable";
 import { UploadCloud, ChevronLeft, ChevronRight, X, CheckCircle2, Banknote, Mail, Send, CalendarClock, FileSpreadsheet, Trash2 } from "lucide-react";
@@ -54,6 +55,15 @@ interface SummaryResponse {
 type SortField = "dueDate" | "remaining";
 const PAGE_SIZE = 10;
 
+/** Số tuần trượt kế hoạch (0 = chưa trượt): còn nợ mà ngày dự kiến đã qua trước thứ 2 tuần này. */
+function slippedWeeksOf(expected: string | null, paid: boolean): number {
+  if (!expected || paid) return 0;
+  const thisMonday = mondayOfWeek(new Date());
+  const exp = new Date(expected);
+  if (exp >= thisMonday) return 0;
+  return Math.max(1, Math.round((thisMonday.getTime() - mondayOfWeek(exp).getTime()) / (7 * 86400000)));
+}
+
 function pct(n: number): string {
   return `${(n * 100).toFixed(1)}%`;
 }
@@ -74,7 +84,7 @@ function ImportResultToast({ message, onClose }: { message: string; onClose: () 
 export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
   const queryClient = useQueryClient();
   // "NO_SCHEDULE" = còn nợ nhưng NVKD chưa điền ngày dự kiến thanh toán (chưa có lịch thanh toán).
-  const [status, setStatus] = useState<DebtStatus | "NO_SCHEDULE" | "">("");
+  const [status, setStatus] = useState<DebtStatus | "NO_SCHEDULE" | "SLIPPED" | "">("");
   // Lọc theo tháng chứng từ ("YYYY-MM", rỗng = tất cả) — lọc theo invoiceDate, không phải hạn
   // thanh toán (bảng vốn sort theo hạn nên hoá đơn mới up dễ bị đẩy xuống cuối trang, khó tìm).
   const [invoiceMonthFilter, setInvoiceMonthFilter] = useState("");
@@ -282,7 +292,9 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
       const daysOverdue = debtStatus === "PAID" ? null : overdueDays(inv.dueDate);
       // Dùng chung 1 định nghĩa mốc với server (lib/debt-reminder.ts), không tính lại tay.
       const reminderMilestone = reminderMilestoneFor({ dueDate: inv.dueDate, originalAmount: original, paidAmount: paid });
-      return { ...inv, remaining, debtStatus, daysOverdue, reminderMilestone };
+      // Trượt kế hoạch: còn nợ mà ngày dự kiến thanh toán đã qua trước thứ 2 tuần này (cùng định nghĩa bảng "Cần thu tuần này").
+      const slippedWeeks = slippedWeeksOf(inv.expectedPaymentDate, debtStatus === "PAID");
+      return { ...inv, remaining, debtStatus, daysOverdue, reminderMilestone, slippedWeeks };
     });
   }
   const rowsWithStatus = useMemo(() => withStatus(data?.invoices ?? []), [data]);
@@ -291,6 +303,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
   const visibleRows = useMemo(() => {
     let list = rowsWithStatus;
     if (status === "NO_SCHEDULE") list = list.filter((r) => r.debtStatus !== "PAID" && !r.expectedPaymentDate);
+    else if (status === "SLIPPED") list = list.filter((r) => r.slippedWeeks > 0);
     else if (status) list = list.filter((r) => r.debtStatus === status);
     if (nvkdFilter) list = list.filter((r) => r.salesEmployee?.id === nvkdFilter);
     if (invoiceMonthFilter) {
@@ -602,6 +615,8 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
         </div>
       )}
 
+      <DebtFollowUpPanel isAdmin={isAdmin} employeeId={employeeId} />
+
       {isAdmin && <DebtUnmatchedPaymentsPanel />}
 
       {isAdmin && summary?.perEmployee && summary.perEmployee.length > 0 && (
@@ -696,7 +711,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
           </Link>
           <select
             value={status}
-            onChange={(e) => setStatus(e.target.value as DebtStatus | "NO_SCHEDULE" | "")}
+            onChange={(e) => setStatus(e.target.value as DebtStatus | "NO_SCHEDULE" | "SLIPPED" | "")}
             className="text-xs bg-card text-ink rounded-xl border border-white/10 py-2 px-3 focus:outline-none focus:ring-1 focus:ring-amber-500"
           >
             <option value="">Tất cả trạng thái</option>
@@ -706,6 +721,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
               </option>
             ))}
             <option value="NO_SCHEDULE">Chưa có lịch thanh toán</option>
+            <option value="SLIPPED">Trượt kế hoạch (cần thu tuần này)</option>
           </select>
           <input
             type="month"
@@ -847,12 +863,25 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                     {r.debtStatus === "PAID" ? (
                       <span className="text-xs font-mono text-emerald-400 font-medium">{formatDateVN(r.lastPaymentDate)}</span>
                     ) : (
-                      <input
-                        type="date"
-                        defaultValue={toDateInputValueVN(r.expectedPaymentDate)}
-                        onBlur={(e) => handleExpectedDateChange(r.id, e.target.value)}
-                        className="input !py-1 !text-xs !bg-black/40 !border-white/10 w-36 rounded-lg font-mono"
-                      />
+                      <div className="flex flex-col items-start gap-1">
+                        <input
+                          type="date"
+                          defaultValue={toDateInputValueVN(r.expectedPaymentDate)}
+                          onBlur={(e) => handleExpectedDateChange(r.id, e.target.value)}
+                          className="input !py-1 !text-xs !bg-black/40 !border-white/10 w-36 rounded-lg font-mono"
+                        />
+                        {r.slippedWeeks > 0 && (
+                          <span
+                            className={cn(
+                              "rounded-md border px-1.5 py-0.5 text-[10px] font-medium",
+                              r.slippedWeeks >= 3 ? "border-brandRed-500/50 bg-brandRed-500/15 text-alert" : "border-amber-500/40 bg-amber-500/10 text-amber-400"
+                            )}
+                            title="Ngày dự kiến đã qua mà chưa thu đủ — cần thu tiếp tuần này. Điền ngày dự kiến mới nếu khách hẹn lại."
+                          >
+                            Trượt {r.slippedWeeks} tuần
+                          </span>
+                        )}
+                      </div>
                     )}
                   </td>
                   {isAdmin && (
