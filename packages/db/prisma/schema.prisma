@@ -42,10 +42,22 @@ enum SyncStatus {
   FAILED
 }
 
+// Luồng mới (10/2026): Đăng ký (PENDING = "Chờ báo cáo") -> đi gặp -> NVKD nộp báo cáo (REPORTED = "Chờ duyệt") ->
+// Quản trị viên duyệt (APPROVED — CHỈ lúc này mới tính điểm Kế hoạch tuần/KPI tháng) | trả lại bổ sung
+// (NEEDS_REVISION) | từ chối (REJECTED). Các buổi APPROVED từ trước đợt đổi luồng (không có reportedAt) vẫn tính như cũ.
 enum TripStatus {
   PENDING
+  REPORTED
+  NEEDS_REVISION
   APPROVED
   REJECTED
+}
+
+// Kết quả từng khách trong báo cáo công tác. NOT_MET không tính điểm; stop cũ (outcome null) tính như MET.
+enum TripStopOutcome {
+  MET // Đã gặp
+  NOT_MET // Không gặp được
+  RESCHEDULED // Hẹn gặp lại
 }
 
 // 6 đầu mục cố định của Kế hoạch làm việc tuần — theo đúng file mẫu "KẾ HOẠCH LÀM VIỆC TUẦN"
@@ -118,6 +130,7 @@ model User {
   businessTrips    BusinessTripRequest[]  @relation("TripEmployee")
   tripApprovals    BusinessTripRequest[]  @relation("TripApprovedBy")
   tripSupportOf    BusinessTripSupporter[] @relation("TripSupporter")
+  tripNextActions  BusinessTripStop[]     @relation("TripNextActionOwner")
   defectReports    DefectReport[]         @relation("DefectEmployee")
   defectsCreated   DefectReport[]         @relation("DefectCreatedBy")
   poTrackingLines  PoTrackingLine[]
@@ -709,7 +722,10 @@ model BusinessTripRequest {
   approvedById String?
   approvedBy   User?      @relation("TripApprovedBy", fields: [approvedById], references: [id])
   approvedAt   DateTime?
+  // Lý do từ chối / yêu cầu bổ sung (dùng chung 1 cột cho cả 2 trạng thái).
   rejectReason String?
+  // Thời điểm NVKD nộp báo cáo gần nhất (null = buổi duyệt theo luồng cũ, chưa có báo cáo).
+  reportedAt   DateTime?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
@@ -734,10 +750,46 @@ model BusinessTripStop {
   companyName  String // Công ty đến gặp
   address      String? // Địa chỉ khách hàng — dùng để tạo link mở Google Maps nhiều điểm dừng
   expectedTime String? // Giờ dự kiến gặp (vd "09:30") — chỉ là mốc dự kiến, không phải DateTime đầy đủ
-  content      String // Nội dung buổi gặp
+  content      String // Nội dung buổi gặp (dự kiến, lúc đăng ký)
+
+  // ----- Báo cáo sau buổi gặp (NVKD nộp; chưa nộp = tất cả null) -----
+  outcome         TripStopOutcome?
+  contactName     String? // Người đã gặp
+  contactPhone    String?
+  reportContent   String? // Nội dung đã trao đổi thực tế
+  productInterest String? // Nhu cầu / sản phẩm khách quan tâm
+  // Bước tiếp theo: việc cần làm + người phụ trách + hạn; xong thì nextActionDoneAt có giá trị.
+  nextAction        String?
+  nextActionDue     DateTime?
+  nextActionOwnerId String?
+  nextActionOwner   User?     @relation("TripNextActionOwner", fields: [nextActionOwnerId], references: [id])
+  nextActionDoneAt  DateTime?
+  // Định vị check-in (trình duyệt gửi lên) — thời điểm lấy theo giờ MÁY CHỦ lúc nhận, không tin giờ máy khách.
+  checkinLat       Decimal?  @db.Decimal(9, 6)
+  checkinLng       Decimal?  @db.Decimal(9, 6)
+  checkinAccuracyM Int?
+  checkinAt        DateTime?
+
+  photos BusinessTripPhoto[]
 
   @@index([tripId])
+  @@index([nextActionOwnerId, nextActionDue])
   @@map("business_trip_stops")
+}
+
+// Ảnh chứng minh buổi gặp — lưu thẳng trong DB (đã nén ở trình duyệt, ≤ 2MB/ảnh, ≤ 5 ảnh/khách) nên không phụ
+// thuộc volume/thư mục upload nào trên máy chủ. Chỉ phục vụ qua /api/business-trips/photos/[id] có kiểm quyền.
+model BusinessTripPhoto {
+  id        String           @id @default(cuid())
+  stopId    String
+  stop      BusinessTripStop @relation(fields: [stopId], references: [id], onDelete: Cascade)
+  mimeType  String
+  sizeBytes Int
+  data      Bytes
+  createdAt DateTime         @default(now())
+
+  @@index([stopId])
+  @@map("business_trip_photos")
 }
 
 // 1 dòng = 1 người đi hỗ trợ cho 1 lượt đăng ký đi công tác — được chọn thêm bởi người đăng ký
@@ -1047,6 +1099,10 @@ enum NotificationType {
   WEEK_PLAN_REMINDER
   KPI_REMINDER
   DEBT_DUE_DATE_MISSING
+  TRIP_REPORT_DUE // nhắc NVKD nộp báo cáo công tác
+  TRIP_NEXT_STEP_DUE // nhắc bước tiếp theo sau buổi gặp tới hạn
+  TRIP_REVIEW_PENDING // nhắc Quản trị viên duyệt báo cáo công tác
+  TRIP_REVIEWED // báo NVKD kết quả duyệt báo cáo
 }
 
 model Notification {

@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { WeekPlanOverview } from "@/components/week-plan/WeekPlanOverview";
+import { TripPendingBanner } from "@/components/business-trips/TripPendingBanner";
 import { CalendarDays } from "lucide-react";
 
 export default async function WeekPlanPage() {
@@ -21,6 +22,7 @@ export default async function WeekPlanPage() {
           </p>
         </div>
       </div>
+      <TripPendingBanner />
       <WeekPlanOverview isAdmin={isAdmin} />
     </div>
   );

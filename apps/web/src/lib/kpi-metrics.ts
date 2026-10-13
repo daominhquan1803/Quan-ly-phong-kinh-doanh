@@ -2,6 +2,7 @@ import { prisma } from "@hoanggia/db";
 import { monthRange, getEmployeeTargetVsActual, getProductGroupTargetVsActual } from "./dashboard-metrics";
 import { getMonthlyWeekPlanScore } from "./week-plan";
 import { computeDebtStatus, remainingAmount } from "./debt-status";
+import { COUNTED_STOP_WHERE, COUNTED_TRIP_WHERE } from "./business-trip-report";
 
 /**
  * Công thức tính điểm KPI hàng tháng — dựa theo file mẫu KPI_KD_HoanggiaPS.xlsx / KPI_PKD1_
@@ -338,21 +339,21 @@ export async function getKpiMonthlyReport(
     // thay vì đếm dòng trip.
     prisma.businessTripRequest.findMany({
       where: {
-        status: "APPROVED",
+        ...COUNTED_TRIP_WHERE,
         visitDate: { gte: start, lt: end },
         ...(onlyEmployeeId ? { employeeId: onlyEmployeeId } : {}),
       },
-      select: { employeeId: true, _count: { select: { stops: true } } },
+      select: { employeeId: true, _count: { select: { stops: { where: COUNTED_STOP_WHERE } } } },
     }),
     // Người đi HỖ TRỢ cũng được tính điểm "đi gặp khách" cho lượt đi đã duyệt — cộng thêm vào
     // visitByEmployee bên dưới (không có duyệt riêng, ăn theo trạng thái của trip), tính đủ số
     // khách (stops) của CHÍNH lượt đi đó, không phải 1 điểm cố định mỗi lượt.
     prisma.businessTripSupporter.findMany({
       where: {
-        trip: { status: "APPROVED", visitDate: { gte: start, lt: end } },
+        trip: { ...COUNTED_TRIP_WHERE, visitDate: { gte: start, lt: end } },
         ...(onlyEmployeeId ? { employeeId: onlyEmployeeId } : {}),
       },
-      select: { employeeId: true, trip: { select: { _count: { select: { stops: true } } } } },
+      select: { employeeId: true, trip: { select: { _count: { select: { stops: { where: COUNTED_STOP_WHERE } } } } } },
     }),
     getNewCustomerCounts(year, month, pkd1EmployeeIds),
   ]);

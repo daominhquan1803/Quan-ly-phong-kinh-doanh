@@ -36,7 +36,11 @@ export async function GET(req: NextRequest) {
         employee: { select: { id: true, name: true } },
         approvedBy: { select: { id: true, name: true } },
         supporters: { include: { employee: { select: { id: true, name: true } } } },
-        stops: { orderBy: { orderIndex: "asc" } },
+        // Ảnh chỉ lấy id (nội dung ảnh phục vụ riêng qua /api/business-trips/photos/[id]).
+        stops: {
+          orderBy: { orderIndex: "asc" },
+          include: { photos: { select: { id: true } }, nextActionOwner: { select: { id: true, name: true } } },
+        },
       },
       orderBy: { visitDate: "desc" },
       take: 500,
@@ -67,10 +71,10 @@ const createSchema = z.object({
 });
 
 /**
- * NVKD tự đăng ký đi công tác cho chính mình — chờ Quản trị viên duyệt mới được ghi nhận. 1 buổi
+ * NVKD tự đăng ký đi công tác cho chính mình — đi xong nộp báo cáo, Quản trị viên duyệt báo cáo mới được ghi nhận. 1 buổi
  * đi có thể ghé nhiều khách hàng (stops). Có thể chọn thêm đồng nghiệp đi hỗ trợ
  * (supporterEmployeeIds) — người hỗ trợ cũng được tính điểm KPI "đi gặp khách" cho đúng các
- * khách trong lượt đi này khi lượt đi được duyệt.
+ * khách trong lượt đi này khi báo cáo của lượt đi được duyệt.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -91,7 +95,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: weekLockedMessage(snapToWeekStart(visitDate)) }, { status: 403 });
     }
     const ownerId = isAdmin && parsed.data.employeeId ? parsed.data.employeeId : session.user.id;
-    const onBehalf = ownerId !== session.user.id;
+    const onBehalf = ownerId !== session.user.id; // chỉ để kiểm tra nhân viên hợp lệ bên dưới
     if (onBehalf) {
       const owner = await prisma.user.findFirst({ where: { id: ownerId, active: true }, select: { id: true } });
       if (!owner) return NextResponse.json({ error: "Nhân viên không hợp lệ" }, { status: 400 });
@@ -111,8 +115,8 @@ export async function POST(req: NextRequest) {
       data: {
         employeeId: ownerId,
         visitDate,
-        // Admin đăng ký bổ sung hộ nhân viên thì duyệt luôn (admin chính là người duyệt).
-        ...(onBehalf ? { status: "APPROVED" as const, approvedById: session.user.id, approvedAt: new Date() } : {}),
+        // Luồng mới: đăng ký xong ở trạng thái "Chờ báo cáo" (kể cả admin đăng ký hộ) — chỉ tính điểm sau khi có
+        // báo cáo được duyệt (admin nộp báo cáo hộ thì duyệt luôn, xem action "report" ở [id]/route.ts).
         supporters: {
           create: validSupporters.map((u) => ({ employeeId: u.id })),
         },

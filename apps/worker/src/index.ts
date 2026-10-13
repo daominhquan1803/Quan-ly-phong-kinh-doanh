@@ -5,6 +5,7 @@ import { runQuoteSync } from "./sync/quotes";
 import { runWeekPlanReminder } from "./notifications/weekPlanReminder";
 import { runKpiReminder } from "./notifications/kpiReminder";
 import { runDebtDueReminder } from "./notifications/debtDueReminder";
+import { runTripReminder } from "./notifications/tripReminder";
 import { logger } from "./logger";
 
 const PORT = Number(process.env.WORKER_PORT || 4001);
@@ -59,6 +60,7 @@ async function main() {
       runWeekPlanReminder().catch((err) => logger.error("Lỗi nhắc việc Kế hoạch tuần:", err));
       runKpiReminder().catch((err) => logger.error("Lỗi nhắc việc KPI tháng:", err));
       runDebtDueReminder().catch((err) => logger.error("Lỗi nhắc công nợ tới hạn:", err));
+      runTripReminder().catch((err) => logger.error("Lỗi nhắc công tác:", err));
     },
     { timezone: NOTIFY_CRON_TIMEZONE }
   );

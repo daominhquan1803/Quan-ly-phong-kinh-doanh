@@ -9,7 +9,14 @@ import { isPushSupported, getCurrentPushSubscription, subscribeToPush, unsubscri
 
 interface NotificationRow {
   id: string;
-  type: "WEEK_PLAN_REMINDER" | "KPI_REMINDER";
+  type:
+    | "WEEK_PLAN_REMINDER"
+    | "KPI_REMINDER"
+    | "DEBT_DUE_DATE_MISSING"
+    | "TRIP_REPORT_DUE"
+    | "TRIP_NEXT_STEP_DUE"
+    | "TRIP_REVIEW_PENDING"
+    | "TRIP_REVIEWED";
   title: string;
   message: string;
   link: string | null;

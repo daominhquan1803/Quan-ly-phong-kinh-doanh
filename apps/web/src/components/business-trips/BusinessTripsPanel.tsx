@@ -1,50 +1,38 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn, formatDateVN, toDateInputValueVN } from "@/lib/utils";
 import { EmployeeFilterSelect } from "@/components/shared/EmployeeFilterSelect";
 import { buildGoogleMapsMultiStopUrl } from "@/lib/business-trip-maps";
-import { Check, X, Trash2, Plus, MapPin, ArrowUp, ArrowDown, Pencil } from "lucide-react";
+import { TRIP_STATUS_LABEL } from "@/lib/business-trip-report";
+import { Check, X, Trash2, Plus, MapPin, ArrowUp, ArrowDown, Pencil, FileText, ChevronDown, ChevronUp, Undo2 } from "lucide-react";
+import { TripReportForm } from "./TripReportForm";
+import { TripReportView } from "./TripReportView";
+import { TripNextSteps } from "./TripNextSteps";
+import { TripPendingBanner } from "./TripPendingBanner";
+import { todayVN, visitDay, type PrefillStop, type TripRow } from "./types";
 
-interface StopRow {
-  id: string;
-  orderIndex: number;
-  companyName: string;
-  address: string | null;
-  expectedTime: string | null;
-  content: string;
-}
-interface TripRow {
-  id: string;
-  employee: { id: string; name: string };
-  visitDate: string;
-  status: "PENDING" | "APPROVED" | "REJECTED";
-  approvedBy: { id: string; name: string } | null;
-  rejectReason: string | null;
-  supporters: { employee: { id: string; name: string } }[];
-  stops: StopRow[];
-  // Quá hạn đăng ký của tuần chứa ngày đi — NVKD không sửa/huỷ được nữa, chỉ Quản trị viên.
-  entryLocked?: boolean;
-}
-
-const STATUS_LABEL: Record<TripRow["status"], string> = {
-  PENDING: "Chờ duyệt",
-  APPROVED: "Đã duyệt",
-  REJECTED: "Từ chối",
-};
 const STATUS_STYLE: Record<TripRow["status"], string> = {
-  PENDING: "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_8px_rgba(224,163,39,0.2)]",
+  PENDING: "bg-sky-500/15 text-sky-300 border border-sky-500/30",
+  REPORTED: "bg-amber-500/15 text-amber-300 border border-amber-500/30 shadow-[0_0_8px_rgba(224,163,39,0.2)]",
+  NEEDS_REVISION: "bg-orange-500/15 text-orange-300 border border-orange-500/30",
   APPROVED: "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-[0_0_8px_rgba(16,185,129,0.2)]",
   REJECTED: "bg-brandRed-500/15 text-alert border border-brandRed-500/30 shadow-[0_0_8px_rgba(200,16,46,0.2)]",
 };
+
+type Tab = "trips" | "next";
 
 export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
   const { data: session } = useSession();
   const [employeeId, setEmployeeId] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [prefill, setPrefill] = useState<PrefillStop | null>(null);
   const [editingTrip, setEditingTrip] = useState<TripRow | null>(null);
+  const [reportingTrip, setReportingTrip] = useState<TripRow | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>("trips");
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -62,10 +50,13 @@ export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
     queryClient.invalidateQueries({ queryKey: ["business-trips"] });
   }
 
-  async function handleAction(id: string, action: "approve" | "reject" | "cancel") {
+  async function handleAction(id: string, action: "approve" | "reject" | "revise" | "cancel") {
     let rejectReason: string | undefined;
     if (action === "reject") {
       rejectReason = window.prompt("Lý do từ chối (không bắt buộc):") || undefined;
+    } else if (action === "revise") {
+      rejectReason = window.prompt("Cần bổ sung gì? (bắt buộc, nhân viên sẽ thấy nội dung này):")?.trim() || undefined;
+      if (!rejectReason) return;
     } else if (action === "cancel") {
       if (!window.confirm("Huỷ đăng ký này?")) return;
     }
@@ -75,19 +66,44 @@ export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
       body: JSON.stringify({ action, rejectReason }),
     });
     if (res.ok) invalidate();
+    else {
+      const body = await res.json().catch(() => ({}));
+      window.alert(body.error || "Không thực hiện được");
+    }
   }
+
+  const today = todayVN();
+  const canAct = (t: TripRow) => isAdmin || (t.employee.id === session?.user?.id && !t.entryLocked);
 
   return (
     <div className="space-y-4">
+      <TripPendingBanner linkToTrips={false} />
       <div className="flex items-center justify-between flex-wrap gap-3">
-        {isAdmin ? (
-          <EmployeeFilterSelect value={employeeId} onChange={setEmployeeId} />
-        ) : (
-          <span />
-        )}
+        <div className="flex items-center gap-2">
+          {(
+            [
+              ["trips", "Đăng ký & báo cáo"],
+              ["next", "Việc tiếp theo"],
+            ] as [Tab, string][]
+          ).map(([k, label]) => (
+            <button
+              key={k}
+              onClick={() => setTab(k)}
+              className={cn(
+                "rounded-xl border px-3.5 py-2 text-xs font-semibold transition-colors",
+                tab === k ? "border-amber-500/50 bg-amber-500/15 text-amber-300" : "border-white/10 text-muted2 hover:bg-white/10"
+              )}
+            >
+              {label}
+            </button>
+          ))}
+          {isAdmin && tab === "trips" && <EmployeeFilterSelect value={employeeId} onChange={setEmployeeId} />}
+        </div>
         <button
           onClick={() => {
             setEditingTrip(null);
+            setReportingTrip(null);
+            setPrefill(null);
             setShowForm((v) => !v);
           }}
           className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-brandRed-600 to-brandRed-700 hover:from-brandRed-500 hover:to-brandRed-600 px-4 py-2 text-xs font-semibold text-white shadow-[0_0_15px_rgba(200,16,46,0.3)] transition-all"
@@ -97,138 +113,230 @@ export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
       </div>
 
       {showForm && (
-        <TripForm isAdmin={isAdmin} currentUserId={session?.user?.id} onCreated={() => { setShowForm(false); invalidate(); }} />
+        <TripForm
+          key={prefill ? `prefill-${prefill.companyName}` : "new"}
+          isAdmin={isAdmin}
+          currentUserId={session?.user?.id}
+          prefillStop={prefill ?? undefined}
+          onCreated={() => {
+            setShowForm(false);
+            setPrefill(null);
+            setTab("trips");
+            invalidate();
+          }}
+        />
       )}
       {editingTrip && (
         <TripForm
           isAdmin={isAdmin}
           currentUserId={session?.user?.id}
           editingTrip={editingTrip}
-          onCreated={() => { setEditingTrip(null); invalidate(); }}
+          onCreated={() => {
+            setEditingTrip(null);
+            invalidate();
+          }}
           onCancelEdit={() => setEditingTrip(null)}
         />
       )}
+      {reportingTrip && (
+        <TripReportForm
+          key={reportingTrip.id}
+          trip={reportingTrip}
+          isAdmin={isAdmin}
+          onDone={() => {
+            setReportingTrip(null);
+            invalidate();
+          }}
+          onCancel={() => {
+            setReportingTrip(null);
+            invalidate();
+          }}
+        />
+      )}
 
-      <div className="glass-card border border-white/10 rounded-2xl overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
-        <table className="min-w-full text-xs">
-          <thead className="bg-white/[0.04] text-muted-foreground border-b border-white/5 backdrop-blur-md">
-            <tr>
-              <th className="text-left font-medium px-4 py-2.5">Ngày đi</th>
-              {isAdmin && <th className="text-left font-medium px-4 py-2.5">Nhân viên</th>}
-              <th className="text-left font-medium px-4 py-2.5">Khách hàng ghé (buổi này)</th>
-              <th className="text-left font-medium px-4 py-2.5">Người đi hỗ trợ</th>
-              <th className="text-left font-medium px-4 py-2.5">Trạng thái</th>
-              <th className="px-4 py-2.5"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {isLoading && (
+      {tab === "next" && (
+        <TripNextSteps
+          isAdmin={isAdmin}
+          onRegisterNext={(p) => {
+            setPrefill(p);
+            setEditingTrip(null);
+            setReportingTrip(null);
+            setShowForm(true);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+        />
+      )}
+
+      {tab === "trips" && (
+        <div className="glass-card border border-white/10 rounded-2xl overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
+          <table className="min-w-full text-xs">
+            <thead className="bg-white/[0.04] text-muted-foreground border-b border-white/5 backdrop-blur-md">
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
-                  Đang tải...
-                </td>
+                <th className="text-left font-medium px-4 py-2.5">Ngày đi</th>
+                {isAdmin && <th className="text-left font-medium px-4 py-2.5">Nhân viên</th>}
+                <th className="text-left font-medium px-4 py-2.5">Khách hàng ghé (buổi này)</th>
+                <th className="text-left font-medium px-4 py-2.5">Người đi hỗ trợ</th>
+                <th className="text-left font-medium px-4 py-2.5">Trạng thái</th>
+                <th className="px-4 py-2.5"></th>
               </tr>
-            )}
-            {!isLoading && (data?.trips.length ?? 0) === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
-                  Chưa có đăng ký nào.
-                </td>
-              </tr>
-            )}
-            {data?.trips.map((t) => {
-              const mapsUrl = buildGoogleMapsMultiStopUrl(t.stops.map((s) => s.address));
-              return (
-                <tr key={t.id} className="hover:bg-white/[0.02] align-top transition-colors">
-                  <td className="px-4 py-2.5 font-medium text-ink whitespace-nowrap">{formatDateVN(t.visitDate)}</td>
-                  {isAdmin && <td className="px-4 py-2.5 whitespace-nowrap">{t.employee.name}</td>}
-                  <td className="px-4 py-2.5">
-                    <ol className="space-y-1.5">
-                      {t.stops.map((s, i) => (
-                        <li key={s.id}>
-                          <p className="font-medium text-ink">
-                            {i + 1}. {s.companyName}
-                            {s.expectedTime && <span className="text-muted-foreground font-normal"> — {s.expectedTime}</span>}
-                          </p>
-                          {s.address && <p className="text-xs text-muted-foreground">{s.address}</p>}
-                          <p className="text-xs text-ink2" title={s.content}>
-                            {s.content}
-                          </p>
-                        </li>
-                      ))}
-                    </ol>
-                    {mapsUrl && (
-                      <a
-                        href={mapsUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-amber-400 hover:text-amber-300 transition-colors"
-                      >
-                        <MapPin className="h-3.5 w-3.5" /> Mở lộ trình trên Google Maps
-                      </a>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    {t.supporters.length > 0 ? t.supporters.map((s) => s.employee.name).join(", ") : "—"}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <span className={cn("status-badge", STATUS_STYLE[t.status])}>{STATUS_LABEL[t.status]}</span>
-                    {t.status === "REJECTED" && t.rejectReason && (
-                      <p className="text-[11px] text-muted2 mt-0.5">{t.rejectReason}</p>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                    {t.status === "PENDING" && isAdmin && (
-                      <span className="inline-flex items-center gap-2">
-                        <button
-                          onClick={() => handleAction(t.id, "approve")}
-                          className="p-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/30 transition-colors"
-                          title="Duyệt"
-                        >
-                          <Check className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleAction(t.id, "reject")}
-                          className="p-1.5 rounded-lg bg-brandRed-500/15 text-alert hover:bg-brandRed-500/25 border border-brandRed-500/30 transition-colors"
-                          title="Từ chối"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </span>
-                    )}
-                    {t.status === "PENDING" && t.employee.id === session?.user?.id && !isAdmin && t.entryLocked && (
-                      <span className="text-[11px] text-muted2" title="Quá hạn đăng ký — liên hệ Quản trị viên để sửa">
-                        Đã khoá
-                      </span>
-                    )}
-                    {t.status === "PENDING" && (isAdmin || (t.employee.id === session?.user?.id && !t.entryLocked)) && (
-                      <span className="inline-flex items-center gap-2">
-                        <button
-                          onClick={() => {
-                            setShowForm(false);
-                            setEditingTrip(t);
-                          }}
-                          className="text-muted2 hover:text-ink"
-                          title="Sửa đăng ký (gõ nhầm)"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleAction(t.id, "cancel")}
-                          className="text-muted2 hover:text-alert"
-                          title="Huỷ đăng ký"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </span>
-                    )}
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {isLoading && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
+                    Đang tải...
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              )}
+              {!isLoading && (data?.trips.length ?? 0) === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
+                    Chưa có đăng ký nào.
+                  </td>
+                </tr>
+              )}
+              {data?.trips.map((t) => {
+                const mapsUrl = buildGoogleMapsMultiStopUrl(t.stops.map((s) => s.address));
+                const isOwner = t.employee.id === session?.user?.id;
+                const visitedOrToday = visitDay(t.visitDate) <= today;
+                const hasReport = t.stops.some((s) => s.outcome);
+                const open = expandedId === t.id;
+                return (
+                  <Fragment key={t.id}>
+                    <tr className="hover:bg-white/[0.02] align-top transition-colors">
+                      <td className="px-4 py-2.5 font-medium text-ink whitespace-nowrap">{formatDateVN(t.visitDate)}</td>
+                      {isAdmin && <td className="px-4 py-2.5 whitespace-nowrap">{t.employee.name}</td>}
+                      <td className="px-4 py-2.5">
+                        <ol className="space-y-1.5">
+                          {t.stops.map((s, i) => (
+                            <li key={s.id}>
+                              <p className="font-medium text-ink">
+                                {i + 1}. {s.companyName}
+                                {s.expectedTime && <span className="text-muted-foreground font-normal"> — {s.expectedTime}</span>}
+                              </p>
+                              {s.address && <p className="text-xs text-muted-foreground">{s.address}</p>}
+                              <p className="text-xs text-ink2" title={s.content}>
+                                {s.content}
+                              </p>
+                            </li>
+                          ))}
+                        </ol>
+                        {mapsUrl && (
+                          <a
+                            href={mapsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-amber-400 hover:text-amber-300 transition-colors"
+                          >
+                            <MapPin className="h-3.5 w-3.5" /> Mở lộ trình trên Google Maps
+                          </a>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {t.supporters.length > 0 ? t.supporters.map((s) => s.employee.name).join(", ") : "—"}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <span className={cn("status-badge", STATUS_STYLE[t.status])}>{TRIP_STATUS_LABEL[t.status]}</span>
+                        {t.status === "PENDING" && visitedOrToday && (
+                          <p className="text-[11px] text-sky-300 mt-0.5">Đã tới ngày đi — nộp báo cáo</p>
+                        )}
+                        {(t.status === "REJECTED" || t.status === "NEEDS_REVISION") && t.rejectReason && (
+                          <p className="text-[11px] text-muted2 mt-0.5">{t.rejectReason}</p>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                        <span className="inline-flex flex-wrap items-center justify-end gap-2">
+                          {(t.status === "PENDING" || t.status === "NEEDS_REVISION") && (isAdmin || isOwner) && visitedOrToday && (
+                            t.entryLocked && !isAdmin ? (
+                              <span className="text-[11px] text-muted2" title="Quá hạn nộp báo cáo — liên hệ Quản trị viên">
+                                Đã khoá
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  setShowForm(false);
+                                  setEditingTrip(null);
+                                  setReportingTrip(t);
+                                  window.scrollTo({ top: 0, behavior: "smooth" });
+                                }}
+                                className="inline-flex items-center gap-1 rounded-lg border border-amber-500/40 bg-amber-500/15 px-2.5 py-1 font-medium text-amber-300 hover:bg-amber-500/25"
+                              >
+                                <FileText className="h-3.5 w-3.5" />
+                                {t.status === "NEEDS_REVISION" ? "Bổ sung báo cáo" : "Nộp báo cáo"}
+                              </button>
+                            )
+                          )}
+                          {t.status === "REPORTED" && isAdmin && (
+                            <>
+                              <button
+                                onClick={() => handleAction(t.id, "approve")}
+                                className="p-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/30 transition-colors"
+                                title="Duyệt báo cáo"
+                              >
+                                <Check className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => handleAction(t.id, "revise")}
+                                className="p-1.5 rounded-lg bg-orange-500/15 text-orange-300 hover:bg-orange-500/25 border border-orange-500/30 transition-colors"
+                                title="Yêu cầu bổ sung"
+                              >
+                                <Undo2 className="h-4 w-4" />
+                              </button>
+                            </>
+                          )}
+                          {(t.status === "REPORTED" || t.status === "PENDING" || t.status === "NEEDS_REVISION") && isAdmin && (
+                            <button
+                              onClick={() => handleAction(t.id, "reject")}
+                              className="p-1.5 rounded-lg bg-brandRed-500/15 text-alert hover:bg-brandRed-500/25 border border-brandRed-500/30 transition-colors"
+                              title="Từ chối"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          )}
+                          {t.status === "PENDING" && canAct(t) && (
+                            <>
+                              <button
+                                onClick={() => {
+                                  setShowForm(false);
+                                  setReportingTrip(null);
+                                  setEditingTrip(t);
+                                }}
+                                className="text-muted2 hover:text-ink"
+                                title="Sửa đăng ký (gõ nhầm)"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                              <button onClick={() => handleAction(t.id, "cancel")} className="text-muted2 hover:text-alert" title="Huỷ đăng ký">
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </>
+                          )}
+                          {hasReport && (
+                            <button
+                              onClick={() => setExpandedId(open ? null : t.id)}
+                              className="inline-flex items-center gap-1 text-muted2 hover:text-ink"
+                              title="Xem báo cáo"
+                            >
+                              Báo cáo {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                            </button>
+                          )}
+                        </span>
+                      </td>
+                    </tr>
+                    {open && (
+                      <tr key={`${t.id}-report`} className="bg-black/20">
+                        <td colSpan={isAdmin ? 6 : 5} className="px-4 py-3">
+                          <TripReportView trip={t} />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -254,6 +362,7 @@ function TripForm({
   isAdmin,
   currentUserId,
   editingTrip,
+  prefillStop,
   onCancelEdit,
 }: {
   onCreated: () => void;
@@ -262,6 +371,8 @@ function TripForm({
   // Có giá trị -> form ở chế độ SỬA đăng ký hiện có (NVKD tự sửa lỗi gõ nhầm khi còn Chờ duyệt),
   // không có -> chế độ tạo mới như cũ.
   editingTrip?: TripRow;
+  // Đăng ký lần gặp tiếp theo từ "Việc tiếp theo": điền sẵn khách hàng.
+  prefillStop?: PrefillStop;
   onCancelEdit?: () => void;
 }) {
   const [visitDate, setVisitDate] = useState(editingTrip ? toDateInputValueVN(editingTrip.visitDate) : "");
@@ -273,7 +384,9 @@ function TripForm({
           expectedTime: s.expectedTime ?? "",
           content: s.content,
         }))
-      : [emptyStop()]
+      : prefillStop
+        ? [{ ...emptyStop(), companyName: prefillStop.companyName, address: prefillStop.address }]
+        : [emptyStop()]
   );
   const [supporterIds, setSupporterIds] = useState<string[]>(
     editingTrip ? editingTrip.supporters.map((s) => s.employee.id) : []
@@ -289,7 +402,7 @@ function TripForm({
       return res.json() as Promise<{ users: EmployeeOption[] }>;
     },
   });
-  // Admin đăng ký bổ sung HỘ nhân viên (không bị hạn khoá, được duyệt luôn) — rỗng = cho chính mình.
+  // Admin đăng ký bổ sung HỘ nhân viên (không bị hạn khoá) — rỗng = cho chính mình.
   const [forEmployeeId, setForEmployeeId] = useState("");
   const ownerId = isAdmin && forEmployeeId ? forEmployeeId : currentUserId;
   const supporterOptions = (employeesData?.users ?? []).filter((u) => u.id !== ownerId);
@@ -367,8 +480,8 @@ function TripForm({
       {editingTrip && <p className="text-sm font-medium text-ink">Sửa đăng ký ngày {formatDateVN(editingTrip.visitDate)}</p>}
       <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
         {isAdmin
-          ? "Quản trị viên đăng ký bổ sung không bị giới hạn hạn chót. Đăng ký hộ nhân viên sẽ được duyệt luôn."
-          : "Hạn đăng ký: chậm nhất hết ngày thứ Hai của tuần kế tiếp sau tuần chứa ngày đi. Quá hạn sẽ bị khoá, chỉ Quản trị viên bổ sung được."}
+          ? "Quản trị viên đăng ký bổ sung không bị giới hạn hạn chót. Đăng ký xong, đi gặp rồi nộp báo cáo (admin nộp hộ thì được duyệt luôn)."
+          : "Đăng ký trước khi đi; đi xong nộp báo cáo (kết quả, nội dung, bước tiếp theo, ảnh/định vị) để được duyệt mới tính điểm. Hạn: chậm nhất hết ngày thứ Hai của tuần kế tiếp sau tuần chứa ngày đi, quá hạn sẽ bị khoá, chỉ Quản trị viên bổ sung được."}
       </p>
       {isAdmin && !editingTrip && (
         <label className="flex flex-col gap-1 text-xs text-muted-foreground max-w-xs">

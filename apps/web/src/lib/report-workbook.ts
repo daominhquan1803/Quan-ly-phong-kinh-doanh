@@ -485,6 +485,7 @@ async function buildWorkbookAndCharts(data: ReportData): Promise<{ workbook: Exc
     ["OIH", "Giá trị còn lại của mọi PO đang mở (không giới hạn theo kỳ). Kỳ đã kết thúc: tính ngược về cuối kỳ (G.Trị PO trừ các đợt giao đến hết kỳ; PO đã đóng/huỷ không rõ ngày thì coi như đóng từ trước). Kỳ đang chạy: số tại lúc xuất file. Chỉ có cột kỳ hiện tại."],
     ["Chỉ tiêu / Hoàn thành (%)", "Chỉ có ở báo cáo tháng: chỉ tiêu doanh số tháng và Doanh số đi hàng ÷ chỉ tiêu."],
     ["Khách hàng mới", "Số khách hàng được tạo trên trang Khách hàng trong kỳ, theo NVKD phụ trách (dòng Cả phòng gồm cả khách chưa gán NVKD)."],
+    ["Công tác", "Số buổi = số ngày có buổi đi công tác đã được duyệt báo cáo (chính hoặc hỗ trợ); số khách = khách có kết quả \"Đã gặp\" trong các báo cáo đã duyệt. Báo cáo chờ duyệt và việc tiếp theo trễ hạn là số tại lúc xuất file."],
     ["Công nợ", `Chốt ${asOfText}. Quá hạn so với hạn thanh toán; nợ xấu = quá hạn trên 180 ngày. "Cả phòng" tính toàn bộ hoá đơn, kể cả hoá đơn chưa gán NVKD, nên có thể lớn hơn tổng các nhân viên.`],
     ["Chưa có lịch thanh toán", "Hoá đơn còn nợ mà NVKD chưa điền ngày dự kiến thanh toán."],
     ["Kế hoạch thu", "Tổng giá trị hoá đơn có ngày dự kiến thanh toán nằm trong kỳ (theo tuần nếu là báo cáo tháng)."],

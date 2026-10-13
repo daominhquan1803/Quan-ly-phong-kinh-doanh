@@ -16,8 +16,8 @@ export default async function BusinessTripsPage() {
           <h1 className="text-xl font-bold text-ink tracking-tight">Đăng Ký &amp; Lịch Trình Đi Công Tác</h1>
           <p className="text-xs text-muted2">
             {isAdmin
-              ? "Duyệt đăng ký đi gặp khách hàng của nhân viên kinh doanh"
-              : "Đăng ký lịch đi gặp khách hàng — sau khi được duyệt sẽ tự động tính vào điểm KPI"}
+              ? "Duyệt báo cáo công tác của nhân viên kinh doanh — duyệt xong mới tính vào Kế hoạch tuần và KPI"
+              : "Đăng ký lịch đi gặp khách hàng, đi xong nộp báo cáo (kèm ảnh/định vị) — báo cáo được duyệt mới tính vào điểm Kế hoạch tuần và KPI"}
           </p>
         </div>
       </div>

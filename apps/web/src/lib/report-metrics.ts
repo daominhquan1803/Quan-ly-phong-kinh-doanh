@@ -2,6 +2,7 @@ import { prisma, getPoAggregates, Prisma } from "@hoanggia/db";
 import { monthWeekBuckets } from "@/lib/debt-status";
 import { getDebtSnapshot, getCollectionPlan, type DebtOverdueInvoice } from "@/lib/debt-snapshot";
 import { getOihAsOf } from "@/lib/dashboard-metrics";
+import { COUNTED_STOP_WHERE, COUNTED_TRIP_WHERE } from "@/lib/business-trip-report";
 import { asOfDateForPeriod, type ReportPeriod, type ReportType } from "@/lib/report-period";
 
 export const TOTAL_LABEL = "Cả phòng";
@@ -11,7 +12,7 @@ export type MetricUnit = "vnd" | "count" | "pct";
 export interface ReportMetricDef {
   key: string;
   label: string;
-  group: "Doanh số" | "Khách hàng" | "Công nợ" | "Kế hoạch thu";
+  group: "Doanh số" | "Khách hàng" | "Công tác" | "Công nợ" | "Kế hoạch thu";
   unit: MetricUnit;
   /** true = có số của cả 3 kỳ để so sánh; false = chỉ kỳ hiện tại (OIH, công nợ chốt cuối kỳ...). */
   multi: boolean;
@@ -29,6 +30,10 @@ export const REPORT_METRICS: ReportMetricDef[] = [
   { key: "target", label: "Chỉ tiêu doanh số tháng", group: "Doanh số", unit: "vnd", multi: true, monthOnly: true },
   { key: "completion", label: "Hoàn thành chỉ tiêu (%)", group: "Doanh số", unit: "pct", multi: true, monthOnly: true },
   { key: "new_customers", label: "Khách hàng mới (số khách)", group: "Khách hàng", unit: "count", multi: true },
+  { key: "trip_days", label: "Số buổi đi công tác đã duyệt", group: "Công tác", unit: "count", multi: true },
+  { key: "trip_visits", label: "Số khách đã gặp (báo cáo đã duyệt)", group: "Công tác", unit: "count", multi: true },
+  { key: "trip_pending_review", label: "Báo cáo công tác chờ duyệt (chưa tính điểm)", group: "Công tác", unit: "count", multi: false },
+  { key: "trip_steps_overdue", label: "Việc tiếp theo sau buổi gặp trễ hạn", group: "Công tác", unit: "count", multi: false },
   { key: "debt_total", label: "Tổng công nợ", group: "Công nợ", unit: "vnd", multi: false },
   { key: "debt_overdue", label: "Công nợ quá hạn", group: "Công nợ", unit: "vnd", multi: false },
   { key: "debt_overdue_rate", label: "Tỉ lệ nợ quá hạn (%)", group: "Công nợ", unit: "pct", multi: false },
@@ -119,7 +124,8 @@ export async function getReportData(opts: {
 
   // Kỳ đã kết thúc -> OIH tính ngược về cuối kỳ; kỳ đang chạy -> số hiện tại.
   const oihAsOfEnd = now >= current.end;
-  const [poLines, events, targets, poAgg, customers, oihPast] = await Promise.all([
+  const todayStartVN = new Date(`${new Date(now.getTime() + 7 * 3600_000).toISOString().slice(0, 10)}T00:00:00+07:00`);
+  const [poLines, events, targets, poAgg, customers, oihPast, primaryTrips, supporterTrips, pendingReviewTrips, overdueSteps] = await Promise.all([
     prisma.poTrackingLine.findMany({
       where: { poDate: { gte: rangeStart, lt: rangeEnd }, salesEmployeeId: { in: empIds } },
       select: { salesEmployeeId: true, itemCode: true, poValue: true, poDate: true },
@@ -140,6 +146,28 @@ export async function getReportData(opts: {
       orderBy: { createdAt: "asc" },
     }),
     oihAsOfEnd ? getOihAsOf(current.end, scopeEmployeeId) : Promise.resolve(new Map<string, number>()),
+    // Công tác: chỉ tính buổi đã duyệt + khách đã gặp (xem lib/business-trip-report.ts); chính + người đi hỗ trợ.
+    prisma.businessTripRequest.findMany({
+      where: { ...COUNTED_TRIP_WHERE, visitDate: { gte: rangeStart, lt: rangeEnd }, employeeId: { in: empIds } },
+      select: { employeeId: true, visitDate: true, stops: { where: COUNTED_STOP_WHERE, select: { id: true } } },
+    }),
+    prisma.businessTripSupporter.findMany({
+      where: { trip: { ...COUNTED_TRIP_WHERE, visitDate: { gte: rangeStart, lt: rangeEnd } }, employeeId: { in: empIds } },
+      select: { employeeId: true, trip: { select: { visitDate: true, stops: { where: COUNTED_STOP_WHERE, select: { id: true } } } } },
+    }),
+    // Số tại lúc xuất file (không tính ngược quá khứ được).
+    prisma.businessTripRequest.findMany({ where: { status: "REPORTED", employeeId: { in: empIds } }, select: { employeeId: true } }),
+    prisma.businessTripStop.findMany({
+      where: {
+        nextAction: { not: null },
+        nextActionDoneAt: null,
+        nextActionDue: { lt: todayStartVN },
+        outcome: { in: ["MET", "RESCHEDULED"] },
+        trip: { status: { in: ["REPORTED", "APPROVED"] } },
+        nextActionOwnerId: { in: empIds },
+      },
+      select: { nextActionOwnerId: true },
+    }),
   ]);
 
   // ---- Gom số theo (nhân viên, chỉ số, kỳ) ----
@@ -168,6 +196,31 @@ export async function getReportData(opts: {
     const i = periods.findIndex((p) => p.start.getFullYear() === t.year && p.start.getMonth() + 1 === t.month);
     if (i >= 0) add(t.employeeId, "target", i, Number(t.targetRevenue));
   }
+  // Công tác: số buổi = số NGÀY có buổi đi đã duyệt (gộp nhiều lượt cùng ngày), số khách = tổng khách đã gặp.
+  const tripDaySets = new Map<string, Set<string>>(); // `${empId}|${i}` -> các ngày
+  const addTrip = (empId: string, visitDate: Date, visits: number) => {
+    const i = periodIdx(visitDate);
+    if (i < 0) return;
+    const k = `${empId}|${i}`;
+    if (!tripDaySets.has(k)) tripDaySets.set(k, new Set());
+    tripDaySets.get(k)!.add(visitDate.toISOString().slice(0, 10));
+    add(empId, "trip_visits", i, visits);
+  };
+  for (const t of primaryTrips) addTrip(t.employeeId, t.visitDate, t.stops.length);
+  for (const t of supporterTrips) addTrip(t.employeeId, t.trip.visitDate, t.trip.stops.length);
+  for (const [k, days] of tripDaySets) {
+    const [empId, i] = k.split("|");
+    add(empId, "trip_days", Number(i), days.size);
+  }
+  const countBy = (ids: (string | null)[]) => {
+    const m = new Map<string, number>();
+    for (const id of ids) if (id) m.set(id, (m.get(id) ?? 0) + 1);
+    return m;
+  };
+  const pendingReviewBy = countBy(pendingReviewTrips.map((t) => t.employeeId));
+  const stepsOverdueBy = countBy(overdueSteps.map((t) => t.nextActionOwnerId));
+  const sumMap = (m: Map<string, number>) => empIds.reduce((a, id) => a + (m.get(id) ?? 0), 0);
+
   const oih = new Map<string, number>(oihPast);
   for (const p of poAgg) {
     if (!p.isOpen || !p.salesEmployeeId) continue;
@@ -235,6 +288,10 @@ export async function getReportData(opts: {
     pushRow(label, "target", target);
     pushRow(label, "completion", target.map((t, i) => ratePct(delivered[i] ?? 0, t ?? 0)));
     pushRow(label, "new_customers", empId ? get("new_customers") : newCustomersAll.map((v) => v as number | null));
+    pushRow(label, "trip_days", get("trip_days"));
+    pushRow(label, "trip_visits", get("trip_visits"));
+    pushRow(label, "trip_pending_review", [empId ? pendingReviewBy.get(empId) ?? 0 : sumMap(pendingReviewBy)]);
+    pushRow(label, "trip_steps_overdue", [empId ? stepsOverdueBy.get(empId) ?? 0 : sumMap(stepsOverdueBy)]);
 
     const d = empId
       ? snap.perEmployee.get(empId)

@@ -1,6 +1,7 @@
 import { prisma } from "@hoanggia/db";
 import { WeekPlanMetric } from "@prisma/client";
 import { normalizeVN } from "./text-normalize";
+import { COUNTED_STOP_WHERE, COUNTED_TRIP_WHERE } from "./business-trip-report";
 
 /**
  * Kế hoạch làm việc tuần — theo đúng file mẫu "KẾ HOẠCH LÀM VIỆC TUẦN" anh Quân gửi (bản
@@ -341,12 +342,12 @@ async function computeAutoMetrics(
   // (đã bỏ khỏi BusinessTripRequest khi tách model, xem schema.prisma).
   const [primaryVisits, supporterVisits] = await Promise.all([
     prisma.businessTripRequest.findMany({
-      where: { status: "APPROVED", visitDate: { gte: start, lt: end }, employeeId: { in: employeeIds } },
-      select: { employeeId: true, stops: { select: { companyName: true } } },
+      where: { ...COUNTED_TRIP_WHERE, visitDate: { gte: start, lt: end }, employeeId: { in: employeeIds } },
+      select: { employeeId: true, stops: { where: COUNTED_STOP_WHERE, select: { companyName: true } } },
     }),
     prisma.businessTripSupporter.findMany({
-      where: { trip: { status: "APPROVED", visitDate: { gte: start, lt: end } }, employeeId: { in: employeeIds } },
-      select: { employeeId: true, trip: { select: { stops: { select: { companyName: true } } } } },
+      where: { trip: { ...COUNTED_TRIP_WHERE, visitDate: { gte: start, lt: end } }, employeeId: { in: employeeIds } },
+      select: { employeeId: true, trip: { select: { stops: { where: COUNTED_STOP_WHERE, select: { companyName: true } } } } },
     }),
   ]);
   const visitCompaniesByEmployee = new Map<string, Set<string>>();
@@ -409,11 +410,11 @@ async function computeAutoMetrics(
   // ---- BUSINESS_TRIP: số ngày có lượt đi đã duyệt (chính + hỗ trợ), mỗi ngày tính 1 buổi ----
   const [primaryTrips, supporterTrips] = await Promise.all([
     prisma.businessTripRequest.findMany({
-      where: { status: "APPROVED", visitDate: { gte: start, lt: end }, employeeId: { in: employeeIds } },
+      where: { ...COUNTED_TRIP_WHERE, visitDate: { gte: start, lt: end }, employeeId: { in: employeeIds } },
       select: { employeeId: true, visitDate: true },
     }),
     prisma.businessTripSupporter.findMany({
-      where: { trip: { status: "APPROVED", visitDate: { gte: start, lt: end } }, employeeId: { in: employeeIds } },
+      where: { trip: { ...COUNTED_TRIP_WHERE, visitDate: { gte: start, lt: end } }, employeeId: { in: employeeIds } },
       select: { employeeId: true, trip: { select: { visitDate: true } } },
     }),
   ]);
@@ -641,12 +642,12 @@ export async function getWeekPlanMetricDetail(
   if (metric === "EXISTING_VISIT" || metric === "BUSINESS_TRIP") {
     const [primary, supporter] = await Promise.all([
       prisma.businessTripRequest.findMany({
-        where: { status: "APPROVED", visitDate: { gte: start, lt: end }, employeeId },
-        select: { visitDate: true, stops: { select: { companyName: true, content: true }, orderBy: { orderIndex: "asc" } } },
+        where: { ...COUNTED_TRIP_WHERE, visitDate: { gte: start, lt: end }, employeeId },
+        select: { visitDate: true, stops: { where: COUNTED_STOP_WHERE, select: { companyName: true, content: true }, orderBy: { orderIndex: "asc" } } },
       }),
       prisma.businessTripSupporter.findMany({
-        where: { trip: { status: "APPROVED", visitDate: { gte: start, lt: end } }, employeeId },
-        select: { trip: { select: { visitDate: true, stops: { select: { companyName: true, content: true }, orderBy: { orderIndex: "asc" } } } } },
+        where: { trip: { ...COUNTED_TRIP_WHERE, visitDate: { gte: start, lt: end } }, employeeId },
+        select: { trip: { select: { visitDate: true, stops: { where: COUNTED_STOP_WHERE, select: { companyName: true, content: true }, orderBy: { orderIndex: "asc" } } } } },
       }),
     ]);
     const trips = [

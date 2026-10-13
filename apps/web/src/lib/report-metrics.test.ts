@@ -12,6 +12,9 @@ const h = vi.hoisted(() => ({
   snapshot: vi.fn(),
   plan: vi.fn(),
   oihAsOf: vi.fn(),
+  tripsP: vi.fn(),
+  tripsS: vi.fn(),
+  stepsOverdue: vi.fn(),
 }));
 vi.mock("@hoanggia/db", () => ({
   prisma: {
@@ -21,6 +24,9 @@ vi.mock("@hoanggia/db", () => ({
     salesTarget: { findMany: h.targets },
     customer: { findMany: h.customers },
     debtPayment: { aggregate: h.received },
+    businessTripRequest: { findMany: h.tripsP },
+    businessTripSupporter: { findMany: h.tripsS },
+    businessTripStop: { findMany: h.stepsOverdue },
   },
   getPoAggregates: h.poAgg,
 }));
@@ -59,6 +65,18 @@ beforeEach(() => {
     { employeeId: "u1", year: 2026, month: 9, targetRevenue: 1500 },
   ]);
   h.oihAsOf.mockResolvedValue(new Map([["u1", 111]]));
+  // Công tác: lần gọi đầu = buổi đã duyệt (có "stops" đếm khách), lần 2 (cùng mock tripsP) = báo cáo chờ duyệt (chỉ employeeId).
+  h.tripsP.mockImplementation(async (args: { where: { status?: string } }) =>
+    args.where.status === "REPORTED"
+      ? [{ employeeId: "u1" }, { employeeId: "u1" }, { employeeId: "u2" }]
+      : [
+          { employeeId: "u1", visitDate: d("2026-10-06"), stops: [{ id: "a" }, { id: "b" }] },
+          { employeeId: "u1", visitDate: d("2026-10-06"), stops: [{ id: "c" }] }, // cùng ngày -> 1 buổi, 3 khách
+          { employeeId: "u1", visitDate: d("2026-09-10"), stops: [{ id: "d" }] }, // kỳ trước
+        ]
+  );
+  h.tripsS.mockResolvedValue([{ employeeId: "u2", trip: { visitDate: d("2026-10-06"), stops: [{ id: "a" }, { id: "b" }] } }]);
+  h.stepsOverdue.mockResolvedValue([{ nextActionOwnerId: "u1" }, { nextActionOwnerId: "u2" }, { nextActionOwnerId: "u2" }]);
   h.poAgg.mockResolvedValue([
     { salesEmployeeId: "u1", isOpen: true, remainingValue: 700 },
     { salesEmployeeId: "u1", isOpen: false, remainingValue: 0 },
@@ -171,6 +189,21 @@ describe("getReportData - công nợ & kế hoạch thu", () => {
     await monthReport();
     expect(h.oihAsOf).not.toHaveBeenCalled();
     expect(h.poAgg).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("getReportData - công tác", () => {
+  it("số buổi = số ngày đã duyệt (gộp lượt cùng ngày), số khách cộng dồn, người hỗ trợ cũng được tính; chờ duyệt/việc trễ là số hiện tại", async () => {
+    const data = await monthReport();
+    expect(val(data, "Tùng", "trip_days")).toEqual([1, 1, 0]);
+    expect(val(data, "Tùng", "trip_visits")).toEqual([3, 1, 0]);
+    expect(val(data, "Dung", "trip_days")[0]).toBe(1); // hỗ trợ
+    expect(val(data, "Dung", "trip_visits")[0]).toBe(2);
+    expect(val(data, "Cả phòng", "trip_days")[0]).toBe(2);
+    expect(val(data, "Cả phòng", "trip_visits")[0]).toBe(5);
+    expect(val(data, "Tùng", "trip_pending_review")).toEqual([2, null, null]);
+    expect(val(data, "Cả phòng", "trip_pending_review")[0]).toBe(3);
+    expect(val(data, "Dung", "trip_steps_overdue")[0]).toBe(2);
   });
 });
 

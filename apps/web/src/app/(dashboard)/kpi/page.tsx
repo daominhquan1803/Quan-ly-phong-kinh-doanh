@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { KpiOverview } from "@/components/kpi/KpiOverview";
+import { TripPendingBanner } from "@/components/business-trips/TripPendingBanner";
 import { Award } from "lucide-react";
 
 export default async function KpiPage() {
@@ -21,6 +22,7 @@ export default async function KpiPage() {
           </p>
         </div>
       </div>
+      <TripPendingBanner />
       <KpiOverview isAdmin={isAdmin} />
     </div>
   );
