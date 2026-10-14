@@ -780,10 +780,11 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                 <th className="text-left font-medium px-4 py-3">Thư nhắc</th>
               </tr>
               <tr className="bg-black/30 border-t border-white/5">
-                <th className="px-4 py-2 font-normal">
+                {/* Ô tìm kiếm rộng 3 cột (Khách hàng + Số hoá đơn + Ngày chứng từ) để nhìn rõ chữ đang gõ */}
+                <th colSpan={3} className="px-4 py-2 font-normal">
                   <FilterInput value={filterCustomer} onChange={setFilterCustomer} placeholder="Tìm số HĐ, mã khách..." />
                 </th>
-                <th colSpan={5} className="px-4 py-2 text-right font-normal text-xs text-muted2">
+                <th colSpan={3} className="px-4 py-2 text-right font-normal text-xs text-muted2">
                   Tổng {visibleRows.length} hoá đơn đang lọc
                 </th>
                 <th className="px-4 py-2 text-right font-mono text-ink">{formatCurrencyVND(filteredTotals.original)}</th>
