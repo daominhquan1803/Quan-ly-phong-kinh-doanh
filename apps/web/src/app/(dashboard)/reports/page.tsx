@@ -1,7 +1,11 @@
-import { ReportsPanel } from "@/components/reports/ReportsPanel";
+import { auth } from "@/lib/auth";
+import { ReportsTabs } from "@/components/reports/ReportsTabs";
 import { FileBarChart } from "lucide-react";
 
-export default function ReportsPage() {
+export default async function ReportsPage() {
+  const session = await auth();
+  const isAdmin = session?.user?.role === "ADMIN";
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3 border-b border-white/10 pb-5">
@@ -10,10 +14,12 @@ export default function ReportsPage() {
         </div>
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-white">Báo cáo</h1>
-          <p className="text-xs text-gray-400 mt-0.5">Xuất báo cáo tuần / tháng ra Excel dashboard — chọn chỉ số và xem theo nhân viên</p>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Báo cáo tuần / tháng ra Excel dashboard, và Thống kê khách hàng / mã hàng lâu chưa mua, hoá đơn theo khách
+          </p>
         </div>
       </div>
-      <ReportsPanel />
+      <ReportsTabs isAdmin={isAdmin} />
     </div>
   );
 }
