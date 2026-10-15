@@ -2,6 +2,7 @@ import cron from "node-cron";
 import { buildServer } from "./server";
 import { runAmisOrderSync } from "./sync/amis";
 import { runQuoteSync } from "./sync/quotes";
+import { runBaoGiaAppSync, isBaoGiaAppConfigured } from "./sync/baoGiaApp";
 import { runWeekPlanReminder } from "./notifications/weekPlanReminder";
 import { runKpiReminder } from "./notifications/kpiReminder";
 import { runDebtDueReminder } from "./notifications/debtDueReminder";
@@ -51,6 +52,23 @@ async function main() {
     logger.info(`Đã lên lịch đồng bộ Báo giá: "${QUOTE_CRON}" (múi giờ ${QUOTE_CRON_TIMEZONE})`);
   } else {
     logger.warn("Chưa cấu hình GOOGLE_SHEETS_QUOTE_ID — bỏ qua lịch đồng bộ Báo giá.");
+  }
+
+  // App báo giá (từ 10/10/2026): đọc file dữ liệu chỉ-đọc, 10 phút/lần — lần nào không có thay đổi thì không ghi log.
+  if (isBaoGiaAppConfigured()) {
+    const BAO_GIA_CRON = process.env.BAO_GIA_SYNC_CRON || "*/10 * * * *";
+    cron.schedule(
+      BAO_GIA_CRON,
+      () => {
+        runBaoGiaAppSync("CRON").catch((err) => logger.error("Lỗi cron đồng bộ app báo giá:", err));
+      },
+      { timezone: QUOTE_CRON_TIMEZONE }
+    );
+    logger.info(`Đã lên lịch đồng bộ từ app báo giá: "${BAO_GIA_CRON}"`);
+    // Chạy 1 lần ngay khi worker khởi động để dữ liệu có sẵn, không phải đợi tới mốc 10 phút đầu tiên.
+    runBaoGiaAppSync("CRON").catch((err) => logger.error("Lỗi đồng bộ app báo giá khi khởi động:", err));
+  } else {
+    logger.warn("Chưa cấu hình BAO_GIA_DB_PATH — bỏ qua đồng bộ báo giá từ app báo giá.");
   }
 
   cron.schedule(

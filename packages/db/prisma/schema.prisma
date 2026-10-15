@@ -632,10 +632,20 @@ model QuoteRequest {
   sourceColorHex      String?
   sourceSheetName     String
   sourceRowNumber     Int // số dòng trong sheet gốc lúc đồng bộ — chỉ để đối chiếu, không phải khoá
+  // Nguồn dữ liệu (từ 10/10/2026 cả phòng nhập báo giá vào app báo giá riêng): "SHEET" = Google Sheet (các báo giá
+  // TRƯỚC 10/10/2026, xoá-ghi lại theo sheet), "BAOGIA_APP" = app báo giá (từ 10/10/2026, upsert theo mã BG-xx-xxxx
+  // qua worker/src/sync/baoGiaApp.ts, 10 phút/lần). Hai nguồn không chồng ngày nhau nên cộng gộp được.
+  sourceApp           String      @default("SHEET")
+  sourceCode          String? // mã báo giá trong app báo giá (BG-26-0001) — null với dòng từ Google Sheet
+  sourceUpdatedAt     DateTime? // updatedAt của báo giá bên app báo giá — để bỏ qua dòng không đổi khi đồng bộ
+  requestedAt         DateTime? // thời điểm tạo báo giá thật (chỉ có với dòng từ app báo giá)
+  statusRaw           String? // trạng thái gốc trong app báo giá (CHO_BAO_GIA, DA_CO_GIA_L1...)
+  finalResult         String? // kết quả chốt gốc trong app báo giá (DANG_THEO, CHOT_PO, KHACH_CHE_DAT...)
   syncedAt            DateTime    @default(now())
   createdAt           DateTime    @default(now())
   updatedAt           DateTime    @updatedAt
 
+  @@unique([sourceApp, sourceCode])
   @@index([year, month])
   @@index([status])
   @@index([assigneeRaw])

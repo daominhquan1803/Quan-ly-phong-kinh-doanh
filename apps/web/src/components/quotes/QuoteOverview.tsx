@@ -229,7 +229,7 @@ export function QuoteOverview() {
           className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 px-4 py-2 text-xs font-semibold text-black shadow-[0_0_15px_rgba(224,163,39,0.3)] disabled:opacity-60 transition-all"
         >
           <RefreshCw className={cn("h-3.5 w-3.5", syncing && "animate-spin")} />
-          {syncing ? "Đang đồng bộ..." : "Đồng bộ Google Sheet"}
+          {syncing ? "Đang đồng bộ..." : "Đồng bộ báo giá"}
         </button>
       </div>
 
@@ -259,7 +259,7 @@ export function QuoteOverview() {
       <div className="glass-card border border-amber-500/25 bg-amber-500/[0.02] p-4 rounded-xl flex items-start gap-2.5 text-xs text-amber-300/90 shadow-[0_0_15px_rgba(224,163,39,0.06)]">
         <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-amber-400" />
         <span className="leading-relaxed">
-          Trạng thái (Chốt được giá / Đang thương thảo / Không bán được / Chưa báo giá) được nhận diện tự động từ màu nền dòng trong Google Sheet gốc.
+          Từ 10/10/2026 báo giá lấy trực tiếp từ app báo giá (cập nhật 10 phút/lần), trạng thái theo đúng tiến độ trong app: Chốt được giá = đã chốt PO, Đang thương thảo = đã báo giá/khách đang phản hồi, Không bán được = huỷ/khách từ chối, Chưa báo giá = chờ hoặc đang tính giá. Báo giá trước 10/10/2026 lấy từ Google Sheet cũ (trạng thái nhận diện theo màu nền dòng).
         </span>
       </div>
 

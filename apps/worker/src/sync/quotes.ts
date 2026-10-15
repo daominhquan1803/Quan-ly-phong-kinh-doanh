@@ -1,6 +1,8 @@
 import * as XLSX from "xlsx";
 import { prisma, normalizeVN, classifyQuoteStatusByColor, QuoteStatus } from "@hoanggia/db";
 import { logger } from "../logger";
+import { isOnOrAfterCutoff } from "./baoGiaMapping";
+import { runBaoGiaAppSync, isBaoGiaAppConfigured } from "./baoGiaApp";
 
 export interface SyncOutcome {
   status: "SUCCESS" | "FAILED";
@@ -205,7 +207,7 @@ function parseMonthSheet(ws: XLSX.WorkSheet): ParsedQuoteRow[] {
   return result;
 }
 
-export async function runQuoteSync(triggeredBy: string): Promise<SyncOutcome> {
+async function runQuoteSheetSync(triggeredBy: string): Promise<SyncOutcome> {
   const syncLog = await prisma.syncLog.create({ data: { jobType: "QUOTE_SYNC", status: "RUNNING", triggeredBy } });
 
   try {
@@ -234,7 +236,9 @@ export async function runQuoteSync(triggeredBy: string): Promise<SyncOutcome> {
       if (!Number.isFinite(month) || month < 1 || month > 12) continue;
 
       const ws = wb.Sheets[sheetName];
-      const rows = parseMonthSheet(ws);
+      // Từ 10/10/2026 cả phòng nhập báo giá vào app báo giá (đồng bộ ở baoGiaApp.ts) — bỏ các dòng sheet từ ngày đó trở đi
+      // (nếu có ai vẫn ghi vào sheet) để không đếm trùng với dữ liệu lấy từ app.
+      const rows = parseMonthSheet(ws).filter((r) => !isOnOrAfterCutoff(year, month, r.requestDay));
 
       // Xoá hết dữ liệu CŨ của đúng sheet này rồi ghi lại toàn bộ từ đầu — sheet gốc không có
       // cột ID/khoá ổn định để upsert an toàn từng dòng (người dùng có thể chèn/xoá dòng giữa
@@ -266,4 +270,22 @@ export async function runQuoteSync(triggeredBy: string): Promise<SyncOutcome> {
     });
     return { status: "FAILED", recordsSynced: 0, message };
   }
+}
+
+/**
+ * Đồng bộ đầy đủ báo giá: Google Sheet (chỉ phần TRƯỚC 10/10/2026) rồi app báo giá (từ 10/10/2026). Dùng cho lịch hằng
+ * ngày + nút "Đồng bộ báo giá" trên trang. Riêng app báo giá còn có lịch 10 phút/lần (runBaoGiaAppSync ở index.ts).
+ */
+export async function runQuoteSync(triggeredBy: string): Promise<SyncOutcome> {
+  const outcomes: SyncOutcome[] = [];
+  if (process.env.GOOGLE_SHEETS_QUOTE_ID) outcomes.push(await runQuoteSheetSync(triggeredBy));
+  if (isBaoGiaAppConfigured()) outcomes.push(await runBaoGiaAppSync(triggeredBy));
+  if (outcomes.length === 0) {
+    return { status: "FAILED", recordsSynced: 0, message: "Chưa cấu hình nguồn báo giá nào (GOOGLE_SHEETS_QUOTE_ID / BAO_GIA_DB_PATH)." };
+  }
+  return {
+    status: outcomes.some((o) => o.status === "FAILED") ? "FAILED" : "SUCCESS",
+    recordsSynced: outcomes.reduce((s, o) => s + o.recordsSynced, 0),
+    message: outcomes.map((o) => o.message).filter(Boolean).join(" | "),
+  };
 }
