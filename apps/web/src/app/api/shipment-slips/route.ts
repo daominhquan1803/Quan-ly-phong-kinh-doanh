@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@hoanggia/db";
 import { requireSession, scopeByOwner, UnauthorizedError } from "@/lib/rbac";
 import { createShipmentSlipSchema } from "@/lib/validation/shipment-slip";
+import { slipItemMatch, slipSearchWhere } from "@/lib/shipment-slip-search";
 
 export const dynamic = "force-dynamic";
 
@@ -11,32 +12,13 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const q = searchParams.get("q")?.trim();
 
-    // Tìm theo mã hàng / tên hàng / số PO bán / mã PO (đơn hàng gắn với phiếu) của DÒNG HÀNG trong phiếu,
-    // ngoài số phiếu và tên khách.
-    const itemMatch = q
-      ? {
-          OR: [
-            { itemCode: { contains: q, mode: "insensitive" as const } },
-            { itemName: { contains: q, mode: "insensitive" as const } },
-            { poSaleNumber: { contains: q, mode: "insensitive" as const } },
-            { poCustomerItemCode: { contains: q, mode: "insensitive" as const } },
-          ],
-        }
-      : undefined;
+    // Tìm theo số phiếu / khách / mã đơn và theo dòng hàng (mã hàng, tên hàng, số PO) — dùng chung với xuất Excel.
+    const itemMatch = slipItemMatch(q);
 
     const slips = await prisma.shipmentSlip.findMany({
       where: {
         ...scopeByOwner(session, "createdById"),
-        ...(q
-          ? {
-              OR: [
-                { slipNumber: { contains: q, mode: "insensitive" } },
-                { customerName: { contains: q, mode: "insensitive" } },
-                { order: { orderCode: { contains: q, mode: "insensitive" } } },
-                { items: { some: itemMatch } },
-              ],
-            }
-          : {}),
+        ...slipSearchWhere(q),
       },
       orderBy: { createdAt: "desc" },
       take: 200,

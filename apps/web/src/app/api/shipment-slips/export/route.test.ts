@@ -96,6 +96,44 @@ describe("GET /api/shipment-slips/export", () => {
     expect(h.findMany.mock.calls[0][0].where.createdById).toBe("u-tung");
   });
 
+  it("có từ khoá q: truy vấn thêm điều kiện tìm (số phiếu/khách/đơn/dòng hàng) giống danh sách phiếu + tên file có từ khoá", async () => {
+    const res = await get("from=2026-10-01&to=2026-10-09&q=Panasonic%20Vi%E1%BB%87t");
+    const where = h.findMany.mock.calls[0][0].where;
+    expect(where.slipDate).toBeTruthy(); // vẫn lọc khoảng ngày
+    expect(where.OR).toEqual(
+      expect.arrayContaining([
+        { customerName: { contains: "Panasonic Việt", mode: "insensitive" } },
+        { slipNumber: { contains: "Panasonic Việt", mode: "insensitive" } },
+      ])
+    );
+    expect(decodeURIComponent(res.headers.get("Content-Disposition") ?? "")).toContain("Thong-ke-di-hang_Panasonic-Viet_2026-10-01_2026-10-09.xlsx");
+  });
+
+  it("tìm theo khách: lấy mọi dòng của phiếu khớp; tìm theo mã hàng: chỉ lấy đúng dòng khớp; tiêu đề ghi bộ lọc", async () => {
+    h.findMany.mockResolvedValue(SLIPS);
+    // "Khách A" khớp tên khách của phiếu BH04215 -> cả 2 dòng (H1, H2); phiếu BH04216 (Khách B) không khớp khách, dòng H1 cũng không khớp "Khách A" -> bị loại
+    let sheet = (await readWorkbook(await get("from=2026-10-01&to=2026-10-09&q=Kh%C3%A1ch%20A"))).getWorksheet("Chi tiết")!;
+    const dataRows = (ws: ExcelJS.Worksheet) => {
+      const out: string[] = [];
+      ws.eachRow((row) => {
+        const v = row.getCell(3).value;
+        if (typeof v === "string" && /^BH\d+$/.test(v)) out.push(`${v}:${row.getCell(4).value}`);
+      });
+      return out;
+    };
+    expect(dataRows(sheet)).toEqual(["BH04215:H1", "BH04215:H2"]);
+    let subtitle = "";
+    sheet.eachRow((row) => {
+      const v = row.getCell(1).value;
+      if (typeof v === "string" && v.includes("Lọc:")) subtitle = v;
+    });
+    expect(subtitle).toContain('Lọc: "Khách A"');
+
+    // "H2" chỉ khớp qua dòng hàng -> chỉ dòng H2 của phiếu BH04215
+    sheet = (await readWorkbook(await get("from=2026-10-01&to=2026-10-09&q=H2"))).getWorksheet("Chi tiết")!;
+    expect(dataRows(sheet)).toEqual(["BH04215:H2"]);
+  });
+
   it("không có phiếu nào trong khoảng -> vẫn ra file hợp lệ", async () => {
     h.findMany.mockResolvedValue([]);
     const res = await get("from=2026-10-01&to=2026-10-09");

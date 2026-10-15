@@ -35,6 +35,8 @@ export function SlipTable({ isAdmin }: { isAdmin: boolean }) {
   const [exportFrom, setExportFrom] = useState(`${today.slice(0, 8)}01`);
   const [exportTo, setExportTo] = useState(today);
   const exportValid = !!exportFrom && !!exportTo && exportFrom <= exportTo;
+  // Đang gõ ô tìm kiếm thì xuất đúng các phiếu đang tìm (vd 1 khách), để trống thì xuất tất cả khách.
+  const exportQuery = q.trim();
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -117,13 +119,13 @@ export function SlipTable({ isAdmin }: { isAdmin: boolean }) {
               className="text-xs bg-transparent text-ink focus:outline-none font-mono"
             />
             <a
-              href={exportValid ? `/api/shipment-slips/export?from=${exportFrom}&to=${exportTo}` : undefined}
+              href={exportValid ? `/api/shipment-slips/export?from=${exportFrom}&to=${exportTo}${exportQuery ? `&q=${encodeURIComponent(exportQuery)}` : ""}` : undefined}
               aria-disabled={!exportValid}
               className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold text-emerald-400 ${exportValid ? "hover:bg-emerald-500/20" : "opacity-40 pointer-events-none"}`}
-              title="Xuất Excel thống kê đi hàng: số phiếu, mã hàng, tên hàng, ngày đi, số lượng (cả 2 ngày đầu cuối)"
+              title={exportQuery ? `Xuất Excel đi hàng đang lọc "${exportQuery}" trong khoảng ngày đã chọn` : "Xuất Excel thống kê đi hàng của tất cả khách trong khoảng ngày đã chọn (gõ tên khách ở ô tìm kiếm để xuất riêng khách đó)"}
             >
               <Download className="h-3.5 w-3.5" />
-              Xuất Excel đi hàng
+              {exportQuery ? `Xuất Excel "${exportQuery.length > 14 ? `${exportQuery.slice(0, 14)}…` : exportQuery}"` : "Xuất Excel đi hàng"}
             </a>
           </div>
           {isAdmin && (

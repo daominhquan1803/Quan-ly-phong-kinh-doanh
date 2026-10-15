@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { prisma } from "@hoanggia/db";
 import { requireSession, scopeByOwner, UnauthorizedError } from "@/lib/rbac";
+import { slipSearchWhere, slipMatchesQuery, itemMatchesQuery, slugForFileName } from "@/lib/shipment-slip-search";
 import { embedLogo, addCompanyHeaderLines, NAVY, HEADER_FILL, THIN_BOX } from "@/lib/excel-brand";
 
 export const dynamic = "force-dynamic";
@@ -32,6 +33,8 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const from = searchParams.get("from") ?? "";
     const to = searchParams.get("to") ?? "";
+    // Từ khoá tìm (cùng ô tìm kiếm của danh sách phiếu): có thì chỉ xuất các phiếu khớp (vd 1 khách), không có thì xuất tất cả.
+    const q = searchParams.get("q")?.trim().slice(0, 100) || undefined;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) {
       return NextResponse.json({ error: "Thiếu hoặc sai định dạng ngày (từ ngày / đến ngày)" }, { status: 400 });
     }
@@ -48,7 +51,7 @@ export async function GET(req: NextRequest) {
     }
 
     const slips = await prisma.shipmentSlip.findMany({
-      where: { ...scopeByOwner(session, "createdById"), slipDate: { gte: start, lt: endExclusive } },
+      where: { ...scopeByOwner(session, "createdById"), slipDate: { gte: start, lt: endExclusive }, ...slipSearchWhere(q) },
       orderBy: [{ slipDate: "asc" }, { slipNumber: "asc" }],
       select: {
         slipNumber: true,
@@ -57,14 +60,17 @@ export async function GET(req: NextRequest) {
         order: { select: { orderCode: true } },
         items: {
           orderBy: { lineOrder: "asc" },
-          select: { itemCode: true, itemName: true, unit: true, poSaleNumber: true, qtyActual: true, qtyRequested: true },
+          select: { itemCode: true, itemName: true, unit: true, poSaleNumber: true, poCustomerItemCode: true, qtyActual: true, qtyRequested: true },
         },
       },
     });
 
     // Phẳng hoá: 1 dòng = 1 mã hàng của 1 phiếu. Số lượng = thực xuất, thiếu thì lấy số lượng yêu cầu.
+    // Phiếu khớp ở số phiếu/khách/mã đơn -> lấy mọi dòng; phiếu chỉ khớp qua dòng hàng (tìm theo mã hàng/PO) -> chỉ lấy đúng các dòng khớp.
     const lines = slips.flatMap((s) =>
-      s.items.map((it) => ({
+      s.items
+        .filter((it) => !q || slipMatchesQuery(q, s) || itemMatchesQuery(q, it))
+        .map((it) => ({
         slipNumber: s.slipNumber,
         date: vnCalendarDate(s.slipDate!),
         itemCode: it.itemCode ?? "",
@@ -102,7 +108,7 @@ export async function GET(req: NextRequest) {
     sheet.getCell(r, 1).alignment = { horizontal: "center" };
     r++;
     sheet.mergeCells(r, 1, r, COLS.length);
-    sheet.getCell(r, 1).value = `${rangeLabel} — ${slips.length} phiếu, ${lines.length} dòng hàng`;
+    sheet.getCell(r, 1).value = `${rangeLabel}${q ? ` — Lọc: "${q}"` : ""} — ${new Set(lines.map((l) => l.slipNumber)).size} phiếu, ${lines.length} dòng hàng`;
     sheet.getCell(r, 1).font = { italic: true, color: { argb: "FF6B7280" } };
     sheet.getCell(r, 1).alignment = { horizontal: "center" };
     r += 2;
@@ -169,7 +175,7 @@ export async function GET(req: NextRequest) {
     ];
     sum.columns = SUM_COLS.map((c) => ({ width: c.width }));
     sum.mergeCells(1, 1, 1, SUM_COLS.length);
-    sum.getCell(1, 1).value = `TỔNG HỢP ĐI HÀNG THEO MÃ HÀNG — ${rangeLabel}`;
+    sum.getCell(1, 1).value = `TỔNG HỢP ĐI HÀNG THEO MÃ HÀNG — ${rangeLabel}${q ? ` — Lọc: "${q}"` : ""}`;
     sum.getCell(1, 1).font = { bold: true, size: 14, color: { argb: NAVY } };
     sum.getCell(1, 1).alignment = { horizontal: "center" };
     // Gộp theo mã hàng + ĐVT (cùng mã khác ĐVT không cộng lẫn); hàng không có mã thì gộp theo tên.
@@ -208,7 +214,8 @@ export async function GET(req: NextRequest) {
     sum.views = [{ showGridLines: false, state: "frozen", ySplit: sumHeaderRow, xSplit: 0 }];
 
     const buffer = await workbook.xlsx.writeBuffer();
-    const fileName = `Thong-ke-di-hang_${from}_${to}.xlsx`;
+    const qSlug = q ? slugForFileName(q) : "";
+    const fileName = `Thong-ke-di-hang${qSlug ? `_${qSlug}` : ""}_${from}_${to}.xlsx`;
     return new NextResponse(buffer as ArrayBuffer, {
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
