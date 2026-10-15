@@ -90,6 +90,7 @@ export async function POST(req: NextRequest) {
             qtyActual: item.qtyActual,
             poCustomerItemCode: item.poCustomerItemCode,
             note: item.note,
+            unitPrice: item.unitPrice,
           })),
         },
       },

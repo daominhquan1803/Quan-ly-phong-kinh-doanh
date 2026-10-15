@@ -3,7 +3,7 @@ import { prisma, applyShipmentSlipDeliveries } from "@hoanggia/db";
 import { parseShipmentSlipsWithMapping } from "@/lib/shipment-slip-parser";
 import { ShipmentSlipFieldKey, getMissingRequiredShipmentSlipFields } from "@/lib/shipment-slip-fields";
 import { requireSession, UnauthorizedError } from "@/lib/rbac";
-import { diffShipmentSlip } from "@/lib/shipment-slip-diff";
+import { diffShipmentSlip, slipInfoChanged } from "@/lib/shipment-slip-diff";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +58,7 @@ export async function POST(req: NextRequest) {
     let updatedCount = 0;
     let deliveryMatchedCount = 0;
     let skippedIdenticalCount = 0;
+    let infoUpdatedCount = 0;
     let skippedBeforeBaselineCount = 0;
     const deliveryUnmatchedItems: string[] = [];
     const conflicts: { slipNumber: string; customerName: string | null; differences: string[] }[] = [];
@@ -69,13 +70,40 @@ export async function POST(req: NextRequest) {
         where: { slipNumber: slip.slipNumber },
         select: {
           slipDate: true,
-          items: { select: { poSaleNumber: true, itemCode: true, itemName: true, qtyActual: true } },
+          id: true,
+          items: {
+            orderBy: { lineOrder: "asc" },
+            select: { poSaleNumber: true, itemCode: true, itemName: true, qtyActual: true, poCustomerItemCode: true, note: true, unitPrice: true },
+          },
         },
       });
       if (already) {
         const differences = diffShipmentSlip(already, { slipDate: slip.slipDate, items: slip.items });
         if (differences.length === 0) {
-          skippedIdenticalCount++;
+          // Trùng số liệu. Nếu file mới có thêm thông tin bổ sung (Số PO/Mã hàng của khách, Ghi chú, Giá tiền) khác bản đã lưu
+          // thì chỉ cập nhật các dòng hàng (không đụng đợt giao/doanh số) — để nhập lại file có cột mới vẫn ghi nhận được.
+          if (slipInfoChanged(already.items, slip.items)) {
+            await prisma.shipmentSlipItem.deleteMany({ where: { shipmentSlipId: already.id } });
+            await prisma.shipmentSlipItem.createMany({
+              data: slip.items.map((it, idx) => ({
+                shipmentSlipId: already.id,
+                lineOrder: idx,
+                itemCode: it.itemCode,
+                itemName: it.itemName,
+                warehouse: it.warehouse,
+                poSaleNumber: it.poSaleNumber,
+                unit: it.unit,
+                qtyRequested: it.qtyRequested,
+                qtyActual: it.qtyActual,
+                poCustomerItemCode: it.poCustomerItemCode,
+                note: it.note,
+                unitPrice: it.unitPrice,
+              })),
+            });
+            infoUpdatedCount++;
+          } else {
+            skippedIdenticalCount++;
+          }
           continue;
         }
         if (!overwriteSet.has(slip.slipNumber)) {
@@ -131,6 +159,7 @@ export async function POST(req: NextRequest) {
             qtyActual: it.qtyActual,
             poCustomerItemCode: it.poCustomerItemCode,
             note: it.note,
+            unitPrice: it.unitPrice,
           })),
         });
       }
@@ -169,6 +198,7 @@ export async function POST(req: NextRequest) {
       deliveryMatchedCount,
       deliveryUnmatchedItems,
       skippedIdenticalCount,
+      infoUpdatedCount,
       skippedBeforeBaselineCount,
       conflicts,
     });

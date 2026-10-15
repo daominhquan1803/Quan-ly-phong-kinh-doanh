@@ -20,7 +20,8 @@ export type ShipmentSlipFieldKey =
   | "qtyRequested"
   | "qtyActual"
   | "poCustomerItemCode"
-  | "note";
+  | "note"
+  | "unitPrice";
 
 // 7 cột "nhận diện" bắt buộc anh Quân xác nhận là đủ để xử lý 1 phiếu: Ngày giao hàng, Phiếu
 // giao hàng, Mã/Tên khách hàng, Số PO, Mã/Tên hàng, SL thực xuất, Đơn vị — required=true ở
@@ -121,13 +122,30 @@ export const SHIPMENT_SLIP_FIELDS: FieldDef<ShipmentSlipFieldKey>[] = [
     key: "poCustomerItemCode",
     label: "Số PO/Mã hàng KH",
     required: false,
-    synonyms: ["số po/mã hàng kh", "mã hàng kh", "po/mã hàng kh", "po customer item code"],
+    synonyms: [
+      "số po/mã hàng kh",
+      "mã hàng kh",
+      "po/mã hàng kh",
+      "po customer item code",
+      "số po/ mã hàng của khách",
+      "số po/mã hàng của khách",
+      "số po mã hàng của khách",
+      "số po/ mã hàng của khách hàng",
+      "mã hàng của khách",
+      "po của khách",
+    ],
   },
   {
     key: "note",
     label: "Ghi chú",
     required: false,
     synonyms: ["ghi chú", "ghi chu", "note"],
+  },
+  {
+    key: "unitPrice",
+    label: "Đơn giá (Giá tiền)",
+    required: false,
+    synonyms: ["giá tiền", "gia tien", "đơn giá", "don gia", "giá", "unit price"],
   },
 ];
 

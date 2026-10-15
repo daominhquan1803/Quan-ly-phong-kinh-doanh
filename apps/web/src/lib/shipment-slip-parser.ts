@@ -11,6 +11,7 @@ export interface ParsedShipmentSlipItem {
   qtyActual: number | null;
   poCustomerItemCode: string | null;
   note: string | null;
+  unitPrice: number | null;
 }
 
 export interface ParsedShipmentSlip {
@@ -107,6 +108,7 @@ export function parseShipmentSlipsWithMapping(
 
     const qtyRequestedRaw = get("qtyRequested");
     const qtyActualRaw = get("qtyActual");
+    const unitPriceRaw = get("unitPrice");
     slip.items.push({
       itemCode,
       itemName,
@@ -117,6 +119,7 @@ export function parseShipmentSlipsWithMapping(
       qtyActual: qtyActualRaw !== undefined && qtyActualRaw !== "" ? parseNumber(qtyActualRaw) : null,
       poCustomerItemCode: str("poCustomerItemCode"),
       note: str("note"),
+      unitPrice: unitPriceRaw !== undefined && unitPriceRaw !== "" ? parseNumber(unitPriceRaw) : null,
     });
   });
 

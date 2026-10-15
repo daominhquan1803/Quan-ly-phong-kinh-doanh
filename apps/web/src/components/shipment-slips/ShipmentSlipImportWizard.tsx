@@ -24,6 +24,7 @@ interface CommitResponse {
   deliveryMatchedCount: number;
   deliveryUnmatchedItems: string[];
   skippedIdenticalCount: number;
+  infoUpdatedCount?: number;
   skippedBeforeBaselineCount: number;
   conflicts: { slipNumber: string; customerName: string | null; differences: string[] }[];
 }
@@ -35,6 +36,7 @@ function mergeResults(a: CommitResponse, b: CommitResponse): CommitResponse {
     createdCount: a.createdCount + b.createdCount,
     updatedCount: a.updatedCount + b.updatedCount,
     deliveryMatchedCount: a.deliveryMatchedCount + b.deliveryMatchedCount,
+    infoUpdatedCount: (a.infoUpdatedCount ?? 0) + (b.infoUpdatedCount ?? 0),
     deliveryUnmatchedItems: [...a.deliveryUnmatchedItems, ...b.deliveryUnmatchedItems],
     skippedBeforeBaselineCount: a.skippedBeforeBaselineCount + b.skippedBeforeBaselineCount,
     conflicts: b.conflicts,
@@ -346,7 +348,8 @@ export function ShipmentSlipImportWizard() {
             <CheckCircle2 className="h-4 w-4 shrink-0" />
             <span>
               Đã lưu vào danh sách Phiếu xuất kho.
-              {result.skippedIdenticalCount > 0 && ` Bỏ qua ${result.skippedIdenticalCount} phiếu đã có và trùng số liệu.`}
+              {(result.infoUpdatedCount ?? 0) > 0 && ` Đã cập nhật thông tin bổ sung (Số PO/Mã hàng của khách, Ghi chú, Giá tiền) cho ${result.infoUpdatedCount} phiếu đã có.`}
+              {result.skippedIdenticalCount > 0 && ` Bỏ qua ${result.skippedIdenticalCount} phiếu đã có và trùng hoàn toàn.`}
             </span>
           </div>
 

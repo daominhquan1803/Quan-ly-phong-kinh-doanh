@@ -379,8 +379,10 @@ model ShipmentSlipItem {
   unit               String?
   qtyRequested       Decimal?     @db.Decimal(14, 2)
   qtyActual          Decimal?     @db.Decimal(14, 2)
-  poCustomerItemCode String?
+  poCustomerItemCode String? // "Số PO/Mã hàng của khách" trong file phiếu đi hàng
   note               String?
+  // "Giá tiền" (đơn giá) trên dòng phiếu — chỉ để ghi nhận/xuất Excel, KHÔNG dùng để tính giá trị giao (giá trị giao lấy theo giá HĐ của dòng PO).
+  unitPrice          Decimal?     @db.Decimal(18, 2)
 
   @@map("shipment_slip_items")
 }

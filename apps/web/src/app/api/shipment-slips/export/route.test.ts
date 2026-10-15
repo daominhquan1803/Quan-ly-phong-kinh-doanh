@@ -20,7 +20,7 @@ const SLIPS = [
     customerName: "Khách A",
     order: { orderCode: "PO-A" },
     items: [
-      { itemCode: "H1", itemName: "Hộp 1", unit: "Cái", poSaleNumber: "PO-1", qtyActual: 10, qtyRequested: 12 },
+      { itemCode: "H1", itemName: "Hộp 1", unit: "Cái", poSaleNumber: "PO-1", qtyActual: 10, qtyRequested: 12, unitPrice: "114000.00", poCustomerItemCode: "VPU01-26070003", note: "Sản xuất" },
       { itemCode: "H2", itemName: "Hộp 2", unit: "Cái", poSaleNumber: null, qtyActual: null, qtyRequested: 5 },
     ],
   },
@@ -72,6 +72,12 @@ describe("GET /api/shipment-slips/export", () => {
     expect(row1.getCell(7).value).toBe(10); // thực xuất
     expect(sheet.getRow(headerRow + 2).getCell(7).value).toBe(5); // thiếu thực xuất -> số lượng yêu cầu
     expect(sheet.getRow(headerRow + 2).getCell(9).value).toBe("PO-A"); // không có PO dòng -> PO của phiếu
+    // 3 cột thông tin bổ sung: Đơn giá (Giá tiền), Số PO/Mã hàng của khách, Ghi chú
+    expect(sheet.getRow(headerRow).getCell(10).value).toBe("Đơn giá (Giá tiền)");
+    expect(sheet.getRow(headerRow).getCell(11).value).toBe("Số PO/Mã hàng của khách");
+    expect(sheet.getRow(headerRow).getCell(12).value).toBe("Ghi chú");
+    expect([row1.getCell(10).value, row1.getCell(11).value, row1.getCell(12).value]).toEqual([114000, "VPU01-26070003", "Sản xuất"]);
+    expect(sheet.getRow(headerRow + 2).getCell(11).value).toBe(""); // dòng không có thông tin bổ sung -> ô trống
     expect(sheet.getRow(headerRow + 3).getCell(7).value).toBe(7);
     const total = sheet.getRow(headerRow + 4).getCell(7).value as { result: number };
     expect(total.result).toBe(22);

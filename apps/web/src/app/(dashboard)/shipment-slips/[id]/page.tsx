@@ -71,9 +71,13 @@ export default async function ShipmentSlipDetailPage({ params }: { params: { id:
                   <th className="text-left py-2.5 px-2.5">Mã hàng</th>
                   <th className="text-left py-2.5 px-2.5">Tên hàng</th>
                   <th className="text-left py-2.5 px-2.5">Kho</th>
+                  <th className="text-left py-2.5 px-2.5">Số PO</th>
                   <th className="text-center py-2.5 px-2.5">ĐVT</th>
                   <th className="text-right py-2.5 px-2.5">SL YC</th>
                   <th className="text-right py-2.5 px-2.5">SL Thực Xuất</th>
+                  <th className="text-right py-2.5 px-2.5">Giá tiền</th>
+                  <th className="text-left py-2.5 px-2.5">Số PO/Mã hàng KH</th>
+                  <th className="text-left py-2.5 px-2.5">Ghi chú</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
@@ -82,9 +86,13 @@ export default async function ShipmentSlipDetailPage({ params }: { params: { id:
                     <td className="py-2.5 px-2.5 font-mono text-amber-400 font-medium">{it.itemCode ?? "—"}</td>
                     <td className="py-2.5 px-2.5 text-white font-medium">{it.itemName}</td>
                     <td className="py-2.5 px-2.5 text-gray-400">{it.warehouse ?? "—"}</td>
+                    <td className="py-2.5 px-2.5 font-mono text-gray-300">{it.poSaleNumber ?? "—"}</td>
                     <td className="py-2.5 px-2.5 text-center text-gray-400">{it.unit ?? "—"}</td>
                     <td className="py-2.5 px-2.5 text-right font-mono text-gray-300">{it.qtyRequested?.toString() ?? "—"}</td>
                     <td className="py-2.5 px-2.5 text-right font-mono font-bold text-emerald-400">{it.qtyActual?.toString() ?? "—"}</td>
+                    <td className="py-2.5 px-2.5 text-right font-mono text-gray-300">{it.unitPrice != null ? Number(it.unitPrice).toLocaleString("vi-VN") : "—"}</td>
+                    <td className="py-2.5 px-2.5 text-gray-300">{it.poCustomerItemCode ?? "—"}</td>
+                    <td className="py-2.5 px-2.5 text-gray-300">{it.note ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>

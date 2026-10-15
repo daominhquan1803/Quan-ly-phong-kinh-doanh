@@ -10,6 +10,10 @@ export interface SlipItemForCompare {
   itemCode: string | null;
   itemName: string;
   qtyActual: unknown; // number | Prisma.Decimal | null
+  // Thông tin bổ sung — KHÔNG tính là xung đột số liệu, nhưng đổi thì cập nhật lại (xem slipInfoChanged).
+  poCustomerItemCode?: string | null;
+  note?: string | null;
+  unitPrice?: unknown; // number | Prisma.Decimal | null
 }
 
 export interface SlipForCompare {
@@ -62,4 +66,41 @@ export function diffShipmentSlip(existing: SlipForCompare, incoming: SlipForComp
     if (!a.has(key)) diffs.push(`Thêm dòng ${next.label} (SL ${next.qty})`);
   }
   return diffs;
+}
+
+const normText = (v: string | null | undefined) => (v ?? "").trim();
+const normPrice = (v: unknown) => (v == null || v === "" ? null : Number(v));
+
+/**
+ * Thông tin bổ sung (Số PO/Mã hàng của khách, Ghi chú, Giá tiền) của từng dòng có khác phiếu đã lưu không. Chỉ gọi khi
+ * diffShipmentSlip đã báo trùng số liệu — lúc đó 2 phiếu có cùng tập dòng (theo Số PO + Mã hàng) nên so theo thứ tự xuất hiện
+ * trong từng nhóm. Dùng để file nhập lại (có thêm cột mới) cập nhật được các phiếu đã nhập từ trước mà không cần hỏi ghi đè.
+ */
+export function slipInfoChanged(existing: SlipItemForCompare[], incoming: SlipItemForCompare[]): boolean {
+  const group = (items: SlipItemForCompare[]) => {
+    const m = new Map<string, SlipItemForCompare[]>();
+    for (const i of items) {
+      const key = `${normText(i.poSaleNumber).toLowerCase()}|${normText(i.itemCode ?? i.itemName).toLowerCase()}`;
+      m.set(key, [...(m.get(key) ?? []), i]);
+    }
+    return m;
+  };
+  const a = group(existing);
+  const b = group(incoming);
+  for (const [key, list] of b) {
+    const old = a.get(key) ?? [];
+    for (let i = 0; i < list.length; i++) {
+      const x = old[i];
+      const y = list[i];
+      if (!x) return true;
+      if (
+        normText(x.poCustomerItemCode) !== normText(y.poCustomerItemCode) ||
+        normText(x.note) !== normText(y.note) ||
+        normPrice(x.unitPrice) !== normPrice(y.unitPrice)
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
 }

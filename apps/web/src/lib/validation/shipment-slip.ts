@@ -10,6 +10,7 @@ export const shipmentSlipItemSchema = z.object({
   qtyActual: z.number().nonnegative().optional().nullable(),
   poCustomerItemCode: z.string().trim().optional().nullable(),
   note: z.string().trim().optional().nullable(),
+  unitPrice: z.number().nonnegative().optional().nullable(),
 });
 
 export const createShipmentSlipSchema = z.object({

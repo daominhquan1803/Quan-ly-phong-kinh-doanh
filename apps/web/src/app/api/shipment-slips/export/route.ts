@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
         order: { select: { orderCode: true } },
         items: {
           orderBy: { lineOrder: "asc" },
-          select: { itemCode: true, itemName: true, unit: true, poSaleNumber: true, poCustomerItemCode: true, qtyActual: true, qtyRequested: true },
+          select: { itemCode: true, itemName: true, unit: true, poSaleNumber: true, poCustomerItemCode: true, note: true, unitPrice: true, qtyActual: true, qtyRequested: true },
         },
       },
     });
@@ -79,6 +79,9 @@ export async function GET(req: NextRequest) {
         qty: Number(it.qtyActual ?? it.qtyRequested ?? 0),
         customer: s.customerName ?? "",
         po: it.poSaleNumber ?? s.order?.orderCode ?? "",
+        unitPrice: it.unitPrice == null ? null : Number(it.unitPrice),
+        customerRef: it.poCustomerItemCode ?? "",
+        note: it.note ?? "",
       }))
     );
 
@@ -97,6 +100,9 @@ export async function GET(req: NextRequest) {
       { header: "Số lượng", width: 12 },
       { header: "Khách hàng", width: 32 },
       { header: "Số PO", width: 18 },
+      { header: "Đơn giá (Giá tiền)", width: 16 },
+      { header: "Số PO/Mã hàng của khách", width: 28 },
+      { header: "Ghi chú", width: 36 },
     ];
     sheet.columns = COLS.map((c) => ({ width: c.width }));
     await embedLogo(workbook, sheet);
@@ -126,7 +132,7 @@ export async function GET(req: NextRequest) {
 
     lines.forEach((l, i) => {
       const row = headerRow + 1 + i;
-      const values: (string | number | Date)[] = [i + 1, l.date, l.slipNumber, l.itemCode, l.itemName, l.unit, l.qty, l.customer, l.po];
+      const values: (string | number | Date | null)[] = [i + 1, l.date, l.slipNumber, l.itemCode, l.itemName, l.unit, l.qty, l.customer, l.po, l.unitPrice, l.customerRef, l.note];
       values.forEach((v, c) => {
         const cell = sheet.getCell(row, c + 1);
         cell.value = v;
@@ -136,6 +142,10 @@ export async function GET(req: NextRequest) {
           cell.alignment = { horizontal: "center" };
         } else if (c === 6) {
           cell.numFmt = QTY_FMT;
+        } else if (c === 9) {
+          cell.numFmt = "#,##0.##";
+        } else if (c === 10 || c === 11) {
+          cell.alignment = { wrapText: true, vertical: "top" };
         } else if (c === 0 || c === 5) {
           cell.alignment = { horizontal: "center" };
         }
