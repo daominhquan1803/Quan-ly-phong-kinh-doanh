@@ -49,6 +49,23 @@ describe("getDebtSnapshot", () => {
     expect(s.perEmployee.get("u1")!.overdueDebt).toBe(600);
   });
 
+  it("nợ xấu của khách theo dõi riêng (LOGISTIC-SC, SUA-TH): vẫn là nợ xấu + tổng công nợ, KHÔNG tính quá hạn; hoá đơn chưa tới mức nợ xấu vẫn quá hạn", async () => {
+    h.invoices.mockResolvedValue([
+      inv({ id: "a", customerCode: "LOGISTIC-SC", dueDate: vn("2021-05-21"), originalAmount: 700 }), // nợ xấu, theo dõi riêng
+      inv({ id: "b", customerCode: "sua-th", dueDate: vn("2021-10-07"), originalAmount: 300 }), // nợ xấu, theo dõi riêng (chữ thường)
+      inv({ id: "c", customerCode: "KH-KHAC", dueDate: vn("2021-01-01"), originalAmount: 100 }), // nợ xấu khách thường
+      inv({ id: "d", customerCode: "LOGISTIC-SC", dueDate: new Date(Date.now() - 30 * 86_400_000), originalAmount: 50 }), // quá hạn 30 ngày
+    ]);
+    const s = await getDebtSnapshot({ where: {}, asOfDate: null, withOverdueInvoices: true });
+    expect(s.totalDebt).toBe(1150);
+    expect(s.badDebt).toBe(1100);
+    expect(s.separateBadDebt).toBe(1000);
+    expect(s.overdueDebt).toBe(150); // c (100) + d (50)
+    expect(s.perEmployee.get("u1")!.overdueDebt).toBe(150);
+    expect(s.perEmployee.get("u1")!.badDebt).toBe(1100);
+    expect(s.overdueInvoices.map((i) => i.invoiceNumber).length).toBe(2);
+  });
+
   it("xem tại 30/09 chốt cuối ngày: hạn đúng 30/09 mà chưa thu = quá hạn", async () => {
     h.invoices.mockResolvedValue([inv({ dueDate: vn("2026-09-30"), originalAmount: 1000 })]);
     const s = await getDebtSnapshot({ where: {}, asOfDate: vn("2026-09-30") });

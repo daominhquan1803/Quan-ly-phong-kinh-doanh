@@ -18,6 +18,23 @@ export const DEBT_STATUS_LABEL: Record<DebtStatus, string> = {
   PAID: "Đã thanh toán",
 };
 
+/**
+ * Khách có nợ xấu được THEO DÕI RIÊNG (anh Quân chốt 16/10/2026): khoản nợ xấu (> 180 ngày) của các
+ * khách này vẫn nằm trong "Nợ xấu" và "Tổng công nợ" nhưng KHÔNG tính vào "Quá hạn" / tỉ lệ nợ quá hạn.
+ * Hoá đơn của họ chưa tới mức nợ xấu (≤ 180 ngày) vẫn tính quá hạn bình thường. So khớp theo mã khách
+ * trên hoá đơn công nợ (viết hoa). Muốn thêm/bớt khách: sửa danh sách này.
+ */
+export const SEPARATE_BAD_DEBT_CUSTOMERS: readonly string[] = ["LOGISTIC-SC", "SUA-TH"];
+
+export function isSeparateBadDebt(status: DebtStatus, customerCode: string | null | undefined): boolean {
+  return status === "BAD_DEBT" && !!customerCode && SEPARATE_BAD_DEBT_CUSTOMERS.includes(customerCode.trim().toUpperCase());
+}
+
+/** Có tính vào "Quá hạn" không: quá hạn hoặc nợ xấu, trừ nợ xấu của khách theo dõi riêng. */
+export function countsAsOverdue(status: DebtStatus, customerCode: string | null | undefined): boolean {
+  return (status === "OVERDUE" || status === "BAD_DEBT") && !isSeparateBadDebt(status, customerCode);
+}
+
 /** remainingAmount = originalAmount - paidAmount — luôn tính tại chỗ, không lưu cột riêng. */
 export function remainingAmount(originalAmount: number, paidAmount: number): number {
   return Math.max(0, originalAmount - paidAmount);

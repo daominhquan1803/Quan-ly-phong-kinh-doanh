@@ -1,5 +1,5 @@
 import { prisma, Prisma } from "@hoanggia/db";
-import { remainingAmount, computeDebtStatus, overdueDays, type DebtStatus } from "@/lib/debt-status";
+import { remainingAmount, computeDebtStatus, overdueDays, countsAsOverdue, isSeparateBadDebt, type DebtStatus } from "@/lib/debt-status";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -32,6 +32,8 @@ export interface DebtSnapshot {
   totalDebt: number;
   overdueDebt: number;
   badDebt: number;
+  /** Phần nợ xấu của khách theo dõi riêng (xem SEPARATE_BAD_DEBT_CUSTOMERS) — nằm trong badDebt, KHÔNG nằm trong overdueDebt. */
+  separateBadDebt: number;
   noDueDebt: number; // còn nợ nhưng chưa có hạn thanh toán — không xếp quá hạn được
   noScheduleCount: number;
   noScheduleAmount: number;
@@ -100,6 +102,7 @@ export async function getDebtSnapshot(opts: {
     totalDebt: 0,
     overdueDebt: 0,
     badDebt: 0,
+    separateBadDebt: 0,
     noDueDebt: 0,
     noScheduleCount: 0,
     noScheduleAmount: 0,
@@ -116,7 +119,7 @@ export async function getDebtSnapshot(opts: {
     const paid = asOfDate ? paidAsOfByInvoice!.get(inv.id) ?? 0 : Number(inv.paidAmount);
     const remaining = remainingAmount(original, paid);
     const status = computeDebtStatus({ dueDate: inv.dueDate, originalAmount: original, paidAmount: paid }, overdueRefDate);
-    const isOverdue = status === "OVERDUE" || status === "BAD_DEBT";
+    const isOverdue = countsAsOverdue(status, inv.customerCode);
     const noSchedule = status !== "PAID" && !inv.expectedPaymentDate;
 
     snap.totalOriginal += original;
@@ -124,6 +127,7 @@ export async function getDebtSnapshot(opts: {
     snap.totalDebt += remaining;
     if (isOverdue) snap.overdueDebt += remaining;
     if (status === "BAD_DEBT") snap.badDebt += remaining;
+    if (isSeparateBadDebt(status, inv.customerCode)) snap.separateBadDebt += remaining;
     if (status === "NO_DUE_DATE") snap.noDueDebt += remaining;
     if (remaining > 0) snap.openInvoiceCount++;
     if (noSchedule && remaining > 0) {

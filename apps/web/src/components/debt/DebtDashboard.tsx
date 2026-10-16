@@ -44,6 +44,7 @@ interface SummaryResponse {
   totalDebt: number;
   overdueDebt: number;
   badDebt: number;
+  separateBadDebt: number;
   noDueDebt: number;
   overdueRate: number;
   badDebtRate: number;
@@ -445,6 +446,11 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
             </div>
             <p className="text-2xl font-bold font-mono text-alert mt-2">{formatCurrencyVND(summary.overdueDebt)}</p>
             <p className="text-xs text-muted2 mt-1">{pct(summary.overdueRate)} tổng công nợ</p>
+            {summary.separateBadDebt > 0 && (
+              <p className="text-xs text-muted2 mt-0.5" title="Nợ xấu của Logistic SC và Sữa TH được theo dõi riêng, không tính vào quá hạn (vẫn nằm trong Nợ xấu)">
+                Chưa gồm {formatCurrencyVND(summary.separateBadDebt)} nợ xấu theo dõi riêng
+              </p>
+            )}
             <div className="h-0.5 w-12 bg-brandRed-500/40 mt-3 group-hover:w-full group-hover:bg-brandRed-500 transition-all duration-300" />
           </div>
 

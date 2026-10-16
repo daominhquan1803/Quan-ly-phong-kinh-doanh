@@ -1,7 +1,7 @@
 import { prisma } from "@hoanggia/db";
 import { monthRange, getEmployeeTargetVsActual, getProductGroupTargetVsActual } from "./dashboard-metrics";
 import { getMonthlyWeekPlanScore } from "./week-plan";
-import { computeDebtStatus, remainingAmount } from "./debt-status";
+import { computeDebtStatus, countsAsOverdue, remainingAmount } from "./debt-status";
 import { COUNTED_STOP_WHERE, COUNTED_TRIP_WHERE } from "./business-trip-report";
 
 /**
@@ -226,7 +226,7 @@ export interface KpiMonthlyReportRow extends KpiScoreResult {
 async function getEmployeeDebtRates(employeeId: string): Promise<{ debtOverduePct: number | null; debtCollectionRatePct: number | null }> {
   const invoices = await prisma.debtInvoice.findMany({
     where: { salesEmployeeId: employeeId },
-    select: { originalAmount: true, paidAmount: true, dueDate: true },
+    select: { originalAmount: true, paidAmount: true, dueDate: true, customerCode: true },
   });
 
   let totalOriginal = 0;
@@ -241,7 +241,7 @@ async function getEmployeeDebtRates(employeeId: string): Promise<{ debtOverduePc
     totalPaid += paid;
     totalDebt += remaining;
     const status = computeDebtStatus({ dueDate: inv.dueDate, originalAmount: original, paidAmount: paid });
-    if (status === "OVERDUE" || status === "BAD_DEBT") overdueDebt += remaining;
+    if (countsAsOverdue(status, inv.customerCode)) overdueDebt += remaining;
   }
 
   return {

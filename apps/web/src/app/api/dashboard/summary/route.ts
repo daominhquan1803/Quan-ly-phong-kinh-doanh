@@ -3,7 +3,7 @@ import { prisma, getPoAggregates } from "@hoanggia/db";
 import { requireSession, scopeByOwner, UnauthorizedError } from "@/lib/rbac";
 import { getEmployeeTargetVsActual, getProductGroupTargetVsActual } from "@/lib/dashboard-metrics";
 import { daysUntilDeadline } from "@/lib/order-status";
-import { remainingAmount, overdueDays, mondayOfWeek } from "@/lib/debt-status";
+import { remainingAmount, computeDebtStatus, countsAsOverdue, mondayOfWeek } from "@/lib/debt-status";
 
 const TOP_OVERDUE_COUNT = 10;
 
@@ -99,6 +99,7 @@ export async function GET() {
           originalAmount: true,
           paidAmount: true,
           dueDate: true,
+          customerCode: true,
           expectedPaymentDate: true,
           salesEmployeeId: true,
           salesEmployee: { select: { name: true } },
@@ -119,8 +120,8 @@ export async function GET() {
       for (const inv of invoices) {
         const remaining = remainingAmount(Number(inv.originalAmount), Number(inv.paidAmount));
         debtTotal += remaining;
-        const days = overdueDays(inv.dueDate);
-        const isOverdue = days !== null && days > 0;
+        const status = computeDebtStatus({ dueDate: inv.dueDate, originalAmount: Number(inv.originalAmount), paidAmount: Number(inv.paidAmount) });
+        const isOverdue = countsAsOverdue(status, inv.customerCode);
         if (isOverdue) debtOverdue += remaining;
         const e = entryOf(inv.salesEmployeeId, inv.salesEmployee?.name);
         e.totalDebt += remaining;

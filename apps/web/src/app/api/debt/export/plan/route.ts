@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { prisma, Prisma } from "@hoanggia/db";
 import { requireSession, scopeByOwner, UnauthorizedError } from "@/lib/rbac";
-import { remainingAmount, computeDebtStatus, overdueDays, monthWeekBuckets, type DebtStatus } from "@/lib/debt-status";
+import { remainingAmount, computeDebtStatus, overdueDays, monthWeekBuckets, countsAsOverdue, type DebtStatus } from "@/lib/debt-status";
 import { embedLogo, addCompanyHeaderLines, NAVY, HEADER_FILL, THIN_BOX } from "@/lib/excel-brand";
 
 export const dynamic = "force-dynamic";
@@ -110,7 +110,7 @@ export async function GET(req: NextRequest) {
     for (const r of rows) {
       totalOriginal += r.original;
       totalDebt += r.remaining;
-      if (r.status === "OVERDUE" || r.status === "BAD_DEBT") overdueDebt += r.remaining;
+      if (countsAsOverdue(r.status, r.inv.customerCode)) overdueDebt += r.remaining;
       if (r.status === "BAD_DEBT") badDebt += r.remaining;
       const bs = byStatus.get(r.status) ?? { count: 0, amount: 0 };
       bs.count++;
@@ -119,7 +119,7 @@ export async function GET(req: NextRequest) {
       const empName = r.inv.salesEmployee?.name ?? "(Chưa gán)";
       const be = byEmployee.get(empName) ?? { totalDebt: 0, overdueDebt: 0, badDebt: 0 };
       be.totalDebt += r.remaining;
-      if (r.status === "OVERDUE" || r.status === "BAD_DEBT") be.overdueDebt += r.remaining;
+      if (countsAsOverdue(r.status, r.inv.customerCode)) be.overdueDebt += r.remaining;
       if (r.status === "BAD_DEBT") be.badDebt += r.remaining;
       byEmployee.set(empName, be);
       for (let i = 0; i < 5; i++) {
@@ -292,7 +292,7 @@ export async function GET(req: NextRequest) {
         row.loanDays,
         row.status === "PAID" ? "Đã TT" : row.days,
         ORIGINAL_STATUS_LABEL[row.status],
-        row.status === "OVERDUE" || row.status === "BAD_DEBT" ? row.remaining : 0,
+        countsAsOverdue(row.status, row.inv.customerCode) ? row.remaining : 0,
         row.weekPlanned[0] || null, row.weekCollected[0] || null,
         row.weekPlanned[1] || null, row.weekCollected[1] || null,
         row.weekPlanned[2] || null, row.weekCollected[2] || null,
@@ -309,7 +309,7 @@ export async function GET(req: NextRequest) {
       });
       totalRemaining += row.remaining;
       totalPaidCol += row.paid;
-      totalOverdueAmt += row.status === "OVERDUE" || row.status === "BAD_DEBT" ? row.remaining : 0;
+      totalOverdueAmt += countsAsOverdue(row.status, row.inv.customerCode) ? row.remaining : 0;
       for (let i = 0; i < 5; i++) {
         totalWeekPlanned[i] += row.weekPlanned[i];
         totalWeekCollected[i] += row.weekCollected[i];

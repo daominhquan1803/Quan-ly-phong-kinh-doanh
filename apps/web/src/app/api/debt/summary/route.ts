@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     if (employeeId && session.user.role === "ADMIN") where.salesEmployeeId = employeeId;
 
     const snap = await getDebtSnapshot({ where, asOfDate });
-    const { totalOriginal, totalPaid, totalDebt, overdueDebt, badDebt, noDueDebt } = snap;
+    const { totalOriginal, totalPaid, totalDebt, overdueDebt, badDebt, separateBadDebt, noDueDebt } = snap;
     const perEmployee =
       session.user.role === "ADMIN"
         ? Array.from(snap.perEmployee.values()).map((e) => ({
@@ -92,6 +92,7 @@ export async function GET(req: NextRequest) {
       totalDebt,
       overdueDebt,
       badDebt,
+      separateBadDebt,
       noDueDebt,
       overdueRate: totalDebt > 0 ? overdueDebt / totalDebt : 0,
       badDebtRate: totalDebt > 0 ? badDebt / totalDebt : 0,
