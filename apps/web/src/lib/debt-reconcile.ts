@@ -124,7 +124,7 @@ export async function rematchPayment(db: Db, paymentId: string): Promise<{ befor
 }
 
 /**
- * Nhả các khoản FIFO/đúng-số-tiền (do app tự ĐOÁN) của một Tiền về mà nội dung ghi số hoá đơn không gán được: tiền đó trả
+ * Nhả các khoản FIFO (do app tự ĐOÁN) của một Tiền về mà nội dung ghi số hoá đơn không gán được: tiền đó trả
  * cho hoá đơn khác chứ không phải hoá đơn bị đoán. Khoản gán vào đúng hoá đơn nội dung nhắc tới (kể cả theo tên gọi khác)
  * và khoản gán tay giữ nguyên. Trả về số tiền nhả.
  */
@@ -139,10 +139,9 @@ export async function releaseGuessedAllocations(db: Db, paymentId: string): Prom
   const invoices = await db.debtInvoice.findMany({ where: { customerCode: p.customerCode }, select: { invoiceNumber: true, supersedes: true } });
   const known = new Set(invoices.flatMap((i) => [i.invoiceNumber, ...(i.supersedes ?? [])]).filter((n): n is string => !!n));
   if (cited.every((n) => known.has(n))) return 0;
+  // Chỉ nhả khoản FIFO (đoán yếu). Khoản "đúng số tiền" của 1 hoá đơn là căn cứ mạnh nên giữ.
   const guessed = p.allocations.filter(
-    (a) =>
-      (a.matchMethod === "FIFO" || a.matchMethod === "EXACT_AMOUNT") &&
-      !cited.some((n) => a.invoice.invoiceNumber === n || (a.invoice.supersedes ?? []).includes(n))
+    (a) => a.matchMethod === "FIFO" && !cited.some((n) => a.invoice.invoiceNumber === n || (a.invoice.supersedes ?? []).includes(n))
   );
   if (guessed.length === 0) return 0;
   await db.$transaction(
