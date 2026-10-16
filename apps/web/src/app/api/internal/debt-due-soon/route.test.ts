@@ -273,6 +273,14 @@ describe("GET /api/internal/debt-due-soon - đúng mốc, đúng đối tượng
     expect(groups.map((g: { customerCode: string }) => g.customerCode).sort()).toEqual(["KH1", "KH2"]);
   });
 
+  it("4 khách nợ xấu theo dõi riêng (LOGISTIC-SC, SUA-TH, DP-PULIPHA, LICOGI) KHÔNG nhận thư nhắc ở mọi mốc, kể cả bấm Gửi ngay; khách khác vẫn nhận", async () => {
+    const codes = ["LOGISTIC-SC", "SUA-TH", "DP-PULIPHA", "licogi"];
+    db.customers = [cust(), ...codes.map((c) => cust({ customerCode: c, email: "x@x.com" }))];
+    db.invoices = [inv(), ...codes.flatMap((c) => [inv({ customerCode: c }), inv({ customerCode: c, dueDate: day(-1) }), inv({ customerCode: c, dueDate: day(0) })])];
+    expect((await call()).body.groups.map((g: { customerCode: string }) => g.customerCode)).toEqual(["KH1"]);
+    expect((await call("?customerCode=LOGISTIC-SC")).body.groups).toEqual([]);
+  });
+
   it("lọc theo customerCode (nút Gửi ngay) chỉ trả khách đó, so khớp qua chuẩn hoá mã", async () => {
     db.customers = [cust(), cust({ customerCode: "KH2", email: "b@kh2.com" })];
     db.invoices = [inv(), inv({ customerCode: "KH2" })];

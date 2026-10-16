@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@hoanggia/db";
 import { requireInternalToken, UnauthorizedError } from "@/lib/rbac";
-import { overdueDays, remainingAmount } from "@/lib/debt-status";
+import { overdueDays, remainingAmount, isSeparateCustomer } from "@/lib/debt-status";
 import { normalizeCustomerCode } from "@/lib/debt-customer-match";
 import {
   DEBT_REMINDER_DAYS_BEFORE,
@@ -77,6 +77,7 @@ export async function GET(req: NextRequest) {
     // (lib/debt-reminder.ts).
     const due = invoices
       .filter((inv) => matchesCustomerFilter(inv.customerCode))
+      .filter((inv) => !isSeparateCustomer(inv.customerCode)) // nợ xấu theo dõi riêng: không gửi thư nhắc
       .map((inv) => {
         const original = Number(inv.originalAmount);
         const paid = Number(inv.paidAmount);
