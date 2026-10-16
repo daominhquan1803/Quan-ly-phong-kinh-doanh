@@ -37,6 +37,9 @@ services:
       # Thông báo đẩy (Web Push) — web chỉ cần khoá CÔNG KHAI để trả cho trình duyệt đăng ký,
       # khoá riêng tư chỉ worker (nơi thực sự gửi push) mới cần.
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      # Zalo Bot: web nhận webhook (xác thực bằng secret) + trả lời mã liên kết + gửi tin thử.
+      ZALO_BOT_TOKEN: ${ZALO_BOT_TOKEN:-}
+      ZALO_WEBHOOK_SECRET: ${ZALO_WEBHOOK_SECRET:-}
     volumes:
       - web_uploads:/app/apps/web/public/uploads
     expose:
@@ -96,6 +99,9 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:sale5.hoanggiaps@gmail.com}
+      # Zalo Bot: worker quét mỗi phút để gửi thông báo; APP_PUBLIC_URL để gắn đường dẫn vào tin.
+      ZALO_BOT_TOKEN: ${ZALO_BOT_TOKEN:-}
+      APP_PUBLIC_URL: ${NEXTAUTH_URL:-}
     volumes:
       - worker_debug:/app/debug
     expose:

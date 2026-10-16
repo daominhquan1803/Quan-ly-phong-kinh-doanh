@@ -4,6 +4,8 @@ import { runQuoteSync } from "./sync/quotes";
 import { runWeekPlanReminder } from "./notifications/weekPlanReminder";
 import { runKpiReminder } from "./notifications/kpiReminder";
 import { runDebtDueReminder } from "./notifications/debtDueReminder";
+import { runWeekPlanDigest } from "./notifications/weekPlanDigest";
+import { runDebtWeekReminder } from "./notifications/debtWeekReminder";
 import { logger } from "./logger";
 
 function checkInternalToken(req: FastifyRequest, reply: FastifyReply): boolean {
@@ -57,6 +59,17 @@ export function buildServer() {
     logger.info("Nhận yêu cầu kiểm tra nhắc việc KPI tháng thủ công");
     try {
       return await runKpiReminder();
+    } catch (err) {
+      reply.code(502);
+      return { error: err instanceof Error ? err.message : "Lỗi không xác định" };
+    }
+  });
+
+  // Test thủ công tin điểm Kế hoạch tuần hằng ngày + nhắc công nợ đầu tuần (vẫn tôn trọng điều kiện ngày bên trong).
+  app.post("/notify-week-digest", async (req, reply) => {
+    if (!checkInternalToken(req, reply)) return;
+    try {
+      return { weekPlan: await runWeekPlanDigest(), debt: await runDebtWeekReminder() };
     } catch (err) {
       reply.code(502);
       return { error: err instanceof Error ? err.message : "Lỗi không xác định" };

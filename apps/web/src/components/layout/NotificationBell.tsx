@@ -16,7 +16,9 @@ interface NotificationRow {
     | "TRIP_REPORT_DUE"
     | "TRIP_NEXT_STEP_DUE"
     | "TRIP_REVIEW_PENDING"
-    | "TRIP_REVIEWED";
+    | "TRIP_REVIEWED"
+    | "WEEK_PLAN_DAILY"
+    | "DEBT_WEEK_FOLLOWUP";
   title: string;
   message: string;
   link: string | null;

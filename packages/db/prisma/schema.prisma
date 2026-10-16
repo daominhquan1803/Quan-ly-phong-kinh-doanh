@@ -114,6 +114,14 @@ model User {
   // Số điện thoại hiển thị trên Phiếu soạn hàng (mục "Phụ trách đơn hàng: Tên_SĐT") — tuỳ chọn,
   // điền tại trang Nhân viên.
   phone            String?
+  // Liên kết Zalo Bot để nhận thông báo (xem apps/web/src/lib/zalo-api.ts, worker/notifications/
+  // zaloDispatch.ts). zaloChatId = chat.id bot Zalo trả về khi nhân viên nhắn mã liên kết; mã chỉ
+  // sống ngắn (zaloLinkCodeExpiresAt). zaloOffTypes = các loại thông báo nhân viên tự tắt.
+  zaloChatId       String?  @unique
+  zaloLinkedAt     DateTime?
+  zaloLinkCode     String?  @unique
+  zaloLinkCodeExpiresAt DateTime?
+  zaloOffTypes     NotificationType[]
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -1115,6 +1123,8 @@ enum NotificationType {
   TRIP_NEXT_STEP_DUE // nhắc bước tiếp theo sau buổi gặp tới hạn
   TRIP_REVIEW_PENDING // nhắc Quản trị viên duyệt báo cáo công tác
   TRIP_REVIEWED // báo NVKD kết quả duyệt báo cáo
+  WEEK_PLAN_DAILY // hằng ngày: điểm Kế hoạch tuần hiện tại + mục còn thiếu nhiều nhất
+  DEBT_WEEK_FOLLOWUP // đầu tuần: tuần này cần thu bao nhiêu, trượt bao nhiêu
 }
 
 model Notification {
@@ -1133,6 +1143,8 @@ model Notification {
   // Có gửi kèm thông báo đẩy lên điện thoại (Web Push) hay không — chỉ ghi khi gửi thành công tới
   // ÍT NHẤT 1 thiết bị đã đăng ký (PushSubscription), tương tự emailSentAt ở trên.
   pushSentAt  DateTime?
+  // Đã gửi qua Zalo Bot chưa (worker quét mỗi phút, xem notifications/zaloDispatch.ts).
+  zaloSentAt  DateTime?
   createdAt   DateTime         @default(now())
 
   @@index([userId, readAt])

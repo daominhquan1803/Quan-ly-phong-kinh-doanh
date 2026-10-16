@@ -3,6 +3,7 @@ import { ChangePasswordButton } from "@/components/layout/ChangePasswordButton";
 import { NotificationBell } from "@/components/layout/NotificationBell";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
+import { ZaloButton } from "@/components/layout/ZaloButton";
 
 function initials(name?: string): string {
   if (!name) return "?";
@@ -48,6 +49,7 @@ export function Header({ userName, role }: { userName?: string; role?: "ADMIN" |
           {isAdmin ? "Quản trị viên" : "Nhân viên kinh doanh"}
         </span>
 
+        <ZaloButton />
         <ChangePasswordButton />
 
         <form action="/api/auth/signout" method="post">

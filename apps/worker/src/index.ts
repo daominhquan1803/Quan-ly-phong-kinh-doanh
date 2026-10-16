@@ -7,6 +7,10 @@ import { runWeekPlanReminder } from "./notifications/weekPlanReminder";
 import { runKpiReminder } from "./notifications/kpiReminder";
 import { runDebtDueReminder } from "./notifications/debtDueReminder";
 import { runTripReminder } from "./notifications/tripReminder";
+import { runWeekPlanDigest } from "./notifications/weekPlanDigest";
+import { runDebtWeekReminder } from "./notifications/debtWeekReminder";
+import { runZaloDispatch } from "./notifications/zaloDispatch";
+import { isZaloConfigured } from "./zalo";
 import { logger } from "./logger";
 
 const PORT = Number(process.env.WORKER_PORT || 4001);
@@ -79,9 +83,21 @@ async function main() {
       runKpiReminder().catch((err) => logger.error("Lỗi nhắc việc KPI tháng:", err));
       runDebtDueReminder().catch((err) => logger.error("Lỗi nhắc công nợ tới hạn:", err));
       runTripReminder().catch((err) => logger.error("Lỗi nhắc công tác:", err));
+      runWeekPlanDigest().catch((err) => logger.error("Lỗi tin điểm Kế hoạch tuần hằng ngày:", err));
+      runDebtWeekReminder().catch((err) => logger.error("Lỗi nhắc công nợ đầu tuần:", err));
     },
     { timezone: NOTIFY_CRON_TIMEZONE }
   );
+
+  // Gửi Zalo mỗi phút cho mọi thông báo mới (do web hoặc worker tạo) — chỉ khi đã cấu hình bot.
+  if (isZaloConfigured()) {
+    cron.schedule("* * * * *", () => {
+      runZaloDispatch().catch((err) => logger.error("Lỗi gửi Zalo:", err));
+    });
+    logger.info("Đã bật gửi thông báo qua Zalo Bot (quét mỗi phút, khung 7h–20h).");
+  } else {
+    logger.warn("Chưa cấu hình ZALO_BOT_TOKEN — bỏ qua gửi thông báo qua Zalo.");
+  }
   logger.info(`Đã lên lịch kiểm tra nhắc việc + công nợ tới hạn: "${NOTIFY_CRON}" (múi giờ ${NOTIFY_CRON_TIMEZONE})`);
 }
 
