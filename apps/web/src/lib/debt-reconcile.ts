@@ -43,7 +43,15 @@ export async function removeInvoice(
       })
     : null;
 
-  if (inv.allocations.length > 0 && !target && remaining <= EPS) {
+  // Đã thu đủ và có khoản tiền về gán vào: chỉ xoá khi hoá đơn thay thế đủ chỗ nhận lại TOÀN BỘ số đã thu; ngược lại giữ
+  // lại để không làm mất dấu khoản khách đã trả.
+  const paidTotal = inv.allocations.reduce((s, a) => s + Number(a.amount), 0);
+  const targetRoom = target ? Math.max(0, Number(target.originalAmount) - Number(target.paidAmount)) : 0;
+  if (inv.allocations.length > 0 && remaining <= EPS && targetRoom + EPS < paidTotal) {
+    // Ghi số hoá đơn thay thế (chưa nhập được) làm tên gọi khác của hoá đơn này, để tiền về ghi số mới vẫn nhận ra khoản đã thu.
+    if (r.replacedBy && !(inv.supersedes ?? []).includes(r.replacedBy)) {
+      await db.debtInvoice.update({ where: { id: inv.id }, data: { supersedes: { push: r.replacedBy } } });
+    }
     return { ...base, result: "KEPT_PAID", remaining, releasedPaymentIds: [] };
   }
 
@@ -57,7 +65,7 @@ export async function removeInvoice(
       const amt = Number(a.amount);
       const move = Math.min(amt, room);
       if (move > EPS) {
-        ops.push(db.debtPaymentAllocation.update({ where: { id: a.id }, data: { invoiceId: target.id, amount: move } }));
+        ops.push(db.debtPaymentAllocation.update({ where: { id: a.id }, data: { invoiceId: target.id, amount: move, matchMethod: "INVOICE_NUMBER" } }));
         ops.push(db.debtInvoice.update({ where: { id: target.id }, data: { paidAmount: { increment: move } } }));
         room -= move;
         moved = true;
@@ -113,6 +121,37 @@ export async function rematchPayment(db: Db, paymentId: string): Promise<{ befor
   const status = unallocated <= EPS ? "MATCHED" : allocated > EPS ? "PARTIAL" : "UNMATCHED";
   if (status !== p.matchStatus) await db.debtPayment.update({ where: { id: p.id }, data: { matchStatus: status } });
   return { before: p.matchStatus, after: status, added };
+}
+
+/**
+ * Nhả các khoản FIFO/đúng-số-tiền (do app tự ĐOÁN) của một Tiền về mà nội dung ghi số hoá đơn không gán được: tiền đó trả
+ * cho hoá đơn khác chứ không phải hoá đơn bị đoán. Khoản gán vào đúng hoá đơn nội dung nhắc tới (kể cả theo tên gọi khác)
+ * và khoản gán tay giữ nguyên. Trả về số tiền nhả.
+ */
+export async function releaseGuessedAllocations(db: Db, paymentId: string): Promise<number> {
+  const p = await db.debtPayment.findUnique({
+    where: { id: paymentId },
+    include: { allocations: { include: { invoice: { select: { id: true, invoiceNumber: true, supersedes: true } } } } },
+  });
+  if (!p || !p.customerCode || p.matchStatus === "IGNORED") return 0;
+  const cited = extractInvoiceNumbersFromDescription(p.rawDescription);
+  if (cited.length === 0) return 0;
+  const invoices = await db.debtInvoice.findMany({ where: { customerCode: p.customerCode }, select: { invoiceNumber: true, supersedes: true } });
+  const known = new Set(invoices.flatMap((i) => [i.invoiceNumber, ...(i.supersedes ?? [])]).filter((n): n is string => !!n));
+  if (cited.every((n) => known.has(n))) return 0;
+  const guessed = p.allocations.filter(
+    (a) =>
+      (a.matchMethod === "FIFO" || a.matchMethod === "EXACT_AMOUNT") &&
+      !cited.some((n) => a.invoice.invoiceNumber === n || (a.invoice.supersedes ?? []).includes(n))
+  );
+  if (guessed.length === 0) return 0;
+  await db.$transaction(
+    guessed.flatMap((a) => [
+      db.debtPaymentAllocation.delete({ where: { id: a.id } }),
+      db.debtInvoice.update({ where: { id: a.invoice.id }, data: { paidAmount: { decrement: Number(a.amount) } } }),
+    ])
+  );
+  return guessed.reduce((s, a) => s + Number(a.amount), 0);
 }
 
 /** Chỉ số các dòng của file Tiền về mới TRÙNG (số tiền + nội dung giống hệt, ngày gần nhau hoặc ngày vô lý) với giao dịch đã ghi trước đó. */
