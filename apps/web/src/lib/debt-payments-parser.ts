@@ -74,6 +74,15 @@ export function parseDebtPaymentsExcel(buffer: Buffer): { rows: ParsedPaymentRow
     }
 
     const paymentDate = parseExcelDate(row[COL.date]);
+    // Ngày tiền về ở tương lai = đọc sai (thấy thật: 2027, 2028, 2029) -> báo lỗi để sửa file, không ghi vào hệ thống.
+    if (paymentDate && paymentDate.getTime() > Date.now() + 7 * 86_400_000) {
+      const d = paymentDate;
+      result.errors.push({
+        rowNumber,
+        message: `Ngày tiền về ${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()} ở tương lai — kiểm tra lại ô ngày trong file`,
+      });
+      return;
+    }
     const customerCode = customerCodeRaw ? normalizeCustomerCode(customerCodeRaw) : null;
     result.rows.push({
       rowNumber,

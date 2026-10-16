@@ -3,6 +3,7 @@ import { prisma } from "@hoanggia/db";
 import { parseDebtPaymentsExcel } from "@/lib/debt-payments-parser";
 import { remainingAmount } from "@/lib/debt-status";
 import { planPaymentAllocation } from "@/lib/debt-payment-allocation";
+import { findFuzzyDuplicates } from "@/lib/debt-reconcile";
 import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
@@ -23,12 +24,12 @@ export async function POST(req: NextRequest) {
     const codes = Array.from(new Set(rows.map((r) => r.customerCode).filter((c): c is string => !!c)));
     const invoicesByCode = new Map<
       string,
-      { id: string; invoiceNumber: string | null; invoiceDate: Date | null; remaining: number }[]
+      { id: string; invoiceNumber: string | null; invoiceDate: Date | null; remaining: number; supersedes: string[] }[]
     >();
     if (codes.length > 0) {
       const invoices = await prisma.debtInvoice.findMany({
         where: { customerCode: { in: codes } },
-        select: { id: true, customerCode: true, invoiceNumber: true, invoiceDate: true, originalAmount: true, paidAmount: true },
+        select: { id: true, customerCode: true, invoiceNumber: true, invoiceDate: true, originalAmount: true, paidAmount: true, supersedes: true },
       });
       for (const inv of invoices) {
         const list = invoicesByCode.get(inv.customerCode) ?? [];
@@ -37,6 +38,7 @@ export async function POST(req: NextRequest) {
           invoiceNumber: inv.invoiceNumber,
           invoiceDate: inv.invoiceDate,
           remaining: remainingAmount(Number(inv.originalAmount), Number(inv.paidAmount)),
+          supersedes: inv.supersedes ?? [],
         });
         invoicesByCode.set(inv.customerCode, list);
       }
@@ -53,7 +55,9 @@ export async function POST(req: NextRequest) {
       ).map((p) => p.sourceHash)
     );
 
-    const preview = rows.map((row) => {
+    const fuzzy = await findFuzzyDuplicates(prisma, rows);
+
+    const preview = rows.map((row, rowIdx) => {
       const candidateInvoices = row.customerCode ? invoicesByCode.get(row.customerCode) ?? [] : [];
       const plan = planPaymentAllocation(
         { amount: row.amount, candidateInvoiceNumbers: row.candidateInvoiceNumbers },
@@ -69,7 +73,8 @@ export async function POST(req: NextRequest) {
         matchStatus: plan.matchStatus,
         allocations: plan.allocations,
         unallocatedAmount: plan.unallocatedAmount,
-        isDuplicate: existingHashes.has(row.sourceHash),
+        unresolvedNumbers: plan.unresolvedNumbers,
+        isDuplicate: existingHashes.has(row.sourceHash) || fuzzy.has(rowIdx),
       };
     });
 

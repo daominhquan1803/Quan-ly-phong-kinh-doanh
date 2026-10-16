@@ -54,7 +54,7 @@ export async function runZaloDispatch(now: Date = new Date()): Promise<{ sent: n
   for (const n of rows) {
     const u = n.user;
     if (!u.zaloChatId || !u.zaloLinkedAt || n.createdAt < u.zaloLinkedAt) continue;
-    if (u.zaloOffTypes.includes(n.type)) continue;
+    if ((u.zaloOffTypes ?? []).includes(n.type)) continue;
     if ((fails.get(n.id) ?? 0) >= MAX_FAILS) continue;
 
     const r = await sendZaloText(u.zaloChatId, formatZaloText(n));

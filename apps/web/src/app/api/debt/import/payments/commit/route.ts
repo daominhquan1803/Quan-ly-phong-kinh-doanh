@@ -3,6 +3,7 @@ import { prisma } from "@hoanggia/db";
 import { parseDebtPaymentsExcel } from "@/lib/debt-payments-parser";
 import { remainingAmount } from "@/lib/debt-status";
 import { planPaymentAllocation } from "@/lib/debt-payment-allocation";
+import { findFuzzyDuplicates } from "@/lib/debt-reconcile";
 import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
@@ -25,12 +26,12 @@ export async function POST(req: NextRequest) {
     // dịch "Tiền về" của cùng 1 khách trong cùng file không vô tình cùng trừ vào đúng 1 hoá đơn.
     const invoicesByCode = new Map<
       string,
-      { id: string; invoiceNumber: string | null; invoiceDate: Date | null; remaining: number }[]
+      { id: string; invoiceNumber: string | null; invoiceDate: Date | null; remaining: number; supersedes: string[] }[]
     >();
     if (codes.length > 0) {
       const invoices = await prisma.debtInvoice.findMany({
         where: { customerCode: { in: codes } },
-        select: { id: true, customerCode: true, invoiceNumber: true, invoiceDate: true, originalAmount: true, paidAmount: true },
+        select: { id: true, customerCode: true, invoiceNumber: true, invoiceDate: true, originalAmount: true, paidAmount: true, supersedes: true },
       });
       for (const inv of invoices) {
         const list = invoicesByCode.get(inv.customerCode) ?? [];
@@ -39,6 +40,7 @@ export async function POST(req: NextRequest) {
           invoiceNumber: inv.invoiceNumber,
           invoiceDate: inv.invoiceDate,
           remaining: remainingAmount(Number(inv.originalAmount), Number(inv.paidAmount)),
+          supersedes: inv.supersedes ?? [],
         });
         invoicesByCode.set(inv.customerCode, list);
       }
@@ -68,14 +70,24 @@ export async function POST(req: NextRequest) {
       ).map((p) => p.sourceHash)
     );
 
+    // Trùng "mềm": cùng giao dịch nằm trong file khác (số tiền + nội dung giống hệt, mã khách/ngày có thể khác) — xem
+    // lib/debt-payment-dedupe.ts. Bỏ qua và liệt kê để admin kiểm tra.
+    const fuzzy = await findFuzzyDuplicates(prisma, rows);
+    const fuzzyDuplicates: { rowNumber: number; amount: number; customerCode: string | null }[] = [];
+
     let matchedCount = 0;
     let partialCount = 0;
     let unmatchedCount = 0;
     let duplicateSkippedCount = 0;
 
-    for (const row of rows) {
+    for (const [rowIdx, row] of rows.entries()) {
       if (existingHashes.has(row.sourceHash)) {
         duplicateSkippedCount++;
+        continue;
+      }
+      if (fuzzy.has(rowIdx)) {
+        duplicateSkippedCount++;
+        fuzzyDuplicates.push({ rowNumber: row.rowNumber, amount: row.amount, customerCode: row.customerCode });
         continue;
       }
       existingHashes.add(row.sourceHash); // phòng file có dòng lặp y hệt ngay trong chính nó
@@ -136,6 +148,7 @@ export async function POST(req: NextRequest) {
       partialCount,
       unmatchedCount,
       duplicateSkippedCount,
+      fuzzyDuplicates,
     });
   } catch (err) {
     if (err instanceof UnauthorizedError) return NextResponse.json({ error: err.message }, { status: 401 });

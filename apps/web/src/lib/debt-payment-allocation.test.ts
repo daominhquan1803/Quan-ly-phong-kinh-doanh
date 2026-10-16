@@ -64,4 +64,37 @@ describe("planPaymentAllocation", () => {
       { invoiceId: "other", amount: 500, matchMethod: "FIFO" },
     ]);
   });
+
+  it("nội dung ghi số hoá đơn KHÔNG có trong hệ thống -> không trừ nhầm vào hoá đơn khác (đúng số tiền/FIFO), để chưa khớp", () => {
+    const invoices = [inv("old", 500, "00000001", 20), inv("exact", 700, "00000002", 5)];
+    const plan = planPaymentAllocation({ amount: 700, candidateInvoiceNumbers: ["00000099"] }, invoices);
+    expect(plan.allocations).toHaveLength(0);
+    expect(plan.matchStatus).toBe("UNMATCHED");
+    expect(plan.unallocatedAmount).toBe(700);
+    expect(plan.unresolvedNumbers).toEqual(["00000099"]);
+  });
+
+  it("nhắc 2 số HĐ, 1 số khớp 1 số thiếu -> chỉ gán số khớp, phần còn lại PARTIAL (không FIFO)", () => {
+    const invoices = [inv("a", 400, "00000001", 10), inv("other", 9999, null, 30)];
+    const plan = planPaymentAllocation({ amount: 1000, candidateInvoiceNumbers: ["00000001", "00000077"] }, invoices);
+    expect(plan.allocations).toEqual([{ invoiceId: "a", amount: 400, matchMethod: "INVOICE_NUMBER" }]);
+    expect(plan.matchStatus).toBe("PARTIAL");
+    expect(plan.unallocatedAmount).toBe(600);
+    expect(plan.unresolvedNumbers).toEqual(["00000077"]);
+  });
+
+  it("số HĐ nhắc tới đã thu đủ (remaining 0) -> coi là chưa gán được, không đoán sang hoá đơn khác", () => {
+    const invoices = [inv("paid", 0, "00000003", 10), inv("open", 800, "00000004", 5)];
+    const plan = planPaymentAllocation({ amount: 800, candidateInvoiceNumbers: ["00000003"] }, invoices);
+    expect(plan.allocations).toHaveLength(0);
+    expect(plan.unresolvedNumbers).toEqual(["00000003"]);
+  });
+
+  it("khách ghi số HĐ CŨ nhưng hoá đơn mới đã thay thế -> khớp vào hoá đơn mới (supersedes)", () => {
+    const invoices = [{ ...inv("new", 15768000, "00002681", 5), supersedes: ["00002507"] }, inv("other", 100, "00000001", 40)];
+    const plan = planPaymentAllocation({ amount: 15768000, candidateInvoiceNumbers: ["00002507"] }, invoices);
+    expect(plan.matchStatus).toBe("MATCHED");
+    expect(plan.allocations).toEqual([{ invoiceId: "new", amount: 15768000, matchMethod: "INVOICE_NUMBER" }]);
+    expect(plan.unresolvedNumbers).toEqual([]);
+  });
 });

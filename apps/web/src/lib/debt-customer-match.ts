@@ -8,6 +8,16 @@
  * cùng logic cho scripts/) — nhiều test ở đây mock trọn module "@hoanggia/db" thành
  * `{ prisma: ... }`, re-export qua đó sẽ thành undefined và vỡ test.
  */
+/**
+ * Khách KHÔNG thuộc phòng (anh Quân chốt 16/10/2026): hoá đơn của họ có trong file AMIS nhưng không đưa vào
+ * công nợ của phòng. Mã đã chuẩn hoá (xem normalizeCustomerCode). Muốn thêm/bớt: sửa danh sách này.
+ */
+export const NON_PKD1_CUSTOMERS: readonly string[] = ["INTERPLEX-HN", "PAVICO"];
+
+export function isNonPkd1Customer(raw: string | null | undefined): boolean {
+  return NON_PKD1_CUSTOMERS.includes(normalizeCustomerCode(raw));
+}
+
 export function normalizeCustomerCode(raw: string | null | undefined): string {
   if (!raw) return "";
   return raw

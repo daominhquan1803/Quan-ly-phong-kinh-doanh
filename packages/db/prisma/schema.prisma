@@ -121,7 +121,7 @@ model User {
   zaloLinkedAt     DateTime?
   zaloLinkCode     String?  @unique
   zaloLinkCodeExpiresAt DateTime?
-  zaloOffTypes     NotificationType[]
+  zaloOffTypes     NotificationType[] @default([])
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -467,6 +467,9 @@ model DebtInvoice {
 
   source String @default("BASELINE") // BASELINE (từ file Công nợ gốc) | NEW_INVOICE (hoá đơn phát sinh, import cuối tháng)
   note   String?
+  // Số hoá đơn CŨ đã bị hoá đơn này thay thế/điều chỉnh (hoá đơn cũ đã xoá khỏi công nợ). Tiền về của khách còn ghi
+  // số cũ trong nội dung vẫn khớp vào hoá đơn này — xem lib/debt-payment-allocation.ts, lib/debt-reconcile.ts.
+  supersedes String[] @default([])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

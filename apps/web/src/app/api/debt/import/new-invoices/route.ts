@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, resolveEmployeeIdByCode } from "@hoanggia/db";
 import { parseDebtNewInvoicesExcel } from "@/lib/debt-new-invoices-parser";
+import { removeInvoice, rematchPayment } from "@/lib/debt-reconcile";
 import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
 import { computeDueDateFromTerm, PaymentTerm } from "@/lib/customer-payment-term";
 
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const { rows, errors, skippedReplaced } = parseDebtNewInvoicesExcel(buffer);
+    const { rows, errors, skippedReplaced, removals, skippedNonPkd1, skippedNonPositiveAdjustment } = parseDebtNewInvoicesExcel(buffer);
 
     // Quy tắc thời hạn công nợ theo khách hàng (trang Khách hàng) — hoá đơn mới cuối tháng KHÔNG
     // có cột hạn thanh toán trong file AMIS, tự tính thay vì để trống chờ nhập tay.
@@ -67,15 +68,41 @@ export async function POST(req: NextRequest) {
       if (existing) {
         // Chỉ set dueDate khi hoá đơn CHƯA có hạn thanh toán — tránh ghi đè hạn admin đã tự điền
         // hoặc đã tự tính trước đó.
+        const supersedes = Array.from(new Set([...(existing.supersedes ?? []), ...row.replaces]));
         await prisma.debtInvoice.update({
           where: { id: existing.id },
-          data: existing.dueDate === null && dueDate ? { ...data, dueDate } : data,
+          data: { ...data, supersedes, ...(existing.dueDate === null && dueDate ? { dueDate } : {}) },
         });
         updatedCount++;
       } else {
-        await prisma.debtInvoice.create({ data: { ...data, dueDate, paidAmount: 0 } });
+        await prisma.debtInvoice.create({ data: { ...data, dueDate, paidAmount: 0, supersedes: row.replaces } });
         createdCount++;
       }
+    }
+
+    // Hoá đơn gốc/hoá đơn cũ đã bị thay thế hoặc điều chỉnh -> xoá khỏi công nợ (sau khi đã nhập hoá đơn thay thế để chuyển
+    // các khoản đã thu sang). Hoá đơn đã thu đủ mà không có hoá đơn thay thế thì giữ lại, báo trong kết quả.
+    let removedCount = 0;
+    const keptPaid: string[] = [];
+    const released = new Set<string>();
+    for (const r of removals) {
+      const out = await removeInvoice(prisma, r);
+      if (out.result === "REMOVED" || out.result === "MOVED") removedCount++;
+      if (out.result === "KEPT_PAID") keptPaid.push(`${r.invoiceNumber} (${r.customerCode})`);
+      out.releasedPaymentIds.forEach((id) => released.add(id));
+    }
+
+    // Khớp lại Tiền về chưa khớp / một phần của các khách vừa có hoá đơn mới (tiền về có thể về trước khi nhập hoá đơn), và
+    // các khoản vừa bị nhả khỏi hoá đơn đã xoá.
+    const touchedCustomers = Array.from(new Set(rows.map((r) => r.customerCode)));
+    const pending = await prisma.debtPayment.findMany({
+      where: { OR: [{ id: { in: Array.from(released) } }, { matchStatus: { in: ["UNMATCHED", "PARTIAL"] }, customerCode: { in: touchedCustomers } }] },
+      select: { id: true },
+    });
+    let rematchedCount = 0;
+    for (const p of pending) {
+      const res = await rematchPayment(prisma, p.id);
+      if (res && res.added > 0) rematchedCount++;
     }
 
     await prisma.debtImportBatch.create({
@@ -98,6 +125,11 @@ export async function POST(req: NextRequest) {
       errorCount: errors.length,
       errors,
       skippedReplaced,
+      removedCount,
+      keptPaid,
+      rematchedCount,
+      skippedNonPkd1,
+      skippedNonPositiveAdjustment,
     });
   } catch (err) {
     if (err instanceof UnauthorizedError) return NextResponse.json({ error: err.message }, { status: 401 });
