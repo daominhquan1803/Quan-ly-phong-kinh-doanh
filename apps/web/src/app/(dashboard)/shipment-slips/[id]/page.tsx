@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { prisma } from "@hoanggia/db";
 import { auth } from "@/lib/auth";
+import { canViewSlip } from "@/lib/shipment-slip-scope";
 import { cn, formatDateVN } from "@/lib/utils";
 
 export default async function ShipmentSlipDetailPage({ params }: { params: { id: string } }) {
@@ -18,6 +19,7 @@ export default async function ShipmentSlipDetailPage({ params }: { params: { id:
   });
 
   if (!slip) notFound();
+  if (!(await canViewSlip(session.user, slip.id))) redirect("/shipment-slips");
 
   return (
     <div className="space-y-6 max-w-5xl">

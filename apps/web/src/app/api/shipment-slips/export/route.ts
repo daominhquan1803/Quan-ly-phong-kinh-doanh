@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import ExcelJS from "exceljs";
 import { prisma } from "@hoanggia/db";
 import { requireSession, UnauthorizedError } from "@/lib/rbac";
+import { slipScopeWhere } from "@/lib/shipment-slip-scope";
 import { slipSearchWhere, slipMatchesQuery, itemMatchesQuery, slugForFileName } from "@/lib/shipment-slip-search";
 import { embedLogo, addCompanyHeaderLines, NAVY, HEADER_FILL, THIN_BOX } from "@/lib/excel-brand";
 
@@ -29,7 +30,7 @@ function fmtDMY(ymd: string): string {
  * theo bộ lọc) và sheet "Tổng hợp theo mã hàng". Phiếu không có ngày đi thì không vào thống kê. */
 export async function GET(req: NextRequest) {
   try {
-    await requireSession();
+    const session = await requireSession();
     const { searchParams } = new URL(req.url);
     const from = searchParams.get("from") ?? "";
     const to = searchParams.get("to") ?? "";
@@ -51,7 +52,7 @@ export async function GET(req: NextRequest) {
     }
 
     const slips = await prisma.shipmentSlip.findMany({
-      where: { slipDate: { gte: start, lt: endExclusive }, ...slipSearchWhere(q) },
+      where: { AND: [await slipScopeWhere(session.user), { slipDate: { gte: start, lt: endExclusive } }, slipSearchWhere(q)] },
       orderBy: [{ slipDate: "asc" }, { slipNumber: "asc" }],
       select: {
         slipNumber: true,

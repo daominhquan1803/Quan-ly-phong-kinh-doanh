@@ -4,9 +4,15 @@ import ExcelJS from "exceljs";
 
 // GET /api/shipment-slips/export: Excel thống kê đi hàng theo khoảng ngày.
 
-const h = vi.hoisted(() => ({ auth: vi.fn(), findMany: vi.fn() }));
+const h = vi.hoisted(() => ({ auth: vi.fn(), findMany: vi.fn(), poLines: vi.fn() }));
 vi.mock("@/lib/auth", () => ({ auth: h.auth }));
-vi.mock("@hoanggia/db", () => ({ prisma: { shipmentSlip: { findMany: h.findMany } } }));
+vi.mock("@hoanggia/db", () => ({ prisma: { shipmentSlip: { findMany: h.findMany }, poTrackingLine: { findMany: h.poLines } } }));
+
+// where của truy vấn phiếu = AND [phạm vi NVKD, khoảng ngày, điều kiện tìm]: gộp lại để kiểm từng phần.
+const whereOf = (call = 0) => {
+  const parts = h.findMany.mock.calls[call][0].where.AND as Record<string, unknown>[];
+  return { scope: parts[0], slipDate: (parts[1] as { slipDate: { gte: Date; lt: Date } }).slipDate, search: parts[2] as { OR?: unknown[] } };
+};
 
 import { GET } from "./route";
 
@@ -49,7 +55,7 @@ beforeEach(() => {
 describe("GET /api/shipment-slips/export", () => {
   it("lọc theo khoảng ngày VN gồm cả 2 đầu: from 0h, to hết ngày", async () => {
     await get("from=2026-10-01&to=2026-10-09");
-    const { slipDate } = h.findMany.mock.calls[0][0].where;
+    const { slipDate } = whereOf();
     expect(slipDate.gte.toISOString()).toBe("2026-09-30T17:00:00.000Z");
     expect(slipDate.lt.toISOString()).toBe("2026-10-09T17:00:00.000Z");
   });
@@ -96,18 +102,21 @@ describe("GET /api/shipment-slips/export", () => {
     expect(h.findMany).not.toHaveBeenCalled();
   });
 
-  it("NVKD xuất được toàn bộ phiếu như admin (không giới hạn theo người lập phiếu)", async () => {
+  it("ADMIN xuất được tất cả phiếu; NVKD chỉ xuất phiếu có Số PO thuộc PO của mình (hoặc phiếu mình lập)", async () => {
+    expect((await get("from=2026-10-01&to=2026-10-09")).status).toBe(200);
+    expect(whereOf(0).scope).toEqual({}); // admin: không giới hạn
     h.auth.mockResolvedValue({ user: { id: "u-tung", role: "SALES" } });
-    const res = await get("from=2026-10-01&to=2026-10-09");
-    expect(res.status).toBe(200);
-    expect(h.findMany.mock.calls[0][0].where.createdById).toBeUndefined();
+    h.poLines.mockResolvedValue([{ poCode: "PO-1" }, { poCode: "PO-9" }]);
+    expect((await get("from=2026-10-01&to=2026-10-09")).status).toBe(200);
+    expect(whereOf(1).scope).toEqual({ OR: [{ createdById: "u-tung" }, { items: { some: { poSaleNumber: { in: ["PO-1", "PO-9"] } } } }] });
+    expect(h.poLines.mock.calls[0][0].where).toEqual({ salesEmployeeId: "u-tung" });
   });
 
   it("có từ khoá q: truy vấn thêm điều kiện tìm (số phiếu/khách/đơn/dòng hàng) giống danh sách phiếu + tên file có từ khoá", async () => {
     const res = await get("from=2026-10-01&to=2026-10-09&q=Panasonic%20Vi%E1%BB%87t");
-    const where = h.findMany.mock.calls[0][0].where;
+    const where = whereOf();
     expect(where.slipDate).toBeTruthy(); // vẫn lọc khoảng ngày
-    expect(where.OR).toEqual(
+    expect(where.search.OR).toEqual(
       expect.arrayContaining([
         { customerName: { contains: "Panasonic Việt", mode: "insensitive" } },
         { slipNumber: { contains: "Panasonic Việt", mode: "insensitive" } },

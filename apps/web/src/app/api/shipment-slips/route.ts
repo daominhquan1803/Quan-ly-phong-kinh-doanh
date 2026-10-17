@@ -3,12 +3,13 @@ import { prisma } from "@hoanggia/db";
 import { requireSession, UnauthorizedError } from "@/lib/rbac";
 import { createShipmentSlipSchema } from "@/lib/validation/shipment-slip";
 import { slipItemMatch, slipSearchWhere } from "@/lib/shipment-slip-search";
+import { slipScopeWhere } from "@/lib/shipment-slip-scope";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
-    await requireSession();
+    const session = await requireSession();
     const { searchParams } = new URL(req.url);
     const q = searchParams.get("q")?.trim();
 
@@ -16,10 +17,8 @@ export async function GET(req: NextRequest) {
     const itemMatch = slipItemMatch(q);
 
     const slips = await prisma.shipmentSlip.findMany({
-      where: {
-        // Mọi người dùng (kể cả NVKD) xem + tìm được toàn bộ phiếu đi hàng (admin chốt 17/10/2026); chỉ đọc.
-        ...slipSearchWhere(q),
-      },
+      // ADMIN: tất cả; NVKD: chỉ phiếu có Số PO thuộc PO của mình (xem lib/shipment-slip-scope.ts).
+      where: { AND: [await slipScopeWhere(session.user), slipSearchWhere(q)] },
       orderBy: { createdAt: "desc" },
       take: 200,
       select: {
