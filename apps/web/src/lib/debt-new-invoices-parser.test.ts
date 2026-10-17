@@ -44,6 +44,10 @@ describe("parseDebtNewInvoicesExcel — thay thế / điều chỉnh / khách ng
       ["00002911", "25/09/2026", "BOSHOKU", 0, "Hoá đơn điều chỉnh cho hóa đơn số 00002110", "MINHQUAN", "C.BOSHOKU"],
       ["00002612", "27/08/2026", "INTERPLEX", 107248770, "Hoá đơn mới", "DANGTAN", "INTERPLEX-HN."],
       ["00002362", "09/08/2026", "PAVICO", 26244000, "Hoá đơn mới", "DANGTAN", "PAVICO"],
+      ["00002341", "07/08/2026", "AVI", 4536000, "Hoá đơn mới", "DANGTAN", "AVI1"],
+      ["00002500", "24/08/2026", "DONG SONG XANH", 5514048, "Hoá đơn mới", "DANGTAN", "DONGSONGXANH"],
+      ["00002506", "24/08/2026", "HOANG LONG", 17594820, "Hoá đơn mới", "DANGTAN", "HOANGLONG."],
+      ["00002631", "28/08/2026", "PB GLOBAL", 23904720, "Hoá đơn mới", "DANGTAN", "PB-GLOBAL."],
       ["00002331", "06/08/2026", "SHENYAN", 10500000, "Hoá đơn mới", "THANHTUNG", "C.SHENYANVIETNAM"],
     ])
   );
@@ -70,10 +74,11 @@ describe("parseDebtNewInvoicesExcel — thay thế / điều chỉnh / khách ng
     expect(r.errors).toEqual([]); // điều chỉnh 0 đồng không còn báo lỗi "sai tổng tiền"
   });
 
-  it("khách không thuộc phòng (Interplex, Pavico) bị bỏ qua hoàn toàn", () => {
-    expect(r.rows.map((x) => x.invoiceNumber)).not.toContain("00002612");
-    expect(r.rows.map((x) => x.invoiceNumber)).not.toContain("00002362");
-    expect(r.skippedNonPkd1).toBe(2);
+  it("khách không thuộc phòng (Interplex, Pavico, AVI1, Đồng Song Xanh, Hoàng Long, PB Global) bị bỏ qua hoàn toàn", () => {
+    for (const n of ["00002612", "00002362", "00002341", "00002500", "00002506", "00002631"]) {
+      expect(r.rows.map((x) => x.invoiceNumber)).not.toContain(n);
+    }
+    expect(r.skippedNonPkd1).toBe(6);
     expect(r.rows.map((x) => x.invoiceNumber)).toContain("00002331"); // hoá đơn mới bình thường vẫn nhập
   });
 });
