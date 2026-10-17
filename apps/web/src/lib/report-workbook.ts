@@ -5,7 +5,7 @@ import { injectCharts, type ChartSpec } from "@/lib/excel-charts";
 import type { ReportData, ReportMetricDef } from "@/lib/report-metrics";
 
 const VND_FMT = "#,##0";
-const NUM_FMT = "#,##0.##";
+const NUM_FMT = "[>=1000]#,##0;General"; // số lớn có dấu ngăn nghìn, số nhỏ giữ nguyên (không dư dấu thập phân cuối)
 const PCT_POINT_FMT = '0.0"%"'; // giá trị đã là "điểm phần trăm" (12.5 = 12,5%)
 const CHANGE_FMT = "+0.0%;-0.0%;0.0%"; // % tăng giảm so kỳ trước (giá trị là phân số)
 const RATIO_FMT = "0.0%"; // % đạt KPI (giá trị là phân số)
@@ -200,7 +200,7 @@ async function buildWorkbookAndCharts(data: ReportData): Promise<{ workbook: Exc
 
   // ========== Dashboard ==========
   // A nhóm | B chỉ số | C-E ba kỳ | F-G % so kỳ trước || H cách | I nhân viên | J-L ba kỳ | M-N %.
-  [13, 38, 17, 17, 17, 11, 11, 2, 24, 17, 17, 17, 11, 11].forEach((w, i) => (dash.getColumn(i + 1).width = w));
+  [17, 38, 20, 20, 20, 11, 11, 2, 24, 20, 20, 20, 11, 11].forEach((w, i) => (dash.getColumn(i + 1).width = w));
   dash.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
   await embedLogo(wb, dash);
   let r = addCompanyHeaderLines(dash, 1, 3, 5);
@@ -276,7 +276,7 @@ async function buildWorkbookAndCharts(data: ReportData): Promise<{ workbook: Exc
   headerCell(dash.getCell(kHead, 6), "% đạt KPI");
   headerStyle(dash.getCell(kHead, 7)); // ô phụ của vùng gộp: chỉ tô kiểu, không ghi giá trị (sẽ ghi đè ô chính)
   dash.mergeCells(kHead, 9, kHead, 14);
-  headerCell(dash.getCell(kHead, 9), "Tiến độ so với KPI (mỗi ô vuông = 5%)");
+  headerCell(dash.getCell(kHead, 9), "Tiến độ so với KPI (mỗi vạch = 5%)");
   for (let c = 10; c <= 14; c++) headerStyle(dash.getCell(kHead, c));
   dash.getRow(kHead).height = 26;
   // Hạng theo % đạt giữa các nhân viên (không tính dòng Cả phòng); nhân viên chưa có KPI xếp cuối, không đánh hạng.
