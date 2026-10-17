@@ -83,6 +83,11 @@ export function parseShipmentSlipsWithMapping(
       result.errors.push({ rowNumber, message: "Thiếu Số phiếu" });
       return;
     }
+    // Dòng tiêu đề "STT" / dòng đánh số thứ tự 1, 2, 3... (map nhầm cột hoặc sheet có hàng số cột) — không phải phiếu thật.
+    if (/^(stt|\d{1,4})$/i.test(slipNumber)) {
+      result.errors.push({ rowNumber, message: `Bỏ qua dòng "${slipNumber}" — không phải số phiếu` });
+      return;
+    }
     if (!itemName) {
       result.errors.push({ rowNumber, message: "Thiếu Mã hàng hoặc Tên hàng" });
       return;

@@ -69,6 +69,12 @@ describe("parseShipmentSlipsWithMapping", () => {
     expect(errors).toEqual([{ rowNumber: 2, message: "Thiếu Số phiếu" }]);
   });
 
+  it("bỏ qua dòng tiêu đề STT và dòng đánh số cột 1, 2, 3 — không tạo phiếu rác", () => {
+    const buffer = makeBuffer([HEADERS, ["STT", "STT", "", "STT", "STT", "", "STT", "", "", ""], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], ["BH03265", "SAMSUNG", "Mr Phú", "SI08244", "Tem A", "KHO S", "PO1", "Cái", 100, 100]]);
+    const { slips } = parseShipmentSlipsWithMapping(buffer, mapping);
+    expect(slips.map((s) => s.slipNumber)).toEqual(["BH03265"]);
+  });
+
   it("uses Mã hàng as fallback Tên hàng when Tên hàng is blank — Mã hàng HOẶC Tên hàng là đủ", () => {
     const buffer = makeBuffer([HEADERS, ["BH03265", "SAMSUNG", "Mr Phú", "SI08244", "", "KHO S", "PO1", "Cái", 100, 100]]);
     const { slips, errors } = parseShipmentSlipsWithMapping(buffer, mapping);
