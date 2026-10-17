@@ -153,6 +153,13 @@ model User {
   defectsCreated         DefectReport[]              @relation("DefectCreatedBy")
   defectsClosed          DefectReport[]              @relation("DefectClosedBy")
   defectResponsibilities DefectResponsible[]         @relation("DefectResponsibleUser")
+  delayReasonsCreated    DeliveryDelayReason[]       @relation("DelayReasonCreatedBy")
+  delayReasonsReviewed   DeliveryDelayReason[]       @relation("DelayReasonReviewedBy")
+  invoiceCorrectionsSet  InvoiceCorrection[]         @relation("InvoiceCorrectionCauseSetBy")
+  adminKpiManualEntries  AdminKpiManual[]            @relation("AdminKpiManualAdmin")
+  adminKpiManualEdits    AdminKpiManual[]            @relation("AdminKpiManualUpdatedBy")
+  satisfactionReceived   AdminSatisfactionRating[]   @relation("SatisfactionAdmin")
+  satisfactionGiven      AdminSatisfactionRating[]   @relation("SatisfactionRater")
   poTrackingLines        PoTrackingLine[]
   poTrackingBatches      PoTrackingImportBatch[]
   shipmentSlipBatches    ShipmentSlipImportBatch[]
@@ -865,6 +872,9 @@ model DefectReport {
   // Bộ phận khác chịu trách nhiệm (Sản xuất / Kế hoạch / Kho / Vận chuyển / Nhà cung cấp...) — không tính KPI.
   otherResponsible String?
 
+  // Khiếu nại: thời điểm nhận và thời điểm phản hồi khách lần đầu — KPI Admin "phản hồi trong 24 giờ, đóng trong 7 ngày".
+  receivedAt             DateTime?
+  respondedAt            DateTime?
   status                 DefectStatus @default(OPEN)
   closedAt               DateTime?
   closedById             String?
@@ -1093,6 +1103,7 @@ model PoTrackingLine {
   updatedAt     DateTime               @updatedAt
 
   deliveryEvents PoDeliveryEvent[]
+  delayReason    DeliveryDelayReason?
 
   @@index([salesEmployeeId])
   @@index([poDate])
@@ -1216,6 +1227,8 @@ enum NotificationType {
   TRIP_REVIEWED // báo NVKD kết quả duyệt báo cáo
   WEEK_PLAN_DAILY // hằng ngày: điểm Kế hoạch tuần hiện tại + mục còn thiếu nhiều nhất
   DEBT_WEEK_FOLLOWUP // đầu tuần: tuần này cần thu bao nhiêu, trượt bao nhiêu
+  ADMIN_KPI_DAILY // hằng ngày cho Admin kinh doanh: điểm KPI tuần + việc còn thiếu
+  DELAY_REASON_PENDING // quản trị hệ thống: lý do giao trễ chờ duyệt
 }
 
 model Notification {
@@ -1328,4 +1341,92 @@ model ProductInventory {
   syncedAt     DateTime @default(now())
 
   @@map("product_inventory")
+}
+
+// ---------- KPI Admin kinh doanh (anh Quân chốt 17/10/2026, xem apps/web/src/lib/admin-kpi.ts) ----------
+
+/// Lý do giao trễ của 1 dòng PO (Admin nhập, quản trị hệ thống duyệt). Được duyệt và không phải lỗi Admin -> dòng không tính trễ.
+model DeliveryDelayReason {
+  id           String            @id @default(cuid())
+  lineId       String            @unique
+  line         PoTrackingLine    @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  category     String // SAN_XUAT | KE_HOACH | KHACH_DOI_LICH | VAN_CHUYEN | ADMIN | KHAC
+  note         String?
+  status       DelayReasonStatus @default(PENDING)
+  createdById  String
+  createdBy    User              @relation("DelayReasonCreatedBy", fields: [createdById], references: [id])
+  reviewedById String?
+  reviewedBy   User?             @relation("DelayReasonReviewedBy", fields: [reviewedById], references: [id])
+  reviewedAt   DateTime?
+  reviewNote   String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @default(now()) @updatedAt
+
+  @@index([status])
+  @@map("delivery_delay_reasons")
+}
+
+enum DelayReasonStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// Hoá đơn thay thế / điều chỉnh (ghi lại khi nhập file hoá đơn AMIS). cause trống = tính lỗi Admin.
+model InvoiceCorrection {
+  id            String    @id @default(cuid())
+  customerCode  String
+  customerName  String?
+  invoiceNumber String
+  invoiceDate   DateTime?
+  kind          String // REPLACEMENT | ADJUSTMENT
+  refs          String[]  @default([])
+  amount        Decimal   @default(0) @db.Decimal(18, 2)
+  statusRaw     String?
+  cause         String? // ADMIN | SALES | ACCOUNTING | CUSTOMER | OTHER
+  causeNote     String?
+  causeSetById  String?
+  causeSetBy    User?     @relation("InvoiceCorrectionCauseSetBy", fields: [causeSetById], references: [id])
+  causeSetAt    DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@unique([customerCode, invoiceNumber])
+  @@index([invoiceDate])
+  @@map("invoice_corrections")
+}
+
+/// Phần chấm tay KPI tháng của Admin kinh doanh (quản trị hệ thống chấm): hồ sơ đầy đủ (%), thái độ (0-5).
+model AdminKpiManual {
+  id            String   @id @default(cuid())
+  adminId       String
+  admin         User     @relation("AdminKpiManualAdmin", fields: [adminId], references: [id])
+  year          Int
+  month         Int
+  documentsPct  Decimal? @db.Decimal(5, 2)
+  attitudeScore Decimal? @db.Decimal(4, 2)
+  note          String?
+  updatedById   String?
+  updatedBy     User?    @relation("AdminKpiManualUpdatedBy", fields: [updatedById], references: [id])
+  updatedAt     DateTime @default(now()) @updatedAt
+
+  @@unique([adminId, year, month])
+  @@map("admin_kpi_manual")
+}
+
+/// NVKD chấm mức hài lòng về hỗ trợ của Admin kinh doanh mỗi tháng (1-5).
+model AdminSatisfactionRating {
+  id        String   @id @default(cuid())
+  adminId   String
+  admin     User     @relation("SatisfactionAdmin", fields: [adminId], references: [id])
+  raterId   String
+  rater     User     @relation("SatisfactionRater", fields: [raterId], references: [id])
+  year      Int
+  month     Int
+  score     Int
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@unique([adminId, raterId, year, month])
+  @@map("admin_satisfaction_ratings")
 }

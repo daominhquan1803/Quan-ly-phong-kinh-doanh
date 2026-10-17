@@ -20,6 +20,7 @@ import {
   Package,
   FileBarChart,
   AlertTriangle,
+  ClipboardCheck,
 } from "lucide-react";
 import { SidebarBanner } from "./SidebarBanner";
 
@@ -37,6 +38,7 @@ export const NAV_ITEMS = [
   { href: "/reports", label: "Báo cáo", icon: FileBarChart, adminOnly: false },
   { href: "/targets", label: "Kế hoạch kinh doanh", icon: Target, adminOnly: false },
   { href: "/kpi", label: "Đánh giá KPI", icon: Award, adminOnly: false },
+  { href: "/kpi-admin", label: "KPI Admin", icon: ClipboardCheck, adminOnly: false },
   { href: "/business-trips", label: "Đăng ký đi công tác", icon: Briefcase, adminOnly: false },
   { href: "/defects", label: "Báo cáo hàng lỗi", icon: AlertTriangle, adminOnly: false },
   { href: "/admin/users", label: "Nhân viên", icon: Users, adminOnly: true },
@@ -71,7 +73,7 @@ export function Sidebar({ role, accessLevel }: { role?: "ADMIN" | "SALES"; acces
       {/* Navigation List */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {NAV_ITEMS.filter((item) => canSeeNavItem(item, role, accessLevel)).map((item) => {
-          const active = pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href));
+          const active = pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href + "/"));
           const Icon = item.icon;
           return (
             <Link

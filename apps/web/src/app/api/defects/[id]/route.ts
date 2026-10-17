@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@hoanggia/db";
 import { requireAdmin, requireSession, requireSystemAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
-import { closeSchema, defectBodySchema, defectInclude, defectScope, vnDate } from "@/lib/defect-report";
+import { closeSchema, defectBodySchema, defectInclude, defectScope, vnDate, vnDateTime } from "@/lib/defect-report";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +25,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 
 /**
  * - { action: "close", resolution, invoiceAdjusted, adjustedInvoiceNumbers?, invoiceAdjustNote? } — đóng biên bản (quản trị).
+ * - { action: "responded" } — ghi nhận đã phản hồi khách (quản trị).
  * - { action: "reopen" } — mở lại (chỉ quản trị hệ thống).
  * - nội dung đầy đủ như khi lập — sửa biên bản đang mở (quản trị).
  */
@@ -46,6 +47,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     const session = await requireAdmin();
     if (!current) return NextResponse.json({ error: "Không tìm thấy biên bản" }, { status: 404 });
+
+    if (body?.action === "responded") {
+      // Admin ghi nhận đã phản hồi khách (hạn 24h kể từ lúc nhận khiếu nại — KPI Admin).
+      const defect = await prisma.defectReport.update({ where: { id: params.id }, data: { respondedAt: new Date() }, include: defectInclude });
+      return NextResponse.json({ defect });
+    }
 
     if (body?.action === "close") {
       const parsed = closeSchema.safeParse(body);
@@ -96,6 +103,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
           deliveryDate,
           description: b.description,
           otherResponsible: b.otherResponsible || null,
+          receivedAt: vnDateTime(b.receivedAt),
           items: { create: b.items.map((i) => ({ ...i, slipItemId: i.slipItemId || null, itemCode: i.itemCode || null, unit: i.unit || null, deliveredQty: i.deliveredQty ?? null })) },
           responsibles: { create: userIds.map((userId) => ({ userId })) },
         },

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma } from "@hoanggia/db";
 import { requireAdmin, requireSession, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
-import { defectBodySchema, defectInclude, defectScope, vnDate } from "@/lib/defect-report";
+import { defectBodySchema, defectInclude, defectScope, vnDate, vnDateTime } from "@/lib/defect-report";
 
 export const dynamic = "force-dynamic";
 
@@ -78,6 +78,7 @@ export async function POST(req: NextRequest) {
         deliveryDate,
         description: b.description,
         otherResponsible: b.otherResponsible || null,
+        receivedAt: vnDateTime(b.receivedAt),
         createdById: session.user.id,
         items: { create: b.items.map((i) => ({ ...i, slipItemId: i.slipItemId || null, itemCode: i.itemCode || null, unit: i.unit || null, deliveredQty: i.deliveredQty ?? null })) },
         responsibles: { create: userIds.map((userId) => ({ userId })) },

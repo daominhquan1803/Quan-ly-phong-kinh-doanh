@@ -67,6 +67,19 @@ export interface ParseNewInvoicesResult {
   skippedNonPkd1: number;
   /** Hoá đơn điều chỉnh số tiền 0 hoặc âm — không phải công nợ, không nhập (hoá đơn gốc vẫn bị xoá). */
   skippedNonPositiveAdjustment: number;
+  /** Mọi hoá đơn thay thế / điều chỉnh trong file (kể cả điều chỉnh âm/0 đồng) — ghi lại để gán nguyên nhân cho KPI Admin. */
+  corrections: InvoiceCorrectionRow[];
+}
+
+export interface InvoiceCorrectionRow {
+  customerCode: string;
+  customerName: string;
+  invoiceNumber: string;
+  invoiceDate: Date | null;
+  kind: "REPLACEMENT" | "ADJUSTMENT";
+  refs: string[];
+  amount: number;
+  statusRaw: string;
 }
 
 /**
@@ -98,7 +111,7 @@ export function parseDebtNewInvoicesExcel(buffer: Buffer): ParseNewInvoicesResul
     );
   }
 
-  const result: ParseNewInvoicesResult = { rows: [], errors: [], skippedReplaced: 0, removals: [], skippedNonPkd1: 0, skippedNonPositiveAdjustment: 0 };
+  const result: ParseNewInvoicesResult = { rows: [], errors: [], skippedReplaced: 0, removals: [], skippedNonPkd1: 0, skippedNonPositiveAdjustment: 0, corrections: [] };
 
   for (let i = headerRowIdx + 1; i < allRows.length; i++) {
     const row = allRows[i];
@@ -141,6 +154,18 @@ export function parseDebtNewInvoicesExcel(buffer: Buffer): ParseNewInvoicesResul
     const originalAmount = parseNumber(row[idx.totalAmount]);
 
     const replaces = (kind === "REPLACEMENT" || kind === "ADJUSTMENT" ? refs : []).filter((n) => n !== invoiceNumber);
+    if (kind === "REPLACEMENT" || kind === "ADJUSTMENT") {
+      result.corrections.push({
+        customerCode,
+        customerName: idx.customerName >= 0 ? String(row[idx.customerName] ?? "").trim() : "",
+        invoiceNumber,
+        invoiceDate: idx.invoiceDate >= 0 ? parseExcelDate(row[idx.invoiceDate]) : null,
+        kind,
+        refs: replaces,
+        amount: originalAmount || 0,
+        statusRaw,
+      });
+    }
     const removalReason = kind === "REPLACEMENT" ? "REPLACED" : "ADJUSTED";
 
     if (kind === "ADJUSTMENT" && !(originalAmount > 0)) {

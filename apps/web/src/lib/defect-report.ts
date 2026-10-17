@@ -34,6 +34,8 @@ export const defectBodySchema = z
     items: z.array(defectItemSchema).min(1, "Chọn ít nhất 1 mặt hàng bị lỗi").max(100),
     responsibleUserIds: z.array(z.string().min(1)).max(20).default([]),
     otherResponsible: z.string().trim().max(200).optional().nullable(),
+    /** Thời điểm nhận khiếu nại "YYYY-MM-DDTHH:mm" giờ VN — tính hạn phản hồi 24h của Admin. Trống = lúc lập biên bản. */
+    receivedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "Thời điểm nhận không hợp lệ").optional().nullable(),
   })
   .refine((b) => b.responsibleUserIds.length > 0 || !!b.otherResponsible, {
     message: "Chọn người hoặc bộ phận chịu trách nhiệm",
@@ -58,6 +60,8 @@ export const closeSchema = z
 
 /** Ngày "YYYY-MM-DD" theo giờ VN -> Date 0h VN. */
 export const vnDate = (s: string) => new Date(`${s}T00:00:00+07:00`);
+/** "YYYY-MM-DDTHH:mm" giờ VN -> Date. */
+export const vnDateTime = (s: string | null | undefined) => (s ? new Date(`${s}:00+07:00`) : null);
 
 /** Phạm vi xem: ADMIN (mọi mức) thấy tất cả; NVKD chỉ biên bản mình chịu trách nhiệm. */
 export function defectScope(user: { id: string; role: string }): Prisma.DefectReportWhereInput {

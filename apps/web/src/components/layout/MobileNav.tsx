@@ -56,7 +56,7 @@ export function MobileNav({ role, accessLevel }: { role?: "ADMIN" | "SALES"; acc
 
             <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
               {NAV_ITEMS.filter((item) => canSeeNavItem(item, role, accessLevel)).map((item) => {
-                const active = pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href));
+                const active = pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href + "/"));
                 const Icon = item.icon;
                 return (
                   <Link

@@ -171,6 +171,15 @@ describe("computeKpiScores", () => {
     expect(r.totalScore).toBe(86);
     expect(r.grade).toBe("B");
   });
+
+  it("hàng lỗi: trừ 2đ mỗi biên bản NVKD chịu trách nhiệm, tối đa 10đ", () => {
+    expect(computeKpiScores(base()).defectPenalty).toBe(0);
+    const r2 = computeKpiScores({ ...base(), defectCount: 2 });
+    expect(r2.defectPenalty).toBe(4);
+    expect(r2.totalScore).toBe(96);
+    expect(computeKpiScores({ ...base(), defectCount: 7 }).defectPenalty).toBe(10);
+    expect(computeKpiScores({ ...base(), defectCount: 7 }).totalScore).toBe(90);
+  });
 });
 
 function base() {

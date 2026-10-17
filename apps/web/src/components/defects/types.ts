@@ -9,6 +9,9 @@ export interface DefectRow {
   otherResponsible: string | null;
   status: "OPEN" | "CLOSED";
   closedAt: string | null;
+  receivedAt: string | null;
+  respondedAt: string | null;
+  createdAt: string;
   resolution: string | null;
   invoiceAdjusted: boolean | null;
   adjustedInvoiceNumbers: string | null;

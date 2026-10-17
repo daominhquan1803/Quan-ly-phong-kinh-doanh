@@ -67,7 +67,12 @@ export interface KpiScoreInput {
   // Tổng điểm 0/1/2 của 4 tuần trong tháng (Kế hoạch làm việc tuần) — tính sẵn từ bên ngoài
   // (getMonthlyWeekPlanScore) rồi truyền vào, để computeKpiScores thuần không cần đụng DB.
   weekScore: number;
+  // Số biên bản hàng lỗi trong tháng mà NVKD được ghi chịu trách nhiệm — trừ 2đ/biên bản, tối đa 10đ (anh Quân chốt 17/10/2026).
+  defectCount?: number;
 }
+
+export const DEFECT_PENALTY_PER_REPORT = 2;
+export const DEFECT_PENALTY_MAX = 10;
 
 export interface KpiScoreResult {
   revenuePct: number | null;
@@ -87,6 +92,7 @@ export interface KpiScoreResult {
   scoreVisit: number;
   scoreAttitude: number;
   scoreWeek: number;
+  defectPenalty: number;
   totalScore: number;
   grade: KpiGrade;
   gradeLabel: string;
@@ -170,8 +176,10 @@ export function computeKpiScores(input: KpiScoreInput): KpiScoreResult {
   const rAttitude = round1(scoreAttitude);
   const rWeek = round1(scoreWeek);
 
-  const totalScore = round1(
-    rRevenue + rSX + rNewCustomers + scoreDebtOverdue + rDebtCollection + rVisit + rAttitude + rWeek
+  const defectPenalty = Math.min(DEFECT_PENALTY_MAX, DEFECT_PENALTY_PER_REPORT * (input.defectCount ?? 0));
+  const totalScore = Math.max(
+    0,
+    round1(rRevenue + rSX + rNewCustomers + scoreDebtOverdue + rDebtCollection + rVisit + rAttitude + rWeek - defectPenalty)
   );
   const { grade, label, bonus } = gradeOf(totalScore);
 
@@ -188,6 +196,7 @@ export function computeKpiScores(input: KpiScoreInput): KpiScoreResult {
     scoreVisit: rVisit,
     scoreAttitude: rAttitude,
     scoreWeek: rWeek,
+    defectPenalty,
     totalScore,
     grade,
     gradeLabel: label,
@@ -329,7 +338,7 @@ export async function getKpiMonthlyReport(
   });
   const pkd1EmployeeIds = pkd1Employees.map((u) => u.id);
 
-  const [revenueRows, entries, visitCounts, supporterVisitCounts, newCustomerCounts] = await Promise.all([
+  const [revenueRows, entries, visitCounts, supporterVisitCounts, newCustomerCounts, defectCounts] = await Promise.all([
     getEmployeeTargetVsActual(year, month, onlyEmployeeId),
     prisma.kpiMonthlyEntry.findMany({
       where: { year, month, ...(onlyEmployeeId ? { employeeId: onlyEmployeeId } : {}) },
@@ -356,7 +365,13 @@ export async function getKpiMonthlyReport(
       select: { employeeId: true, trip: { select: { _count: { select: { stops: { where: COUNTED_STOP_WHERE } } } } } },
     }),
     getNewCustomerCounts(year, month, pkd1EmployeeIds),
+    prisma.defectResponsible.groupBy({
+      by: ["userId"],
+      where: { defectReport: { reportDate: { gte: start, lt: end } }, ...(onlyEmployeeId ? { userId: onlyEmployeeId } : {}) },
+      _count: { _all: true },
+    }),
   ]);
+  const defectByEmployee = new Map(defectCounts.map((d) => [d.userId, d._count._all]));
 
   const entryByEmployee = new Map(entries.map((e) => [e.employeeId, e]));
   const visitByEmployee = new Map<string, number>();
@@ -398,6 +413,7 @@ export async function getKpiMonthlyReport(
       weightVisit: entry?.weightVisit ?? 10,
       violationCount: entry?.violationCount ?? 0,
       weekScore,
+      defectCount: defectByEmployee.get(r.employeeId) ?? 0,
     };
 
     const scores = computeKpiScores(input);

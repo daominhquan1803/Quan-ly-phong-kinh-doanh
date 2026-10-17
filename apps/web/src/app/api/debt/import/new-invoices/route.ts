@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const { rows, errors, skippedReplaced, removals, skippedNonPkd1, skippedNonPositiveAdjustment } = parseDebtNewInvoicesExcel(buffer);
+    const { rows, errors, skippedReplaced, removals, skippedNonPkd1, skippedNonPositiveAdjustment, corrections } = parseDebtNewInvoicesExcel(buffer);
 
     // Quy tắc thời hạn công nợ theo khách hàng (trang Khách hàng) — hoá đơn mới cuối tháng KHÔNG
     // có cột hạn thanh toán trong file AMIS, tự tính thay vì để trống chờ nhập tay.
@@ -80,6 +80,15 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Ghi lại hoá đơn thay thế/điều chỉnh để Admin gán nguyên nhân (KPI Admin) — đã có thì giữ nguyên nguyên nhân đã gán.
+    for (const c of corrections) {
+      await prisma.invoiceCorrection.upsert({
+        where: { customerCode_invoiceNumber: { customerCode: c.customerCode, invoiceNumber: c.invoiceNumber } },
+        create: { ...c, customerName: c.customerName || null, statusRaw: c.statusRaw || null },
+        update: { invoiceDate: c.invoiceDate, kind: c.kind, refs: c.refs, amount: c.amount, statusRaw: c.statusRaw || null },
+      });
+    }
+
     // Hoá đơn gốc/hoá đơn cũ đã bị thay thế hoặc điều chỉnh -> xoá khỏi công nợ (sau khi đã nhập hoá đơn thay thế để chuyển
     // các khoản đã thu sang). Hoá đơn đã thu đủ mà không có hoá đơn thay thế thì giữ lại, báo trong kết quả.
     let removedCount = 0;
@@ -130,6 +139,7 @@ export async function POST(req: NextRequest) {
       rematchedCount,
       skippedNonPkd1,
       skippedNonPositiveAdjustment,
+      correctionsRecorded: corrections.length,
     });
   } catch (err) {
     if (err instanceof UnauthorizedError) return NextResponse.json({ error: err.message }, { status: 401 });

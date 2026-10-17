@@ -35,6 +35,8 @@ export const ZALO_TYPE_LABEL: Record<string, string> = {
   TRIP_NEXT_STEP_DUE: "Việc tiếp theo sau buổi gặp khách",
   TRIP_REVIEW_PENDING: "Báo cáo công tác chờ duyệt (quản trị viên)",
   TRIP_REVIEWED: "Kết quả duyệt báo cáo công tác",
+  ADMIN_KPI_DAILY: "Điểm KPI tuần Admin kinh doanh hằng ngày",
+  DELAY_REASON_PENDING: "Lý do giao trễ chờ duyệt (quản trị viên)",
 };
 
 /** Mã liên kết 6 chữ số, hết hạn sau 10 phút. */

@@ -10,6 +10,7 @@ import { runTripReminder } from "./notifications/tripReminder";
 import { runWeekPlanDigest } from "./notifications/weekPlanDigest";
 import { runDebtWeekReminder } from "./notifications/debtWeekReminder";
 import { runZaloDispatch } from "./notifications/zaloDispatch";
+import { runAdminKpiDigest } from "./notifications/adminKpiDigest";
 import { isZaloConfigured } from "./zalo";
 import { logger } from "./logger";
 
@@ -85,6 +86,7 @@ async function main() {
       runTripReminder().catch((err) => logger.error("Lỗi nhắc công tác:", err));
       runWeekPlanDigest().catch((err) => logger.error("Lỗi tin điểm Kế hoạch tuần hằng ngày:", err));
       runDebtWeekReminder().catch((err) => logger.error("Lỗi nhắc công nợ đầu tuần:", err));
+      runAdminKpiDigest().catch((err) => logger.error("Lỗi tin KPI Admin hằng ngày:", err));
     },
     { timezone: NOTIFY_CRON_TIMEZONE }
   );

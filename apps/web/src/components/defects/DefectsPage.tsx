@@ -8,6 +8,8 @@ import { DefectForm } from "./DefectForm";
 import type { DefectRow } from "./types";
 
 const fmtQty = (s: string | null) => (s == null ? "—" : Number(s).toLocaleString("vi-VN"));
+const fmtDateTime = (s: string) =>
+  new Date(s).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 const thisMonth = () => new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 7);
 
 /**
@@ -243,7 +245,10 @@ function DefectDetail({ d, canEdit, canManage, onEdit, onChanged }: { d: DefectR
               ))}
             </tbody>
           </table>
-          <p className="text-xs text-muted2">Lập bởi {d.createdBy.name}</p>
+          <p className="text-xs text-muted2">
+            Lập bởi {d.createdBy.name} · Nhận khiếu nại {fmtDateTime(d.receivedAt ?? d.createdAt)} ·{" "}
+            {d.respondedAt ? `Đã phản hồi khách ${fmtDateTime(d.respondedAt)}` : <span className="text-amber-300">Chưa phản hồi khách (hạn 24h)</span>}
+          </p>
         </div>
         <div>
           <p className="text-xs font-semibold text-muted2 mb-2">Hình ảnh lỗi ({d.photos.length})</p>
@@ -353,6 +358,15 @@ function DefectDetail({ d, canEdit, canManage, onEdit, onChanged }: { d: DefectR
             <button onClick={onEdit} className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3 py-1.5 text-xs hover:bg-white/5">
               <Pencil className="h-3.5 w-3.5" /> Sửa / thêm ảnh
             </button>
+            {!d.respondedAt && (
+              <button
+                disabled={busy}
+                onClick={() => call("PATCH", `/api/defects/${d.id}`, { action: "responded" })}
+                className="rounded-xl border border-sky-500/40 px-3 py-1.5 text-xs text-sky-300 hover:bg-sky-500/10"
+              >
+                Đã phản hồi khách
+              </button>
+            )}
             <button
               onClick={() => setClosing(true)}
               className="flex items-center gap-1.5 rounded-xl border border-emerald-500/40 px-3 py-1.5 text-xs text-emerald-300 hover:bg-emerald-500/10"

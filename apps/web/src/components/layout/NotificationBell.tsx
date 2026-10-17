@@ -18,7 +18,9 @@ interface NotificationRow {
     | "TRIP_REVIEW_PENDING"
     | "TRIP_REVIEWED"
     | "WEEK_PLAN_DAILY"
-    | "DEBT_WEEK_FOLLOWUP";
+    | "DEBT_WEEK_FOLLOWUP"
+    | "ADMIN_KPI_DAILY"
+    | "DELAY_REASON_PENDING";
   title: string;
   message: string;
   link: string | null;

@@ -47,6 +47,9 @@ export function DefectForm({ initial, onDone, onCancel }: { initial?: DefectRow 
   const [customerCode, setCustomerCode] = useState(initial?.customerCode ?? "");
   const [slipId, setSlipId] = useState<string | null>(initial?.shipmentSlip?.id ?? null);
   const [deliveryDate, setDeliveryDate] = useState(initial?.deliveryDate ? ymdOf(initial.deliveryDate) : "");
+  const [receivedAt, setReceivedAt] = useState(
+    initial?.receivedAt ? new Date(new Date(initial.receivedAt).getTime() + 7 * 3600_000).toISOString().slice(0, 16) : ""
+  );
   const [description, setDescription] = useState(initial?.description ?? "");
   const [items, setItems] = useState<ItemDraft[]>(
     initial?.items.map((i) => ({
@@ -150,6 +153,7 @@ export function DefectForm({ initial, onDone, onCancel }: { initial?: DefectRow 
         })),
         responsibleUserIds: responsibleIds,
         otherResponsible: otherResponsible || null,
+        receivedAt: receivedAt || null,
       };
       const res = await fetch(initial ? `/api/defects/${initial.id}` : "/api/defects", {
         method: initial ? "PATCH" : "POST",
@@ -185,7 +189,7 @@ export function DefectForm({ initial, onDone, onCancel }: { initial?: DefectRow 
     <div className="glass-card border border-amber-500/30 p-5 space-y-5">
       <h2 className="text-base font-bold text-ink">{initial ? `Sửa biên bản ${initial.reportNumber}` : "Lập biên bản hàng lỗi"}</h2>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-4">
         <div className="space-y-1">
           <p className={label}>Số biên bản *</p>
           <input className={input} value={reportNumber} onChange={(e) => setReportNumber(e.target.value)} placeholder="Theo số biên bản của công ty" />
@@ -193,6 +197,10 @@ export function DefectForm({ initial, onDone, onCancel }: { initial?: DefectRow 
         <div className="space-y-1">
           <p className={label}>Ngày lập *</p>
           <input type="date" className={input} value={reportDate} onChange={(e) => setReportDate(e.target.value)} />
+        </div>
+        <div className="space-y-1">
+          <p className={label}>Nhận khiếu nại lúc</p>
+          <input type="datetime-local" className={input} value={receivedAt} onChange={(e) => setReceivedAt(e.target.value)} title="Trống = lúc lập biên bản. Admin phản hồi khách trong 24h." />
         </div>
         <div className="space-y-1 relative">
           <p className={label}>Khách hàng *</p>

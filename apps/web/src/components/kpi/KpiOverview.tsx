@@ -35,6 +35,8 @@ interface KpiRow {
   violationCount: number;
   scoreAttitude: number;
   scoreWeek: number;
+  defectCount?: number;
+  defectPenalty: number;
   totalScore: number;
   grade: "A" | "B" | "C" | "D" | "F";
   gradeLabel: string;
@@ -134,6 +136,7 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
                 <th colSpan={4} className="text-center font-medium px-3 py-2 border-l border-white/5">Công nợ (20đ)</th>
                 <th colSpan={2} className="text-center font-medium px-3 py-2 border-l border-white/5" title="max(2 − số lần vi phạm, 0)">Thái độ (2đ)</th>
                 <th rowSpan={2} className="text-right font-medium px-3 py-3 border-l border-white/5 align-bottom" title="Tổng điểm 0/1/2 của 4 tuần trong tháng, từ Kế hoạch làm việc tuần">Điểm tuần (8đ)</th>
+                <th rowSpan={2} className="text-right font-medium px-3 py-3 border-l border-white/5 align-bottom" title="Trừ 2đ mỗi biên bản hàng lỗi NVKD chịu trách nhiệm trong tháng, tối đa 10đ">Hàng lỗi</th>
                 <th colSpan={3} className="text-center font-medium px-3 py-2 border-l border-white/5 text-amber-300">Tổng hợp</th>
                 {isAdmin && <th rowSpan={2} className="px-3 py-3 align-bottom border-l border-white/5"></th>}
               </tr>
@@ -166,7 +169,7 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
             <tbody className="divide-y divide-white/5">
               {isLoading && (
                 <tr>
-                  <td colSpan={24} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={25} className="px-4 py-8 text-center text-muted-foreground">
                     <div className="inline-flex items-center gap-2">
                       <span className="h-2 w-2 rounded-full bg-amber-400 animate-ping" />
                       Đang tải bảng đánh giá KPI...
@@ -176,7 +179,7 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
               )}
               {!isLoading && (data?.rows.length ?? 0) === 0 && (
                 <tr>
-                  <td colSpan={24} className="px-4 py-8 text-center text-muted2">
+                  <td colSpan={25} className="px-4 py-8 text-center text-muted2">
                     Chưa có dữ liệu nhân viên.
                   </td>
                 </tr>
@@ -231,6 +234,9 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
                     <td className="px-2.5 py-2 text-right border-l border-white/5 font-mono text-alert">{r.violationCount}</td>
                     <td className="px-2.5 py-2 text-right font-mono font-semibold text-ink">{r.scoreAttitude}</td>
                     <td className="px-2.5 py-2 text-right border-l border-white/5 font-mono font-semibold text-amber-300">{r.scoreWeek}</td>
+                    <td className="px-2.5 py-2 text-right border-l border-white/5 font-mono font-semibold text-alert" title={`${r.defectCount ?? 0} biên bản hàng lỗi`}>
+                      {r.defectPenalty > 0 ? `−${r.defectPenalty}` : "0"}
+                    </td>
                     <td className="px-2.5 py-2 text-right border-l border-white/5 font-mono font-bold text-amber-400 text-sm">{r.totalScore}</td>
                     <td className="px-2.5 py-2 text-center">
                       <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold", GRADE_STYLE[r.grade])}>
@@ -252,7 +258,7 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
                   </tr>
                   {isAdmin && editingId === r.employeeId && (
                     <tr>
-                      <td colSpan={24} className="bg-amber-500/[0.03] border-y border-amber-500/20 px-5 py-4">
+                      <td colSpan={25} className="bg-amber-500/[0.03] border-y border-amber-500/20 px-5 py-4">
                         <KpiEditForm
                           row={r}
                           year={year}
