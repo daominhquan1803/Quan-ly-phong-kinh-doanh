@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@hoanggia/db";
-import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
+import { requireSystemAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
  */
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string; allocationId: string } }) {
   try {
-    await requireAdmin();
+    await requireSystemAdmin();
     const alloc = await prisma.debtPaymentAllocation.findUnique({
       where: { id: params.allocationId },
       include: { payment: { select: { id: true, sourceHash: true, amount: true } } },

@@ -19,7 +19,7 @@ export async function notifyUser(userId: string, p: Payload): Promise<void> {
 
 export async function notifyAdmins(p: Payload): Promise<void> {
   try {
-    const admins = await prisma.user.findMany({ where: { role: "ADMIN", active: true }, select: { id: true } });
+    const admins = await prisma.user.findMany({ where: { role: "ADMIN", accessLevel: "FULL", active: true }, select: { id: true } });
     if (admins.length === 0) return;
     await prisma.notification.createMany({ data: admins.map((a) => ({ userId: a.id, ...p })) });
   } catch (err) {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma, resolveEmployeeIdByName } from "@hoanggia/db";
 import { parseDebtBaselineExcel } from "@/lib/debt-baseline-parser";
 import { normalizeCustomerCode } from "@/lib/debt-customer-match";
-import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
+import { requireSystemAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
 import { monthWeekMonday } from "@/lib/debt-status";
 import { computeDueDateFromTerm, PaymentTerm } from "@/lib/customer-payment-term";
 
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await requireAdmin();
+    const session = await requireSystemAdmin();
 
     const formData = await req.formData();
     const file = formData.get("file");

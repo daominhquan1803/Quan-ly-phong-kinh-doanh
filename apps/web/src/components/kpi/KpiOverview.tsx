@@ -423,155 +423,48 @@ function KpiEditForm({
   );
 }
 
+/** Biên bản hàng lỗi trong tháng (lập/đóng ở trang Báo cáo hàng lỗi) — số biên bản mỗi người chịu trách nhiệm. */
 function DefectsPanel({ year, month }: { year: number; month: number }) {
-  const queryClient = useQueryClient();
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ reportNumber: "", employeeId: "", reportDate: "", description: "" });
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-
+  const ym = `${year}-${String(month).padStart(2, "0")}`;
   const { data } = useQuery({
-    queryKey: ["kpi-defects", year, month],
+    queryKey: ["defects", "ALL", ym, ""],
     queryFn: async () => {
-      const res = await fetch(`/api/kpi/defects?year=${year}&month=${month}`);
+      const res = await fetch(`/api/defects?status=ALL&month=${ym}`);
       if (!res.ok) throw new Error("Không tải được");
-      return res.json() as Promise<{ defects: DefectRow[] }>;
+      return res.json() as Promise<{ defects: { id: string; reportNumber: string; reportDate: string; customerName: string | null; status: "OPEN" | "CLOSED"; responsibles: { user: { id: string; name: string } }[] }[] }>;
     },
   });
-
-  const { data: employeesData } = useQuery({
-    queryKey: ["admin-users-for-defects"],
-    queryFn: async () => {
-      const res = await fetch("/api/admin/users");
-      if (!res.ok) throw new Error("Không tải được");
-      return res.json() as Promise<{ users: EmployeeOption[] }>;
-    },
-  });
-
-  async function handleCreate() {
-    setSaving(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/kpi/defects", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "Lưu thất bại");
-      }
-      setForm({ reportNumber: "", employeeId: "", reportDate: "", description: "" });
-      setShowForm(false);
-      queryClient.invalidateQueries({ queryKey: ["kpi-defects", year, month] });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Lưu thất bại");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleDelete(id: string) {
-    await fetch(`/api/kpi/defects/${id}`, { method: "DELETE" });
-    queryClient.invalidateQueries({ queryKey: ["kpi-defects", year, month] });
-  }
-
+  const defects = data?.defects ?? [];
+  const byPerson = new Map<string, number>();
+  for (const d of defects) for (const r of d.responsibles) byPerson.set(r.user.name, (byPerson.get(r.user.name) ?? 0) + 1);
   return (
-    <div className="border-t border-white/5 p-5 space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <p className="text-xs text-muted2">
-          Ghi nhận các sự vụ hàng lỗi trong tháng để theo dõi chất lượng.
-        </p>
-        <button
-          onClick={() => setShowForm((v) => !v)}
-          className="rounded-xl bg-gradient-to-r from-brandRed-600 to-brandRed-700 hover:from-brandRed-500 hover:to-brandRed-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-[0_0_15px_rgba(200,16,46,0.3)] transition-all"
-        >
-          {showForm ? "Đóng form" : "+ Thêm biên bản hàng lỗi"}
-        </button>
-      </div>
-
-      {showForm && (
-        <div className="glass-card border border-white/10 p-4 rounded-xl grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <input
-            placeholder="Số biên bản hàng lỗi (vd: BB-01/09)"
-            value={form.reportNumber}
-            onChange={(e) => setForm((p) => ({ ...p, reportNumber: e.target.value }))}
-            className="input !text-xs !bg-black/50 !border-white/10 rounded-xl"
-          />
-          <select
-            value={form.employeeId}
-            onChange={(e) => setForm((p) => ({ ...p, employeeId: e.target.value }))}
-            className="input !text-xs !bg-black/50 !border-white/10 rounded-xl"
-          >
-            <option value="">— Chọn NVKD chịu trách nhiệm —</option>
-            {employeesData?.users.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name}
-              </option>
+    <div className="px-5 pb-5 space-y-3 text-sm">
+      <p className="text-xs text-muted2">
+        Lập, sửa, đóng biên bản ở trang{" "}
+        <a href="/defects" className="text-amber-400 hover:underline">
+          Báo cáo hàng lỗi
+        </a>
+        . Mỗi biên bản tính cho từng người chịu trách nhiệm.
+      </p>
+      {defects.length === 0 ? (
+        <p className="text-muted2">Chưa có biên bản hàng lỗi tháng này.</p>
+      ) : (
+        <>
+          <p>
+            {Array.from(byPerson.entries())
+              .map(([name, n]) => `${name}: ${n}`)
+              .join(" · ") || "Không có người chịu trách nhiệm (chỉ bộ phận khác)"}
+          </p>
+          <ul className="space-y-1">
+            {defects.map((d) => (
+              <li key={d.id} className="text-xs">
+                <span className="font-mono text-amber-400">{d.reportNumber}</span> · {formatDateVN(d.reportDate)} · {d.customerName} ·{" "}
+                {d.responsibles.map((r) => r.user.name).join(", ") || "—"} · {d.status === "OPEN" ? "Đang mở" : "Đã đóng"}
+              </li>
             ))}
-          </select>
-          <input
-            type="date"
-            value={form.reportDate}
-            onChange={(e) => setForm((p) => ({ ...p, reportDate: e.target.value }))}
-            className="input !text-xs !bg-black/50 !border-white/10 rounded-xl font-mono"
-          />
-          <input
-            placeholder="Nội dung và nguyên nhân lỗi"
-            value={form.description}
-            onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-            className="input !text-xs !bg-black/50 !border-white/10 rounded-xl sm:col-span-2"
-          />
-          {error && <p className="text-xs text-alert sm:col-span-2">{error}</p>}
-          <button
-            onClick={handleCreate}
-            disabled={saving}
-            className="rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 px-4 py-2 text-xs font-semibold text-black shadow-[0_0_15px_rgba(224,163,39,0.3)] disabled:opacity-50 sm:col-span-2 w-fit transition-all"
-          >
-            {saving ? "Đang lưu..." : "Lưu biên bản"}
-          </button>
-        </div>
+          </ul>
+        </>
       )}
-
-      <div className="rounded-xl border border-white/5 bg-black/40 overflow-x-auto">
-        <table className="min-w-full text-xs">
-          <thead className="bg-white/[0.04] text-muted-foreground border-b border-white/5">
-            <tr>
-              <th className="text-left font-medium px-4 py-2.5">Số biên bản</th>
-              <th className="text-left font-medium px-4 py-2.5">NVKD</th>
-              <th className="text-left font-medium px-4 py-2.5">Ngày</th>
-              <th className="text-left font-medium px-4 py-2.5">Nội dung lỗi</th>
-              <th className="px-4 py-2.5"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
-            {(data?.defects.length ?? 0) === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-muted2">
-                  Chưa có biên bản hàng lỗi tháng này.
-                </td>
-              </tr>
-            )}
-            {data?.defects.map((d) => (
-              <tr key={d.id} className="hover:bg-white/[0.02] transition-colors">
-                <td className="px-4 py-2 font-mono font-semibold text-amber-300/90">{d.reportNumber}</td>
-                <td className="px-4 py-2 text-ink font-medium">{d.employee.name}</td>
-                <td className="px-4 py-2 font-mono text-muted2">{formatDateVN(d.reportDate)}</td>
-                <td className="px-4 py-2 text-muted-foreground max-w-sm truncate">{d.description}</td>
-                <td className="px-4 py-2 text-right">
-                  <button
-                    onClick={() => handleDelete(d.id)}
-                    className="p-1 rounded-lg text-muted2 hover:text-alert hover:bg-white/5 transition-colors"
-                    title="Xoá biên bản"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 }

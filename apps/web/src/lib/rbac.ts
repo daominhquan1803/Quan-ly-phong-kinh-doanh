@@ -33,6 +33,17 @@ export async function requireAdmin() {
   return session;
 }
 
+/** Quản trị hệ thống (ADMIN mức FULL) — chỉ người này: nhân viên/phân quyền, chỉ tiêu, KPI, duyệt, gán tiền về, công nợ gốc. */
+export function isSystemAdmin(session: { user: { role: string; accessLevel?: string } } | null | undefined): boolean {
+  return session?.user.role === "ADMIN" && (session.user.accessLevel ?? "FULL") === "FULL";
+}
+
+export async function requireSystemAdmin() {
+  const session = await requireSession();
+  if (!isSystemAdmin(session)) throw new ForbiddenError("Chỉ quản trị hệ thống được thực hiện thao tác này");
+  return session;
+}
+
 /**
  * SALES chỉ được thấy dữ liệu của chính mình; ADMIN thấy tất cả.
  * Trả về điều kiện Prisma `where` để áp vào field chỉ định (vd. "salesEmployeeId").

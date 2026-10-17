@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@hoanggia/db";
-import { requireAdmin, ForbiddenError, UnauthorizedError } from "@/lib/rbac";
+import { requireSystemAdmin, ForbiddenError, UnauthorizedError } from "@/lib/rbac";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +26,7 @@ const upsertSchema = z.object({
  * lần lưu, không chặn lưu từng phần (vd chỉ sửa 1 trường không kèm 3 trường kia). */
 export async function POST(req: NextRequest) {
   try {
-    const session = await requireAdmin();
+    const session = await requireSystemAdmin();
     const body = await req.json();
     const parsed = upsertSchema.safeParse(body);
     if (!parsed.success) {

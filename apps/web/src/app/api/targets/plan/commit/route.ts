@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma, resolveEmployeeIdByName } from "@hoanggia/db";
 import { parseSalesPlanWithMapping } from "@/lib/sales-plan-parser";
 import { SalesPlanFieldKey } from "@/lib/sales-plan-fields";
-import { requireAdmin, ForbiddenError, UnauthorizedError } from "@/lib/rbac";
+import { requireSystemAdmin, ForbiddenError, UnauthorizedError } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await requireAdmin();
+    const session = await requireSystemAdmin();
 
     const formData = await req.formData();
     const file = formData.get("file");

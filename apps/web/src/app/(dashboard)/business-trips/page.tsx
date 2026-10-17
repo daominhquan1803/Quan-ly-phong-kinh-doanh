@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { isSystemAdmin } from "@/lib/rbac";
 import { BusinessTripsPanel } from "@/components/business-trips/BusinessTripsPanel";
 import { MapPin } from "lucide-react";
 
@@ -21,7 +22,7 @@ export default async function BusinessTripsPage() {
           </p>
         </div>
       </div>
-      <BusinessTripsPanel isAdmin={isAdmin} />
+      <BusinessTripsPanel isAdmin={isAdmin} canApprove={isSystemAdmin(session)} />
     </div>
   );
 }

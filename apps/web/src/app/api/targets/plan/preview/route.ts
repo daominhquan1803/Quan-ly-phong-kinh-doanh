@@ -3,13 +3,13 @@ import { previewExcel, listSheetNames } from "@/lib/excel-parser";
 import { suggestMapping } from "@/lib/column-mapper";
 import { SALES_PLAN_FIELDS } from "@/lib/sales-plan-fields";
 import { detectMonthColumns } from "@/lib/sales-plan-parser";
-import { requireAdmin, ForbiddenError, UnauthorizedError } from "@/lib/rbac";
+import { requireSystemAdmin, ForbiddenError, UnauthorizedError } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin();
+    await requireSystemAdmin();
 
     const formData = await req.formData();
     const file = formData.get("file");

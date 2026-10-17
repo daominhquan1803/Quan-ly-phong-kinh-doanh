@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@hoanggia/db";
-import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
+import { requireSystemAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
 import { remainingAmount } from "@/lib/debt-status";
 import { planAssign } from "@/lib/debt-unmatched-assign";
 
@@ -21,7 +21,7 @@ const bodySchema = z.object({
  */
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    await requireAdmin();
+    await requireSystemAdmin();
     const parsed = bodySchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Dữ liệu không hợp lệ" }, { status: 400 });

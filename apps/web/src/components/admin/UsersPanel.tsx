@@ -9,6 +9,7 @@ interface UserRow {
   name: string;
   email: string;
   role: "ADMIN" | "SALES";
+  accessLevel: "FULL" | "OPERATOR" | "VIEWER";
   active: boolean;
   amisEmployeeCode: string | null;
   quoteAssigneeCode: string | null;
@@ -88,8 +89,10 @@ export function UsersPanel() {
     }
   }
 
-  async function handleRoleChange(userId: string, role: "ADMIN" | "SALES") {
-    await patchUser(userId, { role });
+  // 1 ô chọn gộp vai trò + mức quyền: "SALES" | "ADMIN:FULL" | "ADMIN:OPERATOR" | "ADMIN:VIEWER".
+  async function handleRoleChange(userId: string, value: string) {
+    const [role, accessLevel] = value.split(":") as ["ADMIN" | "SALES", "FULL" | "OPERATOR" | "VIEWER" | undefined];
+    await patchUser(userId, { role, accessLevel: accessLevel ?? "FULL" });
   }
 
   async function handleToggleActive(userId: string, active: boolean) {
@@ -338,9 +341,9 @@ export function UsersPanel() {
                     <td className="py-3 px-4 text-gray-300 font-mono whitespace-nowrap">{u.email}</td>
                     <td className="py-3 px-4 whitespace-nowrap">
                       <select
-                        value={u.role}
+                        value={u.role === "ADMIN" ? `ADMIN:${u.accessLevel ?? "FULL"}` : "SALES"}
                         disabled={rowBusy === u.id}
-                        onChange={(e) => handleRoleChange(u.id, e.target.value as "ADMIN" | "SALES")}
+                        onChange={(e) => handleRoleChange(u.id, e.target.value)}
                         className={`text-xs rounded-lg border py-1 px-2.5 font-medium transition-colors cursor-pointer disabled:opacity-40 ${
                           u.role === "ADMIN"
                             ? "bg-purple-500/10 text-purple-300 border-purple-500/30"
@@ -348,7 +351,9 @@ export function UsersPanel() {
                         }`}
                       >
                         <option value="SALES" className="bg-gray-100 text-white">Nhân viên kinh doanh</option>
-                        <option value="ADMIN" className="bg-gray-100 text-white">Quản trị viên (Admin)</option>
+                        <option value="ADMIN:FULL" className="bg-gray-100 text-white">Quản trị hệ thống (toàn quyền)</option>
+                        <option value="ADMIN:OPERATOR" className="bg-gray-100 text-white">Admin kinh doanh</option>
+                        <option value="ADMIN:VIEWER" className="bg-gray-100 text-white">Chỉ xem</option>
                       </select>
                     </td>
                     <td className="py-3 px-4 whitespace-nowrap">

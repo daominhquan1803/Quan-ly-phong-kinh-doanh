@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@hoanggia/db";
-import { requireSession, ForbiddenError, UnauthorizedError } from "@/lib/rbac";
+import { requireSession, ForbiddenError, UnauthorizedError, isSystemAdmin } from "@/lib/rbac";
 import { z } from "zod";
 import { stopSchema } from "@/lib/business-trip-schema";
 import { reportSchema, validateReportStops } from "@/lib/business-trip-report";
@@ -41,6 +41,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     const { action } = parsed.data;
     const isAdmin = session.user.role === "ADMIN";
+    // Duyệt / tự duyệt báo cáo công tác chỉ quản trị hệ thống (Admin kinh doanh, tài khoản chỉ xem không duyệt).
+    const canApprove = isSystemAdmin(session);
 
     // Quá hạn đăng ký của tuần chứa ngày đi (hết thứ Hai tuần kế tiếp) — NVKD không còn huỷ/sửa/nộp
     // báo cáo được, chỉ Quản trị viên (approve/reject vốn đã chỉ ADMIN).
@@ -191,15 +193,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
           where: { id: params.id },
           // Quản trị viên nộp hộ = chính người duyệt -> duyệt luôn.
           data: {
-            status: isAdmin ? "APPROVED" : "REPORTED",
+            status: canApprove ? "APPROVED" : "REPORTED",
             reportedAt: now,
             rejectReason: null,
-            ...(isAdmin ? { approvedById: session.user.id, approvedAt: now } : { approvedById: null, approvedAt: null }),
+            ...(canApprove ? { approvedById: session.user.id, approvedAt: now } : { approvedById: null, approvedAt: null }),
           },
         });
       });
 
-      if (!isAdmin) {
+      if (!canApprove) {
         await notifyAdmins({
           type: "TRIP_REVIEW_PENDING",
           title: "Báo cáo công tác chờ duyệt",
@@ -211,7 +213,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
 
     // approve/reject/revise — chỉ ADMIN.
-    if (session.user.role !== "ADMIN") throw new ForbiddenError("Yêu cầu quyền quản trị viên");
+    if (!canApprove) throw new ForbiddenError("Chỉ quản trị hệ thống được duyệt báo cáo công tác");
 
     const dayLabel = trip.visitDate.toISOString().slice(0, 10).split("-").reverse().join("/");
 

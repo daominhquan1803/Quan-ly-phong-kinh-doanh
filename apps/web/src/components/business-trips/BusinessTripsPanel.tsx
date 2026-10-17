@@ -24,7 +24,7 @@ const STATUS_STYLE: Record<TripRow["status"], string> = {
 
 type Tab = "trips" | "next";
 
-export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
+export function BusinessTripsPanel({ isAdmin, canApprove = isAdmin }: { isAdmin: boolean; canApprove?: boolean }) {
   const { data: session } = useSession();
   const [employeeId, setEmployeeId] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -266,7 +266,7 @@ export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
                               </button>
                             )
                           )}
-                          {t.status === "REPORTED" && isAdmin && (
+                          {t.status === "REPORTED" && canApprove && (
                             <>
                               <button
                                 onClick={() => handleAction(t.id, "approve")}
@@ -284,7 +284,7 @@ export function BusinessTripsPanel({ isAdmin }: { isAdmin: boolean }) {
                               </button>
                             </>
                           )}
-                          {(t.status === "REPORTED" || t.status === "PENDING" || t.status === "NEEDS_REVISION") && isAdmin && (
+                          {(t.status === "REPORTED" || t.status === "PENDING" || t.status === "NEEDS_REVISION") && canApprove && (
                             <button
                               onClick={() => handleAction(t.id, "reject")}
                               className="p-1.5 rounded-lg bg-brandRed-500/15 text-alert hover:bg-brandRed-500/25 border border-brandRed-500/30 transition-colors"

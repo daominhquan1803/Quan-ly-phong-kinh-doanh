@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@hoanggia/db";
-import { requireSession, requireAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
+import { requireSystemAdmin, requireSession, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
 import { getEmployeeTargetVsActual } from "@/lib/dashboard-metrics";
 import { z } from "zod";
 
@@ -37,7 +37,7 @@ const upsertSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin();
+    await requireSystemAdmin();
     const body = await req.json();
     const parsed = upsertSchema.safeParse(body);
     if (!parsed.success) {

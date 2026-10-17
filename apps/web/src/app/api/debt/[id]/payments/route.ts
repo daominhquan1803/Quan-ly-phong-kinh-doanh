@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { prisma } from "@hoanggia/db";
-import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
+import { requireSystemAdmin, requireAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
 import { remainingAmount } from "@/lib/debt-status";
 import { z } from "zod";
 
@@ -69,7 +69,7 @@ const createSchema = z.object({
  */
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const session = await requireAdmin();
+    const session = await requireSystemAdmin();
     const parsed = createSchema.safeParse(await req.json());
     if (!parsed.success) {
       return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Dữ liệu không hợp lệ" }, { status: 400 });

@@ -13,8 +13,17 @@ function initials(name?: string): string {
   return (first + last).toUpperCase();
 }
 
-export function Header({ userName, role }: { userName?: string; role?: "ADMIN" | "SALES" }) {
+export function Header({
+  userName,
+  role,
+  accessLevel,
+}: {
+  userName?: string;
+  role?: "ADMIN" | "SALES";
+  accessLevel?: "FULL" | "OPERATOR" | "VIEWER";
+}) {
   const isAdmin = role === "ADMIN";
+  const roleLabel = !isAdmin ? "Nhân viên kinh doanh" : accessLevel === "OPERATOR" ? "Admin kinh doanh" : accessLevel === "VIEWER" ? "Chỉ xem" : "Quản trị viên";
 
   return (
     <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-gray-200/80 px-4 py-3 sm:px-6 shadow-[0_4px_20px_rgba(0,0,0,0.25)]">
@@ -23,7 +32,7 @@ export function Header({ userName, role }: { userName?: string; role?: "ADMIN" |
           chuông thông báo/đổi mật khẩu) khiến chúng bị bó vào chiều cao thanh header. */}
       <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-navy-900/80 backdrop-blur-xl" />
       <div className="flex min-w-0 items-center gap-2.5 sm:gap-3.5">
-        <MobileNav role={role} />
+        <MobileNav role={role} accessLevel={accessLevel} />
         <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-navy-100 to-navy-900 border border-amber-500/30 text-xs font-mono font-bold text-amber-400 shadow-[0_0_12px_rgba(224,163,39,0.2)]">
           {initials(userName)}
           <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-navy-900"></span>
@@ -46,7 +55,7 @@ export function Header({ userName, role }: { userName?: string; role?: "ADMIN" |
           }`}
         >
           {isAdmin ? <ShieldCheck className="h-3 w-3" /> : <User className="h-3 w-3" />}
-          {isAdmin ? "Quản trị viên" : "Nhân viên kinh doanh"}
+          {roleLabel}
         </span>
 
         <ZaloButton />

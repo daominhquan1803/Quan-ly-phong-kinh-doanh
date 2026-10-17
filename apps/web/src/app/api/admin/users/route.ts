@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@hoanggia/db";
-import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
+import { requireSystemAdmin, requireAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +16,7 @@ export async function GET() {
         name: true,
         email: true,
         role: true,
+        accessLevel: true,
         active: true,
         amisEmployeeCode: true,
         quoteAssigneeCode: true,
@@ -42,7 +43,7 @@ const createUserSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    await requireAdmin();
+    await requireSystemAdmin();
     const body = await req.json();
     const parsed = createUserSchema.safeParse(body);
     if (!parsed.success) {

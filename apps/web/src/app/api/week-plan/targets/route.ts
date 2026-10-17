@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
+import { requireSystemAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
 import { setWeekPlanTargets, WEEK_PLAN_METRICS, WEEK_PLAN_WEIGHT_TOTAL } from "@/lib/week-plan";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +29,7 @@ const bodySchema = z.object({
  */
 export async function POST(req: NextRequest) {
   try {
-    const session = await requireAdmin();
+    const session = await requireSystemAdmin();
     const body = await req.json();
     const parsed = bodySchema.safeParse(body);
     if (!parsed.success) {

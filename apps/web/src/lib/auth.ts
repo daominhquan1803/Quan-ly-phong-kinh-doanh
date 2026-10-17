@@ -37,6 +37,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           email: user.email,
           name: user.name,
           role: user.role,
+          accessLevel: user.accessLevel,
         };
       },
     }),
@@ -46,6 +47,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (user) {
         token.id = user.id;
         token.role = (user as { role: "ADMIN" | "SALES" }).role;
+        token.accessLevel = (user as { accessLevel: "FULL" | "OPERATOR" | "VIEWER" }).accessLevel;
       }
       return token;
     },
@@ -53,6 +55,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (session.user) {
         session.user.id = token.id as string;
         session.user.role = token.role as "ADMIN" | "SALES";
+        // Phiên đăng nhập cũ (trước khi có mức quyền) không có accessLevel — middleware buộc đăng nhập lại.
+        session.user.accessLevel = token.accessLevel as "FULL" | "OPERATOR" | "VIEWER";
       }
       return session;
     },

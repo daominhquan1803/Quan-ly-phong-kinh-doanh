@@ -6,13 +6,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { NAV_ITEMS } from "./Sidebar";
+import { NAV_ITEMS, canSeeNavItem } from "./Sidebar";
 
 /** Menu điều hướng cho màn hình nhỏ (điện thoại) — Sidebar chính bị ẩn hẳn dưới breakpoint "md"
  * (xem Sidebar.tsx: "hidden md:flex"), nên trên điện thoại cần 1 cách khác để sang các mục như
  * "Đăng ký đi công tác", "Kế hoạch làm việc tuần"... Dùng nút hamburger mở 1 khay trượt từ trái,
  * cùng danh sách NAV_ITEMS với Sidebar để 2 nơi luôn khớp nhau khi thêm/bớt mục menu sau này. */
-export function MobileNav({ role }: { role?: "ADMIN" | "SALES" }) {
+export function MobileNav({ role, accessLevel }: { role?: "ADMIN" | "SALES"; accessLevel?: "FULL" | "OPERATOR" | "VIEWER" }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
@@ -55,7 +55,7 @@ export function MobileNav({ role }: { role?: "ADMIN" | "SALES" }) {
             </div>
 
             <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-              {NAV_ITEMS.filter((item) => !item.adminOnly || role === "ADMIN").map((item) => {
+              {NAV_ITEMS.filter((item) => canSeeNavItem(item, role, accessLevel)).map((item) => {
                 const active = pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href));
                 const Icon = item.icon;
                 return (

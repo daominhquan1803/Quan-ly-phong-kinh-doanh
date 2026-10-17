@@ -22,6 +22,15 @@ enum Role {
   SALES
 }
 
+// Mức quyền của tài khoản ADMIN (anh Quân chốt 17/10/2026): FULL = quản trị hệ thống (toàn quyền); OPERATOR = Admin kinh
+// doanh (xem toàn phòng + nhập liệu vận hành, KHÔNG quản lý nhân viên/chỉ tiêu/KPI/duyệt/gán tiền về); VIEWER = chỉ xem
+// (không ghi được gì). Tài khoản SALES luôn FULL (không dùng). Xem lib/rbac.ts + middleware.ts.
+enum AccessLevel {
+  FULL
+  OPERATOR
+  VIEWER
+}
+
 enum OrderStatus {
   NEW
   CONFIRMED
@@ -87,76 +96,79 @@ enum QuoteStatus {
 // ---------- Core ----------
 
 model User {
-  id               String   @id @default(cuid())
-  email            String   @unique
-  passwordHash     String
-  name             String
-  role             Role     @default(SALES)
-  active           Boolean  @default(true)
+  id                    String             @id @default(cuid())
+  email                 String             @unique
+  passwordHash          String
+  name                  String
+  role                  Role               @default(SALES)
+  accessLevel           AccessLevel        @default(FULL)
+  active                Boolean            @default(true)
   // Mã nhân viên trên AMIS (vd "DANGTAN") — dùng để khớp đơn hàng đồng bộ tự động từ AMIS
   // API chính xác hơn khớp theo tên. Điền tại trang Nhân viên.
-  amisEmployeeCode String?  @unique
+  amisEmployeeCode      String?            @unique
   // Mã "Phụ trách" trong Google Sheet Báo giá (vd "TUNG.NT") — dùng để đếm tự động "Số báo giá
   // mới" trong Kế hoạch làm việc tuần (QuoteRequest.assigneeRaw không có FK tới User vì không
   // khớp tin cậy được, xem ghi chú ở model QuoteRequest). Điền tại trang Nhân viên, độc lập với
   // amisEmployeeCode vì 2 hệ thống nguồn dùng 2 kiểu mã khác nhau.
-  quoteAssigneeCode String? @unique
+  quoteAssigneeCode     String?            @unique
   // Có tính vào phần thống kê doanh số theo nhân viên (Kế hoạch kinh doanh, Tổng quan) hay
   // không — mặc định true cho mọi nhân viên có amisEmployeeCode. Dùng để ẩn các tài khoản có
   // gán mã AMIS nhưng không phải nhân viên kinh doanh thật (vd tài khoản quản trị hệ thống
   // được gán mã để nhận đồng bộ đơn của 1 mã AMIS không thuộc nhân viên nào) khỏi thống kê,
   // mà vẫn giữ nguyên việc đồng bộ đơn hàng của mã đó.
-  includeInSalesStats Boolean @default(true)
+  includeInSalesStats   Boolean            @default(true)
   // Email THẬT để nhận thông báo nhắc việc (khác với "email" ở trên — email đó chỉ dùng để đăng
   // nhập, thường là địa chỉ nội bộ @hoanggia.local không nhận được thư thật). Để trống thì nhân
   // viên chỉ nhận thông báo trong app, không nhận email. Điền tại trang Nhân viên.
-  notifyEmail      String?
+  notifyEmail           String?
   // Số điện thoại hiển thị trên Phiếu soạn hàng (mục "Phụ trách đơn hàng: Tên_SĐT") — tuỳ chọn,
   // điền tại trang Nhân viên.
-  phone            String?
+  phone                 String?
   // Liên kết Zalo Bot để nhận thông báo (xem apps/web/src/lib/zalo-api.ts, worker/notifications/
   // zaloDispatch.ts). zaloChatId = chat.id bot Zalo trả về khi nhân viên nhắn mã liên kết; mã chỉ
   // sống ngắn (zaloLinkCodeExpiresAt). zaloOffTypes = các loại thông báo nhân viên tự tắt.
-  zaloChatId       String?  @unique
-  zaloLinkedAt     DateTime?
-  zaloLinkCode     String?  @unique
+  zaloChatId            String?            @unique
+  zaloLinkedAt          DateTime?
+  zaloLinkCode          String?            @unique
   zaloLinkCodeExpiresAt DateTime?
-  zaloOffTypes     NotificationType[] @default([])
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  zaloOffTypes          NotificationType[] @default([])
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
 
-  orders           Order[]                @relation("OrderSalesEmployee")
-  shipmentSlips    ShipmentSlip[]         @relation("SlipCreatedBy")
-  salesTargets     SalesTarget[]
-  importTemplates  ImportTemplate[]
-  importBatches    ImportBatch[]
-  employeeAliases  EmployeeAlias[]
-  salesPlanLines   SalesPlanLine[]
-  salesPlanBatches SalesPlanImportBatch[]
-  kpiEntries       KpiMonthlyEntry[]      @relation("KpiEmployee")
-  kpiEntriesEdited KpiMonthlyEntry[]      @relation("KpiUpdatedBy")
-  businessTrips    BusinessTripRequest[]  @relation("TripEmployee")
-  tripApprovals    BusinessTripRequest[]  @relation("TripApprovedBy")
-  tripSupportOf    BusinessTripSupporter[] @relation("TripSupporter")
-  tripNextActions  BusinessTripStop[]     @relation("TripNextActionOwner")
-  defectReports    DefectReport[]         @relation("DefectEmployee")
-  defectsCreated   DefectReport[]         @relation("DefectCreatedBy")
-  poTrackingLines  PoTrackingLine[]
-  poTrackingBatches PoTrackingImportBatch[]
-  shipmentSlipBatches ShipmentSlipImportBatch[]
-  manuallyClosedPoLines PoTrackingLine[] @relation("PoLineManuallyClosedBy")
-  weekPlanTargets        WeekPlanTarget[]       @relation("WeekPlanTargetEmployee")
-  weekPlanTargetsSet     WeekPlanTarget[]       @relation("WeekPlanTargetCreatedBy")
-  weekPlanResultEntries  WeekPlanResultEntry[]  @relation("WeekPlanResultEmployee")
-  weekPlanResultsCreated WeekPlanResultEntry[]  @relation("WeekPlanResultCreatedBy")
+  orders                 Order[]                     @relation("OrderSalesEmployee")
+  shipmentSlips          ShipmentSlip[]              @relation("SlipCreatedBy")
+  salesTargets           SalesTarget[]
+  importTemplates        ImportTemplate[]
+  importBatches          ImportBatch[]
+  employeeAliases        EmployeeAlias[]
+  salesPlanLines         SalesPlanLine[]
+  salesPlanBatches       SalesPlanImportBatch[]
+  kpiEntries             KpiMonthlyEntry[]           @relation("KpiEmployee")
+  kpiEntriesEdited       KpiMonthlyEntry[]           @relation("KpiUpdatedBy")
+  businessTrips          BusinessTripRequest[]       @relation("TripEmployee")
+  tripApprovals          BusinessTripRequest[]       @relation("TripApprovedBy")
+  tripSupportOf          BusinessTripSupporter[]     @relation("TripSupporter")
+  tripNextActions        BusinessTripStop[]          @relation("TripNextActionOwner")
+  defectReports          DefectReport[]              @relation("DefectEmployee")
+  defectsCreated         DefectReport[]              @relation("DefectCreatedBy")
+  defectsClosed          DefectReport[]              @relation("DefectClosedBy")
+  defectResponsibilities DefectResponsible[]         @relation("DefectResponsibleUser")
+  poTrackingLines        PoTrackingLine[]
+  poTrackingBatches      PoTrackingImportBatch[]
+  shipmentSlipBatches    ShipmentSlipImportBatch[]
+  manuallyClosedPoLines  PoTrackingLine[]            @relation("PoLineManuallyClosedBy")
+  weekPlanTargets        WeekPlanTarget[]            @relation("WeekPlanTargetEmployee")
+  weekPlanTargetsSet     WeekPlanTarget[]            @relation("WeekPlanTargetCreatedBy")
+  weekPlanResultEntries  WeekPlanResultEntry[]       @relation("WeekPlanResultEmployee")
+  weekPlanResultsCreated WeekPlanResultEntry[]       @relation("WeekPlanResultCreatedBy")
   weekPlanResultBatches  WeekPlanResultImportBatch[]
   notifications          Notification[]
-  pickingSlipsCreated    PickingSlip[] @relation("PickingSlipCreatedBy")
-  pickingSlipsAsEmployee PickingSlip[] @relation("PickingSlipSalesEmployee")
+  pickingSlipsCreated    PickingSlip[]               @relation("PickingSlipCreatedBy")
+  pickingSlipsAsEmployee PickingSlip[]               @relation("PickingSlipSalesEmployee")
   pushSubscriptions      PushSubscription[]
-  debtInvoices           DebtInvoice[]      @relation("DebtInvoiceSalesEmployee")
-  debtImportBatches      DebtImportBatch[]  @relation("DebtImportBatchCreatedBy")
-  customers              Customer[]         @relation("CustomerSalesEmployee")
+  debtInvoices           DebtInvoice[]               @relation("DebtInvoiceSalesEmployee")
+  debtImportBatches      DebtImportBatch[]           @relation("DebtImportBatchCreatedBy")
+  customers              Customer[]                  @relation("CustomerSalesEmployee")
 
   @@map("users")
 }
@@ -271,12 +283,12 @@ model Order {
 // đợt giao đã xảy ra trước đó, nên có 1 lần backfill duy nhất lúc thêm tính năng — xem
 // migration liên quan).
 model OrderDeliveryEvent {
-  id      String @id @default(cuid())
-  orderId String
-  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  id                  String   @id @default(cuid())
+  orderId             String
+  order               Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   // Chép lại salesEmployeeId của đơn tại thời điểm ghi — tránh phải join sang Order chỉ để
   // gộp theo nhân viên/tháng (truy vấn doanh số chạy thường xuyên, cần nhanh).
-  salesEmployeeId String?
+  salesEmployeeId     String?
   // Phần chênh lệch giá trị đã giao so với lần đồng bộ trước — có thể ÂM nếu AMIS điều chỉnh
   // giảm (huỷ một phần, sửa lỗi nhập liệu...). Tổng các delta của 1 đơn luôn bằng
   // deliveredValue hiện tại của đơn đó.
@@ -284,8 +296,8 @@ model OrderDeliveryEvent {
   deliveredValueAfter Decimal  @db.Decimal(18, 2)
   // Thời điểm phát hiện delta này (giờ chạy đồng bộ, hoặc ngày backfill/đối chiếu thủ công) —
   // quyết định delta này tính vào "doanh số tháng" nào, và không đổi về sau.
-  occurredAt DateTime
-  createdAt  DateTime @default(now())
+  occurredAt          DateTime
+  createdAt           DateTime @default(now())
 
   @@index([occurredAt])
   @@index([salesEmployeeId, occurredAt])
@@ -316,34 +328,35 @@ model OrderItem {
 // ---------- Phiếu đi hàng (upload ảnh + OCR) ----------
 
 model ShipmentSlip {
-  id              String  @id @default(cuid())
-  slipNumber      String  @unique
-  slipDate        DateTime?
-  receiverName    String?
-  customerName    String?
-  deliveryAddress String?
-  description     String?
-  paymentMethod   String?
-  preparedBy      String?
+  id                String                   @id @default(cuid())
+  slipNumber        String                   @unique
+  slipDate          DateTime?
+  receiverName      String?
+  customerName      String?
+  deliveryAddress   String?
+  description       String?
+  paymentMethod     String?
+  preparedBy        String?
   // Null cho phiếu nhập từ Excel hàng loạt (không có ảnh/PDF gốc) — chỉ có giá trị khi phiếu
   // được tạo qua đường chụp ảnh/AI đọc (xem imageThumbPath).
   imagePath         String?
   imageThumbPath    String?
   orderId           String?
-  order             Order?     @relation(fields: [orderId], references: [id])
+  order             Order?                   @relation(fields: [orderId], references: [id])
   ocrRawResponse    Json?
   ocrConfidenceNote Json?
-  status            SlipStatus @default(DRAFT)
+  status            SlipStatus               @default(DRAFT)
   createdById       String
-  createdBy         User       @relation("SlipCreatedBy", fields: [createdById], references: [id])
+  createdBy         User                     @relation("SlipCreatedBy", fields: [createdById], references: [id])
   // Phiếu tạo qua nhập Excel hàng loạt — giữ vết batch để đối chiếu/audit, null nếu tạo qua
   // đường ảnh/thủ công như trước.
-  importBatchId String?
-  importBatch   ShipmentSlipImportBatch? @relation(fields: [importBatchId], references: [id])
-  createdAt     DateTime                 @default(now())
-  updatedAt     DateTime                 @updatedAt
+  importBatchId     String?
+  importBatch       ShipmentSlipImportBatch? @relation(fields: [importBatchId], references: [id])
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
 
-  items                  ShipmentSlipItem[]
+  defectReports           DefectReport[]
+  items                   ShipmentSlipItem[]
   // Các đợt giao (PoDeliveryEvent) được TỰ SINH từ phiếu này khi khớp được với dòng PO tracking
   // — xem PoDeliveryEvent.sourceShipmentSlipId. Xoá phiếu thì xoá luôn các đợt giao tương ứng.
   generatedDeliveryEvents PoDeliveryEvent[]
@@ -413,14 +426,14 @@ model ShipmentSlipItem {
 // apps/web/src/lib/customer-payment-term.ts: computeDueDateFromTerm, và nơi dùng ở
 // api/debt/import/baseline, api/debt/import/new-invoices).
 model Customer {
-  id            String  @id @default(cuid())
-  customerCode  String  @unique
-  customerName  String
-  contactPerson String?
+  id                        String  @id @default(cuid())
+  customerCode              String  @unique
+  customerName              String
+  contactPerson             String?
   // Email nhận thư nhắc lịch thanh toán công nợ (thư gửi RA NGOÀI cho khách, xem
   // apps/worker/src/notifications/debtDueReminder.ts). NHIỀU địa chỉ lưu trong cùng 1 chuỗi, cách
   // nhau ", " — tách/validate ở apps/web/src/lib/debt-reminder.ts (parseEmailList). Trống = không gửi.
-  email         String?
+  email                     String?
   // Số lần NVKD đã TỰ nhắc nợ quá hạn cho khách này TRƯỚC khi dùng hệ thống (vd nợ cũ BASELINE). null =
   // không override: thư quá hạn in "lần thứ N" theo lịch (floor((d-1)/7)+1) như mặc định. Có giá trị =
   // thư in "lần thứ (giá trị này + số thư quá hạn hệ thống đã gửi cho (các) hoá đơn trong thư + 1)".
@@ -447,16 +460,16 @@ model Customer {
 }
 
 model DebtInvoice {
-  id            String    @id @default(cuid())
-  customerCode  String
-  customerName  String
-  invoiceNumber String?
-  invoiceDate   DateTime?
+  id             String    @id @default(cuid())
+  customerCode   String
+  customerName   String
+  invoiceNumber  String?
+  invoiceDate    DateTime?
   // Cột trong file gốc "Công nợ.xlsx" ("Hạn thanh toán") — hoá đơn mới nhập cuối tháng từ AMIS
   // không có cột này (file AMIS không xuất hạn thanh toán), để trống cho tới khi NVKD tự điền.
-  dueDate       DateTime?
-  originalAmount Decimal  @db.Decimal(18, 2)
-  paidAmount     Decimal  @default(0) @db.Decimal(18, 2)
+  dueDate        DateTime?
+  originalAmount Decimal   @db.Decimal(18, 2)
+  paidAmount     Decimal   @default(0) @db.Decimal(18, 2)
 
   salesEmployeeId String?
   salesEmployee   User?   @relation("DebtInvoiceSalesEmployee", fields: [salesEmployeeId], references: [id])
@@ -465,8 +478,8 @@ model DebtInvoice {
   // (Thứ 2 - Chủ nhật), bucket theo tuần tính tại chỗ từ ngày này, không lưu riêng field tuần.
   expectedPaymentDate DateTime?
 
-  source String @default("BASELINE") // BASELINE (từ file Công nợ gốc) | NEW_INVOICE (hoá đơn phát sinh, import cuối tháng)
-  note   String?
+  source     String   @default("BASELINE") // BASELINE (từ file Công nợ gốc) | NEW_INVOICE (hoá đơn phát sinh, import cuối tháng)
+  note       String?
   // Số hoá đơn CŨ đã bị hoá đơn này thay thế/điều chỉnh (hoá đơn cũ đã xoá khỏi công nợ). Tiền về của khách còn ghi
   // số cũ trong nội dung vẫn khớp vào hoá đơn này — xem lib/debt-payment-allocation.ts, lib/debt-reconcile.ts.
   supersedes String[] @default([])
@@ -496,7 +509,7 @@ model DebtPayment {
   note           String?
   // MATCHED: đã khớp hết số tiền vào hoá đơn. PARTIAL: khớp được 1 phần (vd số tiền lớn hơn
   // tổng nợ còn lại của khách). UNMATCHED: không tìm được khách hàng nào khớp, cần admin xử lý tay.
-  matchStatus String @default("UNMATCHED")
+  matchStatus    String    @default("UNMATCHED")
 
   importBatchId String?
   importBatch   DebtImportBatch? @relation(fields: [importBatchId], references: [id])
@@ -518,12 +531,12 @@ model DebtPayment {
 }
 
 model DebtPaymentAllocation {
-  id        String @id @default(cuid())
-  paymentId String
-  payment   DebtPayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
-  invoiceId String
-  invoice   DebtInvoice @relation(fields: [invoiceId], references: [id])
-  amount    Decimal @db.Decimal(18, 2)
+  id          String      @id @default(cuid())
+  paymentId   String
+  payment     DebtPayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  invoiceId   String
+  invoice     DebtInvoice @relation(fields: [invoiceId], references: [id])
+  amount      Decimal     @db.Decimal(18, 2)
   // INVOICE_NUMBER: khớp qua số hoá đơn nhắc trong mô tả. EXACT_AMOUNT: số tiền trùng đúng 1
   // hoá đơn còn nợ của khách. FIFO: không rõ thông tin, trừ dần từ hoá đơn cũ nhất.
   matchMethod String
@@ -562,25 +575,25 @@ model DebtImportBatch {
 // dài). Không dùng bảng Notification được vì Notification.userId trỏ tới User nội bộ, còn đây là
 // thư gửi cho KHÁCH HÀNG.
 model DebtReminderLog {
-  id        String      @id @default(cuid())
-  invoiceId String
-  invoice   DebtInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  id                String      @id @default(cuid())
+  invoiceId         String
+  invoice           DebtInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   // "D7" | "D0" | "OVERDUE". Xem DebtReminderMilestone ở apps/web/src/lib/debt-reminder.ts.
-  milestone String
+  milestone         String
   // Hạn thanh toán TẠI THỜI ĐIỂM gửi (thành phần của khoá chống trùng, xem ghi chú trên).
-  dueDate   DateTime
+  dueDate           DateTime
   // Lần nhắc: D7/D0 luôn 1; OVERDUE = floor((số ngày quá hạn − 1)/7) + 1 — xem reminderOccurrence ở
   // apps/web/src/lib/debt-reminder.ts.
-  occurrence Int @default(1)
+  occurrence        Int         @default(1)
   // Số "lần thứ N" THỰC SỰ in trong thư (khác occurrence nếu khách có Customer.manualOverdueReminderBase).
   // null = bằng occurrence. KHÔNG thuộc khoá chống trùng.
   displayOccurrence Int?
   // Địa chỉ thực tế đã gửi, cách nhau ", " — ghi lại để đối chiếu khi khách đổi email về sau.
-  recipients   String
-  ccRecipients String?
+  recipients        String
+  ccRecipients      String?
   // "CRON" hoặc User.id của người bấm nút "Gửi ngay".
-  triggeredBy  String
-  sentAt       DateTime @default(now())
+  triggeredBy       String
+  sentAt            DateTime    @default(now())
 
   @@unique([invoiceId, milestone, dueDate, occurrence])
   @@index([sentAt])
@@ -614,49 +627,49 @@ model SyncLog {
 // trong sheet gốc (không có cột chữ) — xem QuoteStatus + lib/quote-color.ts, độ chính xác không
 // tuyệt đối vì cách tô màu của người nhập không nhất quán giữa các tháng.
 model QuoteRequest {
-  id   String @id @default(cuid())
-  year  Int
-  month Int
-  requestDay Int? // "Ngày" — chỉ ngày trong tháng, không suy ra được năm/tháng đầy đủ từ cột này
+  id                 String      @id @default(cuid())
+  year               Int
+  month              Int
+  requestDay         Int? // "Ngày" — chỉ ngày trong tháng, không suy ra được năm/tháng đầy đủ từ cột này
   // "Phụ trách" trong file — mã/tên NVKD phụ trách khách hàng, GIỮ NGUYÊN VĂN vì không khớp tin
   // cậy được với tài khoản User đang có (mã ghi kiểu "TAN.DV" khác hẳn amisEmployeeCode
   // "DANGTAN", và nhiều mã không thuộc 4 NVKD đang quản lý trong hệ thống — có thể là nhân sự
   // khác của phòng không có tài khoản đăng nhập).
   assigneeRaw        String?
-  customerField       String? // "Lĩnh vực hoạt động của KH"
-  customerType        String? // "Phân loại KH"
-  customerName        String
-  productInterest     String? // "Mặt hàng KH quan tâm"
-  companyNationality  String? // "Quốc tịch DN"
-  scale               String? // "Quy mô"
-  quantity            String? // "Sản lượng" — giữ dạng chữ vì có ô ghi khoảng (vd "300-500") hoặc "MOQ"
-  unit                String?
-  potentialItems      String? // "Mặt hàng Tiềm năng phát triển thêm"
-  deliveryAddress     String?
-  pricingStaff        String? // "Nhân viên báo giá" — nhân sự nội bộ tính giá, khác Phụ trách
-  quoteL1             String? // "Báo giá PKH L1"
-  feedbackL1          String? // "Phản hồi PKD L1"
-  quoteL2             String? // "Báo giá PKH L2"
-  feedbackL2          String? // "Phản hồi PKD L2"
-  note                String?
-  status              QuoteStatus @default(NOT_QUOTED)
+  customerField      String? // "Lĩnh vực hoạt động của KH"
+  customerType       String? // "Phân loại KH"
+  customerName       String
+  productInterest    String? // "Mặt hàng KH quan tâm"
+  companyNationality String? // "Quốc tịch DN"
+  scale              String? // "Quy mô"
+  quantity           String? // "Sản lượng" — giữ dạng chữ vì có ô ghi khoảng (vd "300-500") hoặc "MOQ"
+  unit               String?
+  potentialItems     String? // "Mặt hàng Tiềm năng phát triển thêm"
+  deliveryAddress    String?
+  pricingStaff       String? // "Nhân viên báo giá" — nhân sự nội bộ tính giá, khác Phụ trách
+  quoteL1            String? // "Báo giá PKH L1"
+  feedbackL1         String? // "Phản hồi PKD L1"
+  quoteL2            String? // "Báo giá PKH L2"
+  feedbackL2         String? // "Phản hồi PKD L2"
+  note               String?
+  status             QuoteStatus @default(NOT_QUOTED)
   // Mã màu nền gốc (hex) dùng để suy đoán status — lưu lại để đối chiếu/audit khi anh phát hiện
   // suy đoán sai ở dòng nào đó, không phải dữ liệu nghiệp vụ.
-  sourceColorHex      String?
-  sourceSheetName     String
-  sourceRowNumber     Int // số dòng trong sheet gốc lúc đồng bộ — chỉ để đối chiếu, không phải khoá
+  sourceColorHex     String?
+  sourceSheetName    String
+  sourceRowNumber    Int // số dòng trong sheet gốc lúc đồng bộ — chỉ để đối chiếu, không phải khoá
   // Nguồn dữ liệu (từ 10/10/2026 cả phòng nhập báo giá vào app báo giá riêng): "SHEET" = Google Sheet (các báo giá
   // TRƯỚC 10/10/2026, xoá-ghi lại theo sheet), "BAOGIA_APP" = app báo giá (từ 10/10/2026, upsert theo mã BG-xx-xxxx
   // qua worker/src/sync/baoGiaApp.ts, 10 phút/lần). Hai nguồn không chồng ngày nhau nên cộng gộp được.
-  sourceApp           String      @default("SHEET")
-  sourceCode          String? // mã báo giá trong app báo giá (BG-26-0001) — null với dòng từ Google Sheet
-  sourceUpdatedAt     DateTime? // updatedAt của báo giá bên app báo giá — để bỏ qua dòng không đổi khi đồng bộ
-  requestedAt         DateTime? // thời điểm tạo báo giá thật (chỉ có với dòng từ app báo giá)
-  statusRaw           String? // trạng thái gốc trong app báo giá (CHO_BAO_GIA, DA_CO_GIA_L1...)
-  finalResult         String? // kết quả chốt gốc trong app báo giá (DANG_THEO, CHOT_PO, KHACH_CHE_DAT...)
-  syncedAt            DateTime    @default(now())
-  createdAt           DateTime    @default(now())
-  updatedAt           DateTime    @updatedAt
+  sourceApp          String      @default("SHEET")
+  sourceCode         String? // mã báo giá trong app báo giá (BG-26-0001) — null với dòng từ Google Sheet
+  sourceUpdatedAt    DateTime? // updatedAt của báo giá bên app báo giá — để bỏ qua dòng không đổi khi đồng bộ
+  requestedAt        DateTime? // thời điểm tạo báo giá thật (chỉ có với dòng từ app báo giá)
+  statusRaw          String? // trạng thái gốc trong app báo giá (CHO_BAO_GIA, DA_CO_GIA_L1...)
+  finalResult        String? // kết quả chốt gốc trong app báo giá (DANG_THEO, CHOT_PO, KHACH_CHE_DAT...)
+  syncedAt           DateTime    @default(now())
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 
   @@unique([sourceApp, sourceCode])
   @@index([year, month])
@@ -776,22 +789,22 @@ model BusinessTripStop {
   content      String // Nội dung buổi gặp (dự kiến, lúc đăng ký)
 
   // ----- Báo cáo sau buổi gặp (NVKD nộp; chưa nộp = tất cả null) -----
-  outcome         TripStopOutcome?
-  contactName     String? // Người đã gặp
-  contactPhone    String?
-  reportContent   String? // Nội dung đã trao đổi thực tế
-  productInterest String? // Nhu cầu / sản phẩm khách quan tâm
+  outcome           TripStopOutcome?
+  contactName       String? // Người đã gặp
+  contactPhone      String?
+  reportContent     String? // Nội dung đã trao đổi thực tế
+  productInterest   String? // Nhu cầu / sản phẩm khách quan tâm
   // Bước tiếp theo: việc cần làm + người phụ trách + hạn; xong thì nextActionDoneAt có giá trị.
   nextAction        String?
   nextActionDue     DateTime?
   nextActionOwnerId String?
-  nextActionOwner   User?     @relation("TripNextActionOwner", fields: [nextActionOwnerId], references: [id])
+  nextActionOwner   User?            @relation("TripNextActionOwner", fields: [nextActionOwnerId], references: [id])
   nextActionDoneAt  DateTime?
   // Định vị check-in (trình duyệt gửi lên) — thời điểm lấy theo giờ MÁY CHỦ lúc nhận, không tin giờ máy khách.
-  checkinLat       Decimal?  @db.Decimal(9, 6)
-  checkinLng       Decimal?  @db.Decimal(9, 6)
-  checkinAccuracyM Int?
-  checkinAt        DateTime?
+  checkinLat        Decimal?         @db.Decimal(9, 6)
+  checkinLng        Decimal?         @db.Decimal(9, 6)
+  checkinAccuracyM  Int?
+  checkinAt         DateTime?
 
   photos BusinessTripPhoto[]
 
@@ -836,18 +849,93 @@ model BusinessTripSupporter {
 
 model DefectReport {
   id           String   @id @default(cuid())
-  reportNumber String // Số biên bản hàng lỗi
-  employeeId   String // NVKD chịu trách nhiệm
-  employee     User     @relation("DefectEmployee", fields: [employeeId], references: [id])
+  reportNumber String // Số biên bản hàng lỗi — nhập tay theo số biên bản của công ty
+  // (cũ) 1 NVKD chịu trách nhiệm — từ 17/10/2026 dùng DefectResponsible (nhiều người: NVKD và/hoặc Admin kinh doanh).
+  employeeId   String?
+  employee     User?    @relation("DefectEmployee", fields: [employeeId], references: [id])
   reportDate   DateTime @default(now())
-  description  String // Nội dung lỗi
-  createdById  String
-  createdBy    User     @relation("DefectCreatedBy", fields: [createdById], references: [id])
-  createdAt    DateTime @default(now())
+  description  String // Thông tin lỗi
+
+  // Khách hàng + lần giao bị lỗi: chọn phiếu đi hàng (deliveryDate lấy theo ngày phiếu) hoặc chỉ nhập ngày giao.
+  customerCode     String?
+  customerName     String?
+  shipmentSlipId   String?
+  shipmentSlip     ShipmentSlip? @relation(fields: [shipmentSlipId], references: [id], onDelete: SetNull)
+  deliveryDate     DateTime?
+  // Bộ phận khác chịu trách nhiệm (Sản xuất / Kế hoạch / Kho / Vận chuyển / Nhà cung cấp...) — không tính KPI.
+  otherResponsible String?
+
+  status                 DefectStatus @default(OPEN)
+  closedAt               DateTime?
+  closedById             String?
+  closedBy               User?        @relation("DefectClosedBy", fields: [closedById], references: [id])
+  resolution             String? // Đã xử lý thế nào
+  // Khi đóng: có phải sửa hoá đơn bán hàng không; sửa hoá đơn nào, sửa thế nào.
+  invoiceAdjusted        Boolean?
+  adjustedInvoiceNumbers String?
+  invoiceAdjustNote      String?
+
+  createdById String
+  createdBy   User     @relation("DefectCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+
+  items        DefectReportItem[]
+  responsibles DefectResponsible[]
+  photos       DefectPhoto[]
 
   @@index([employeeId])
   @@index([reportDate])
+  @@index([status])
   @@map("defect_reports")
+}
+
+enum DefectStatus {
+  OPEN
+  CLOSED
+}
+
+/// Mặt hàng bị lỗi trong 1 biên bản (thường chọn từ dòng hàng của phiếu đi hàng).
+model DefectReportItem {
+  id             String       @id @default(cuid())
+  defectReportId String
+  defectReport   DefectReport @relation(fields: [defectReportId], references: [id], onDelete: Cascade)
+  slipItemId     String?
+  itemCode       String?
+  itemName       String
+  unit           String?
+  deliveredQty   Decimal?     @db.Decimal(14, 2)
+  defectQty      Decimal      @db.Decimal(14, 2)
+
+  @@index([defectReportId])
+  @@map("defect_report_items")
+}
+
+/// Người chịu trách nhiệm (NVKD / Admin kinh doanh) — mỗi biên bản tính vào KPI tháng của từng người ở đây.
+model DefectResponsible {
+  id             String       @id @default(cuid())
+  defectReportId String
+  defectReport   DefectReport @relation(fields: [defectReportId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation("DefectResponsibleUser", fields: [userId], references: [id])
+
+  @@unique([defectReportId, userId])
+  @@index([userId])
+  @@map("defect_responsibles")
+}
+
+/// Ảnh lỗi (lưu trong DB như ảnh báo cáo công tác).
+model DefectPhoto {
+  id             String       @id @default(cuid())
+  defectReportId String
+  defectReport   DefectReport @relation(fields: [defectReportId], references: [id], onDelete: Cascade)
+  mimeType       String
+  sizeBytes      Int
+  data           Bytes
+  createdAt      DateTime     @default(now())
+
+  @@index([defectReportId])
+  @@map("defect_photos")
 }
 
 // ---------- KPI đánh giá hàng tháng ----------
@@ -911,7 +999,7 @@ model KpiMonthlyEntry {
 // vẫn dùng dữ liệu Order đồng bộ AMIS như cũ — 2 nguồn dữ liệu độc lập, phục vụ 2 mục đích
 // khác nhau (quá hạn giao ở mức đơn vs. doanh số ở mức PO/mã hàng).
 model PoTrackingImportBatch {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   fileName     String
   totalRows    Int
   createdCount Int
@@ -919,13 +1007,13 @@ model PoTrackingImportBatch {
   errorCount   Int
   errorReport  Json?
   createdById  String
-  createdBy    User     @relation(fields: [createdById], references: [id])
-  createdAt    DateTime @default(now())
+  createdBy    User      @relation(fields: [createdById], references: [id])
+  createdAt    DateTime  @default(now())
   // File nhập qua app (25k+ dòng có thể mất vài phút) chạy NỀN sau khi trả response — null nghĩa
   // là còn đang xử lý, có giá trị nghĩa là đã xong (thành công hay có lỗi từng dòng đều tính là
   // xong). FE poll route status theo trường này để biết khi nào dừng loading (xem
   // apps/web/src/app/api/shipping-status/import/[batchId]/route.ts).
-  completedAt DateTime?
+  completedAt  DateTime?
 
   lines PoTrackingLine[]
 
@@ -988,7 +1076,7 @@ model PoTrackingLine {
   baselineDeliveredQty   Decimal? @db.Decimal(14, 2)
   // true nếu file PO tracking Excel tự báo dòng này "Kết thúc" — 1 khi đã true thì trạng thái
   // tính lại luôn là "Kết thúc" (không tự mở lại), dù không có thêm đợt giao nào qua Phiếu đi hàng.
-  baselineClosed Boolean @default(false)
+  baselineClosed         Boolean  @default(false)
 
   // Đóng thủ công qua nút "Kết thúc đơn" ở trang Tiến độ giao hàng — dùng khi PO không cần
   // giao tiếp dù chưa giao đủ SL/giá trị (vd khách huỷ bớt/không lấy nữa nhưng file PO tracking
@@ -1001,8 +1089,8 @@ model PoTrackingLine {
 
   importBatchId String?
   importBatch   PoTrackingImportBatch? @relation(fields: [importBatchId], references: [id])
-  createdAt     DateTime                @default(now())
-  updatedAt     DateTime                @updatedAt
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
 
   deliveryEvents PoDeliveryEvent[]
 
@@ -1016,18 +1104,18 @@ model PoTrackingLine {
 // PoTrackingLine) — cho phép cộng dồn theo tháng chính xác bằng 1 câu groupBy đơn giản, đúng
 // bằng ngày/giá trị anh đã ghi nhận, không cần suy đoán/xấp xỉ như với dữ liệu AMIS.
 model PoDeliveryEvent {
-  id     String         @id @default(cuid())
-  lineId String
-  line   PoTrackingLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
+  id              String         @id @default(cuid())
+  lineId          String
+  line            PoTrackingLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
   // Chép lại salesEmployeeId của dòng tại thời điểm ghi — tránh phải join sang PoTrackingLine
   // chỉ để gộp theo nhân viên/tháng.
   salesEmployeeId String?
   eventDate       DateTime
-  quantity        Decimal  @db.Decimal(14, 2)
-  value           Decimal  @db.Decimal(18, 2)
+  quantity        Decimal        @db.Decimal(14, 2)
+  value           Decimal        @db.Decimal(18, 2)
   // đợt giao thứ 1/2/3 trong dòng PO này (từ file Excel) — 0 cho đợt sinh tự động từ Phiếu đi
   // hàng (xem sourceShipmentSlipId), không có ý nghĩa thứ tự thật.
-  sequence Int
+  sequence        Int
 
   // Khác null nếu đợt giao này được TỰ SINH khi nhập Phiếu đi hàng (khớp theo Số PO + Mã hàng)
   // thay vì đọc từ cột "Ngày/SL/GT giao lần 1/2/3" của file PO tracking Excel — dùng để: (1)
@@ -1179,23 +1267,23 @@ model PushSubscription {
 // 1 dòng PO có thể xuất hiện ở nhiều Phiếu soạn hàng khác nhau nếu soạn nhiều đợt — không tự
 // theo dõi trùng lặp (đã xác nhận với anh Quân, giữ đơn giản đúng theo file mẫu).
 model PickingSlip {
-  id              String   @id @default(cuid())
-  slipNumber      String   @unique // tự sinh dạng "PSH-000001"
-  slipDate        DateTime @default(now())
-  customerCode    String?
-  customerName    String
-  deliveryAddress String?
-  contactPhone    String?
-  salesEmployeeId String?
-  salesEmployee   User?    @relation("PickingSlipSalesEmployee", fields: [salesEmployeeId], references: [id])
+  id                         String   @id @default(cuid())
+  slipNumber                 String   @unique // tự sinh dạng "PSH-000001"
+  slipDate                   DateTime @default(now())
+  customerCode               String?
+  customerName               String
+  deliveryAddress            String?
+  contactPhone               String?
+  salesEmployeeId            String?
+  salesEmployee              User?    @relation("PickingSlipSalesEmployee", fields: [salesEmployeeId], references: [id])
   // Snapshot tên+SĐT NVKD TẠI THỜI ĐIỂM tạo phiếu — giữ nguyên trên phiếu cũ dù sau này đổi SĐT.
   salesEmployeeNameSnapshot  String?
   salesEmployeePhoneSnapshot String?
-  note            String?
-  createdById     String
-  createdBy       User     @relation("PickingSlipCreatedBy", fields: [createdById], references: [id])
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  note                       String?
+  createdById                String
+  createdBy                  User     @relation("PickingSlipCreatedBy", fields: [createdById], references: [id])
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
 
   items PickingSlipItem[]
 
@@ -1204,10 +1292,10 @@ model PickingSlip {
 }
 
 model PickingSlipItem {
-  id            String      @id @default(cuid())
-  pickingSlipId String
-  pickingSlip   PickingSlip @relation(fields: [pickingSlipId], references: [id], onDelete: Cascade)
-  lineOrder     Int
+  id                   String      @id @default(cuid())
+  pickingSlipId        String
+  pickingSlip          PickingSlip @relation(fields: [pickingSlipId], references: [id], onDelete: Cascade)
+  lineOrder            Int
   // Liên kết tới đúng dòng PO gốc để đối chiếu sau này — không ràng buộc cứng (dòng PO có thể bị
   // xoá/nhập lại), null vẫn giữ được đầy đủ thông tin qua các cột snapshot bên dưới.
   poTrackingLineId     String?
@@ -1217,11 +1305,11 @@ model PickingSlipItem {
   customerItemCode     String?
   unit                 String?
   // "SL PO" và "SL còn lại chưa giao" TẠI THỜI ĐIỂM tạo phiếu — chỉ để đối chiếu, không tính lại.
-  poQuantitySnapshot      Decimal? @db.Decimal(14, 2)
-  remainingQtySnapshot    Decimal? @db.Decimal(14, 2)
-  poDateSnapshot          DateTime?
-  qtyToPick               Decimal  @db.Decimal(14, 2)
-  deliveryDate            DateTime?
+  poQuantitySnapshot   Decimal?    @db.Decimal(14, 2)
+  remainingQtySnapshot Decimal?    @db.Decimal(14, 2)
+  poDateSnapshot       DateTime?
+  qtyToPick            Decimal     @db.Decimal(14, 2)
+  deliveryDate         DateTime?
 
   @@index([pickingSlipId])
   @@map("picking_slip_items")

@@ -1,0 +1,74 @@
+import { z } from "zod";
+import { Prisma } from "@hoanggia/db";
+
+/**
+ * Biên bản hàng lỗi (anh Quân chốt 17/10/2026): số biên bản nhập tay theo số của công ty; chọn khách + phiếu đi hàng (hoặc
+ * ngày giao) + mặt hàng + SL lỗi; thông tin lỗi; người chịu trách nhiệm (NVKD và/hoặc Admin kinh doanh — tính vào KPI tháng
+ * của từng người) hoặc bộ phận khác; ảnh lỗi. Giải quyết xong thì đóng biên bản, ghi có sửa hoá đơn bán hàng không, sửa hoá
+ * đơn nào, sửa thế nào.
+ */
+export { DEFECT_OTHER_PARTIES } from "./defect-report-shared";
+
+const qty = z.coerce.number().positive("Số lượng lỗi phải lớn hơn 0").max(1e9);
+
+export const defectItemSchema = z.object({
+  slipItemId: z.string().trim().min(1).optional().nullable(),
+  itemCode: z.string().trim().max(100).optional().nullable(),
+  itemName: z.string().trim().min(1, "Thiếu tên mặt hàng").max(500),
+  unit: z.string().trim().max(50).optional().nullable(),
+  deliveredQty: z.coerce.number().min(0).max(1e12).optional().nullable(),
+  defectQty: qty,
+});
+
+const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Ngày không hợp lệ");
+
+export const defectBodySchema = z
+  .object({
+    reportNumber: z.string().trim().min(1, "Thiếu số biên bản").max(100),
+    reportDate: ymd,
+    customerCode: z.string().trim().max(100).optional().nullable(),
+    customerName: z.string().trim().min(1, "Thiếu khách hàng").max(500),
+    shipmentSlipId: z.string().trim().min(1).optional().nullable(),
+    deliveryDate: ymd.optional().nullable(),
+    description: z.string().trim().min(1, "Thiếu thông tin lỗi").max(5000),
+    items: z.array(defectItemSchema).min(1, "Chọn ít nhất 1 mặt hàng bị lỗi").max(100),
+    responsibleUserIds: z.array(z.string().min(1)).max(20).default([]),
+    otherResponsible: z.string().trim().max(200).optional().nullable(),
+  })
+  .refine((b) => b.responsibleUserIds.length > 0 || !!b.otherResponsible, {
+    message: "Chọn người hoặc bộ phận chịu trách nhiệm",
+    path: ["responsibleUserIds"],
+  })
+  .refine((b) => !!b.shipmentSlipId || !!b.deliveryDate, { message: "Chọn phiếu đi hàng hoặc nhập ngày giao hàng", path: ["deliveryDate"] });
+
+export type DefectBody = z.infer<typeof defectBodySchema>;
+
+export const closeSchema = z
+  .object({
+    action: z.literal("close"),
+    resolution: z.string().trim().min(1, "Ghi cách đã xử lý").max(5000),
+    invoiceAdjusted: z.boolean({ required_error: "Chọn có sửa hoá đơn bán hàng hay không" }),
+    adjustedInvoiceNumbers: z.string().trim().max(500).optional().nullable(),
+    invoiceAdjustNote: z.string().trim().max(5000).optional().nullable(),
+  })
+  .refine((b) => !b.invoiceAdjusted || (!!b.adjustedInvoiceNumbers && !!b.invoiceAdjustNote), {
+    message: "Có sửa hoá đơn thì ghi số hoá đơn và sửa như thế nào",
+    path: ["adjustedInvoiceNumbers"],
+  });
+
+/** Ngày "YYYY-MM-DD" theo giờ VN -> Date 0h VN. */
+export const vnDate = (s: string) => new Date(`${s}T00:00:00+07:00`);
+
+/** Phạm vi xem: ADMIN (mọi mức) thấy tất cả; NVKD chỉ biên bản mình chịu trách nhiệm. */
+export function defectScope(user: { id: string; role: string }): Prisma.DefectReportWhereInput {
+  return user.role === "ADMIN" ? {} : { responsibles: { some: { userId: user.id } } };
+}
+
+export const defectInclude = {
+  items: { orderBy: { id: "asc" as const } },
+  responsibles: { include: { user: { select: { id: true, name: true, role: true, accessLevel: true } } } },
+  photos: { select: { id: true }, orderBy: { createdAt: "asc" as const } },
+  shipmentSlip: { select: { id: true, slipNumber: true, slipDate: true } },
+  createdBy: { select: { name: true } },
+  closedBy: { select: { name: true } },
+} satisfies Prisma.DefectReportInclude;

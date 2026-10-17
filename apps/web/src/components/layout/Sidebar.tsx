@@ -19,6 +19,7 @@ import {
   Contact,
   Package,
   FileBarChart,
+  AlertTriangle,
 } from "lucide-react";
 import { SidebarBanner } from "./SidebarBanner";
 
@@ -37,10 +38,17 @@ export const NAV_ITEMS = [
   { href: "/targets", label: "Kế hoạch kinh doanh", icon: Target, adminOnly: false },
   { href: "/kpi", label: "Đánh giá KPI", icon: Award, adminOnly: false },
   { href: "/business-trips", label: "Đăng ký đi công tác", icon: Briefcase, adminOnly: false },
+  { href: "/defects", label: "Báo cáo hàng lỗi", icon: AlertTriangle, adminOnly: false },
   { href: "/admin/users", label: "Nhân viên", icon: Users, adminOnly: true },
 ];
 
-export function Sidebar({ role }: { role?: "ADMIN" | "SALES" }) {
+type AccessLevel = "FULL" | "OPERATOR" | "VIEWER";
+
+/** Mục adminOnly (trang Nhân viên) chỉ dành cho quản trị hệ thống (ADMIN mức FULL). */
+export const canSeeNavItem = (item: { adminOnly: boolean }, role?: "ADMIN" | "SALES", accessLevel?: AccessLevel) =>
+  !item.adminOnly || (role === "ADMIN" && (accessLevel ?? "FULL") === "FULL");
+
+export function Sidebar({ role, accessLevel }: { role?: "ADMIN" | "SALES"; accessLevel?: AccessLevel }) {
   const pathname = usePathname();
 
   return (
@@ -62,7 +70,7 @@ export function Sidebar({ role }: { role?: "ADMIN" | "SALES" }) {
 
       {/* Navigation List */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        {NAV_ITEMS.filter((item) => !item.adminOnly || role === "ADMIN").map((item) => {
+        {NAV_ITEMS.filter((item) => canSeeNavItem(item, role, accessLevel)).map((item) => {
           const active = pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href));
           const Icon = item.icon;
           return (

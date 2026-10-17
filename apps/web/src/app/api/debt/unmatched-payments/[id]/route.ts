@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@hoanggia/db";
-import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
+import { requireSystemAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  */
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const session = await requireAdmin();
+    const session = await requireSystemAdmin();
     const payment = await prisma.debtPayment.findUnique({ where: { id: params.id }, select: { matchStatus: true, note: true } });
     if (!payment) return NextResponse.json({ error: "Không tìm thấy khoản tiền về" }, { status: 404 });
     if (payment.matchStatus !== "UNMATCHED" && payment.matchStatus !== "PARTIAL") {

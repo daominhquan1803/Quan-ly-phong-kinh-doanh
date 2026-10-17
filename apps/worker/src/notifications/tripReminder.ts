@@ -98,7 +98,7 @@ export async function runTripReminder(): Promise<{ reportDue: number; nextStepDu
   // ---- 3) Quản trị viên: báo cáo chờ duyệt ----
   const pending = await prisma.businessTripRequest.count({ where: { status: "REPORTED" } });
   if (pending > 0) {
-    const admins = await prisma.user.findMany({ where: { role: "ADMIN", active: true }, select: { id: true } });
+    const admins = await prisma.user.findMany({ where: { role: "ADMIN", accessLevel: "FULL", active: true }, select: { id: true } });
     for (const a of admins) {
       const message = `${pending} báo cáo công tác đang chờ duyệt — chưa được tính vào Kế hoạch tuần/KPI.`;
       if (await notifyOncePerDay(a.id, "TRIP_REVIEW_PENDING", "Báo cáo công tác chờ duyệt", message, "/business-trips")) reviewPending++;

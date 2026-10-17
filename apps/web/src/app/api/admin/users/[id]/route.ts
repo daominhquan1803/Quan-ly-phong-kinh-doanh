@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@hoanggia/db";
-import { requireAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
+import { requireSystemAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +10,8 @@ const updateUserSchema = z.object({
   amisEmployeeCode: z.string().trim().max(50).optional().nullable(),
   quoteAssigneeCode: z.string().trim().max(50).optional().nullable(),
   role: z.enum(["ADMIN", "SALES"]).optional(),
+  // Mức quyền của tài khoản quản trị: FULL quản trị hệ thống, OPERATOR Admin kinh doanh, VIEWER chỉ xem.
+  accessLevel: z.enum(["FULL", "OPERATOR", "VIEWER"]).optional(),
   active: z.boolean().optional(),
   includeInSalesStats: z.boolean().optional(),
   notifyEmail: z.string().trim().email("Email nhận thông báo không hợp lệ").max(255).optional().nullable().or(z.literal("")),
@@ -19,7 +21,7 @@ const updateUserSchema = z.object({
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    await requireAdmin();
+    await requireSystemAdmin();
     const body = await req.json();
     const parsed = updateUserSchema.safeParse(body);
     if (!parsed.success) {
@@ -33,6 +35,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       amisEmployeeCode?: string | null;
       quoteAssigneeCode?: string | null;
       role?: "ADMIN" | "SALES";
+      accessLevel?: "FULL" | "OPERATOR" | "VIEWER";
       active?: boolean;
       includeInSalesStats?: boolean;
       notifyEmail?: string | null;
@@ -66,6 +69,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
 
     if (parsed.data.role !== undefined) data.role = parsed.data.role;
+    if (parsed.data.accessLevel !== undefined) data.accessLevel = parsed.data.accessLevel;
     if (parsed.data.active !== undefined) data.active = parsed.data.active;
     if (parsed.data.includeInSalesStats !== undefined) data.includeInSalesStats = parsed.data.includeInSalesStats;
     if (parsed.data.notifyEmail !== undefined) data.notifyEmail = parsed.data.notifyEmail?.trim() || null;
@@ -76,15 +80,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     // (vd hạ quyền hoặc khoá nốt người quản trị cuối cùng) — tránh tự khoá cả hệ thống.
     const resultingRole = parsed.data.role ?? target.role;
     const resultingActive = parsed.data.active ?? target.active;
-    const wasActiveAdmin = target.role === "ADMIN" && target.active;
-    const willBeActiveAdmin = resultingRole === "ADMIN" && resultingActive;
+    // "Quản trị" ở đây = quản trị hệ thống (ADMIN mức FULL) — Admin kinh doanh / chỉ xem không quản lý được nhân viên.
+    const resultingLevel = parsed.data.accessLevel ?? target.accessLevel;
+    const wasActiveAdmin = target.role === "ADMIN" && target.active && target.accessLevel === "FULL";
+    const willBeActiveAdmin = resultingRole === "ADMIN" && resultingActive && resultingLevel === "FULL";
     if (wasActiveAdmin && !willBeActiveAdmin) {
       const otherActiveAdmins = await prisma.user.count({
-        where: { role: "ADMIN", active: true, id: { not: params.id } },
+        where: { role: "ADMIN", accessLevel: "FULL", active: true, id: { not: params.id } },
       });
       if (otherActiveAdmins === 0) {
         return NextResponse.json(
-          { error: "Không thể thực hiện — hệ thống cần còn ít nhất 1 quản trị viên đang hoạt động" },
+          { error: "Không thể thực hiện — hệ thống cần còn ít nhất 1 quản trị hệ thống đang hoạt động" },
           { status: 400 }
         );
       }
@@ -98,6 +104,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         name: true,
         email: true,
         role: true,
+        accessLevel: true,
         active: true,
         amisEmployeeCode: true,
         quoteAssigneeCode: true,
@@ -118,7 +125,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const session = await requireAdmin();
+    const session = await requireSystemAdmin();
 
     if (session.user.id === params.id) {
       return NextResponse.json({ error: "Không thể tự xoá tài khoản đang đăng nhập" }, { status: 400 });
@@ -129,7 +136,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
 
     if (target.role === "ADMIN" && target.active) {
       const otherActiveAdmins = await prisma.user.count({
-        where: { role: "ADMIN", active: true, id: { not: params.id } },
+        where: { role: "ADMIN", accessLevel: "FULL", active: true, id: { not: params.id } },
       });
       if (otherActiveAdmins === 0) {
         return NextResponse.json(
