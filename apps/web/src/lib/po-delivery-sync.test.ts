@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeLineDeliveryFields, contentIndicatesNoLongerNeeded, allocateQtyAcrossLines } from "@hoanggia/db";
+import { computeLineDeliveryFields, contentIndicatesNoLongerNeeded, allocateQtyAcrossLines, excessBeyondBaseline } from "@hoanggia/db";
 
 describe("computeLineDeliveryFields", () => {
   it("cộng phần giao qua Phiếu đi hàng lên trên nền từ file PO tracking", () => {
@@ -146,5 +146,20 @@ describe("allocateQtyAcrossLines", () => {
   it("chỉ 1 dòng — nhận trọn vẹn (kể cả vượt capacity, dồn hết vào vì là dòng cuối)", () => {
     const result = allocateQtyAcrossLines(8, [{ lineId: "A", capacity: 5 }]);
     expect(result).toEqual([{ lineId: "A", qty: 8 }]);
+  });
+});
+
+describe("excessBeyondBaseline (phiếu trước mốc nhập file PO tracking)", () => {
+  it("file đã ghi 20.000 (phiếu 23/09), phiếu 28/09 giao 35.000 -> tính đủ 35.000", () => {
+    expect(excessBeyondBaseline(20000, 35000, 20000)).toBe(35000);
+  });
+  it("phiếu sớm nhất nằm trong nền -> không tính thêm", () => {
+    expect(excessBeyondBaseline(0, 20000, 20000)).toBe(0);
+  });
+  it("nền phủ 1 phần phiếu -> chỉ tính phần vượt", () => {
+    expect(excessBeyondBaseline(10000, 30000, 30000)).toBe(10000);
+  });
+  it("file đã ghi đủ cả 2 phiếu -> không tính thêm", () => {
+    expect(excessBeyondBaseline(30000, 30000, 60000)).toBe(0);
   });
 });

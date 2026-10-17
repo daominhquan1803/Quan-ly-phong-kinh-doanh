@@ -1135,6 +1135,9 @@ model PoDeliveryEvent {
   // lib/po-delivery-sync.ts).
   sourceShipmentSlipId String?
   sourceShipmentSlip   ShipmentSlip? @relation(fields: [sourceShipmentSlipId], references: [id], onDelete: Cascade)
+  // true = đợt giao từ Phiếu đi hàng có ngày TRƯỚC mốc nhập file PO tracking nhưng VƯỢT phần file đã ghi
+  // (file thiếu đợt giao đó) — vẫn tính vào dòng PO dù trước mốc (xem applyShipmentSlipDeliveries).
+  beyondBaseline       Boolean       @default(false)
 
   @@index([eventDate])
   @@index([salesEmployeeId, eventDate])

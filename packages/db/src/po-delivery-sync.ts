@@ -152,10 +152,13 @@ export function baselineSlipCutoff(batchCreatedAt: Date): Date {
   return new Date(Date.UTC(vn.getUTCFullYear(), vn.getUTCMonth(), vn.getUTCDate()) - VN_OFFSET_MS);
 }
 
+/** Đợt giao trước mốc chỉ được tính khi là phần VƯỢT nền (beyondBaseline). */
+const sinceFilter = (since?: Date) => (since ? { OR: [{ eventDate: { gte: since } }, { beyondBaseline: true }] } : {});
+
 export async function getSlipAggForAllLines(sinceEventDate?: Date): Promise<Map<string, SlipAgg>> {
   const rows = await prisma.poDeliveryEvent.groupBy({
     by: ["lineId"],
-    where: { sourceShipmentSlipId: { not: null }, ...(sinceEventDate ? { eventDate: { gte: sinceEventDate } } : {}) },
+    where: { sourceShipmentSlipId: { not: null }, ...sinceFilter(sinceEventDate) },
     _sum: { quantity: true, value: true },
   });
   return new Map(rows.map((r) => [r.lineId, { qty: Number(r._sum.quantity ?? 0), value: Number(r._sum.value ?? 0) }]));
@@ -163,7 +166,7 @@ export async function getSlipAggForAllLines(sinceEventDate?: Date): Promise<Map<
 
 async function getSlipAggForLine(lineId: string, sinceEventDate?: Date): Promise<SlipAgg> {
   const agg = await prisma.poDeliveryEvent.aggregate({
-    where: { lineId, sourceShipmentSlipId: { not: null }, ...(sinceEventDate ? { eventDate: { gte: sinceEventDate } } : {}) },
+    where: { lineId, sourceShipmentSlipId: { not: null }, ...sinceFilter(sinceEventDate) },
     _sum: { quantity: true, value: true },
   });
   return { qty: Number(agg._sum.quantity ?? 0), value: Number(agg._sum.value ?? 0) };
@@ -395,6 +398,28 @@ async function findCandidateLines(poCode: string, itemCode: string | null, itemN
   return [] as Awaited<ReturnType<typeof prisma.poTrackingLine.findMany<{ where: { poCode: string }; select: typeof CANDIDATE_LINE_SELECT }>>>;
 }
 
+/** Nền (file PO tracking) phủ `baseline` SL đầu tiên; phiếu có `prior` SL phiếu trước nó và SL `qty` thì phần vượt nền là bao nhiêu. */
+export const excessBeyondBaseline = (prior: number, qty: number, baseline: number) => Math.max(0, Math.min(qty, prior + qty - baseline));
+
+const itemGroupKey =(itemCode: string | null, itemName: string) => (itemCode ? stripItemCodeVersionSuffix(itemCode) : `name:${itemName}`);
+const sameItem = (a: { itemCode: string | null; itemName: string }, b: { itemCode: string | null; itemName: string }) =>
+  (!!a.itemCode && !!b.itemCode && stripItemCodeVersionSuffix(a.itemCode) === stripItemCodeVersionSuffix(b.itemCode)) || a.itemName === b.itemName;
+
+/** Tổng SL thực xuất của cùng PO + mặt hàng trên các phiếu KHÁC có ngày trước mốc và xếp TRƯỚC phiếu này (theo ngày, rồi số phiếu). */
+async function priorSlipQtyBeforeCutoff(item: ShipmentSlipDeliveryItem, cutoff: Date, slipDate: Date, slipNumber: string, slipId: string): Promise<number> {
+  const rows = await prisma.shipmentSlipItem.findMany({
+    where: { poSaleNumber: item.poSaleNumber, qtyActual: { gt: 0 }, shipmentSlip: { id: { not: slipId }, slipDate: { lt: cutoff, not: null } } },
+    select: { itemCode: true, itemName: true, qtyActual: true, shipmentSlip: { select: { slipDate: true, slipNumber: true } } },
+  });
+  let sum = 0;
+  for (const r of rows) {
+    const d = r.shipmentSlip.slipDate!;
+    const before = d < slipDate || (d.getTime() === slipDate.getTime() && r.shipmentSlip.slipNumber < slipNumber);
+    if (before && sameItem(r, item)) sum += Number(r.qtyActual);
+  }
+  return sum;
+}
+
 /**
  * Đồng bộ đợt giao từ 1 Phiếu đi hàng vào các dòng PO tracking tương ứng — khớp theo Số PO
  * (poSaleNumber = PoTrackingLine.poCode) + Mã hàng (hoặc Tên hàng nếu thiếu mã, xem
@@ -427,17 +452,16 @@ export async function applyShipmentSlipDeliveries(
   // hàng khác trong cùng phiếu nếu chúng cũng rơi vào cùng nhóm nhiều-dòng-cùng-mã.
   const allocatedThisRun = new Map<string, number>();
   let skippedBeforeBaseline = 0;
+  const thisSlip = await prisma.shipmentSlip.findUnique({ where: { id: slipId }, select: { slipNumber: true } });
+  // SL đã xét trong CHÍNH phiếu này cho từng nhóm (PO + mặt hàng) trước mốc — cộng vào phần "phiếu trước đó".
+  const preQtyThisRun = new Map<string, number>();
 
-  // "created" = đã ghi đợt giao; "skipped" = ngày phiếu TRƯỚC mốc nhập PO tracking của dòng (nền đã bao
-  // gồm, ghi thêm sẽ tính trùng doanh số — bug thật 17-21/09/2026); "noPrice" = thiếu đơn giá.
+  // "created" = đã ghi đợt giao; "noPrice" = thiếu đơn giá.
   async function createEvent(
-    line: { id: string; contractPrice: number | null; poValue: number; poQuantity: number | null; salesEmployeeId: string | null; baselineCutoff: Date | null },
-    qty: number
-  ): Promise<"created" | "skipped" | "noPrice"> {
-    if (line.baselineCutoff && (slipDate ?? new Date()) < line.baselineCutoff) {
-      skippedBeforeBaseline++;
-      return "skipped";
-    }
+    line: { id: string; contractPrice: number | null; poValue: number; poQuantity: number | null; salesEmployeeId: string | null },
+    qty: number,
+    beyondBaseline = false
+  ): Promise<"created" | "noPrice"> {
     const unitPrice =
       line.contractPrice != null
         ? line.contractPrice
@@ -454,6 +478,7 @@ export async function applyShipmentSlipDeliveries(
         value: qty * unitPrice,
         sequence: 0,
         sourceShipmentSlipId: slipId,
+        beyondBaseline,
       },
     });
     touchedLineIds.add(line.id);
@@ -481,11 +506,31 @@ export async function applyShipmentSlipDeliveries(
       continue;
     }
 
+    // Phiếu có ngày TRƯỚC mốc nhập file PO tracking: file (nền) đã ghi 1 phần đợt giao trước mốc, nhưng có thể
+    // THIẾU (bug 17/10/2026: file 03/10 thiếu nhiều phiếu cuối tháng 9 → dòng PO vẫn báo chưa giao/quá hạn).
+    // Nền coi như phủ các phiếu SỚM NHẤT; phiếu này chỉ ghi phần vượt nền (beyondBaseline).
+    let qty = item.qtyActual;
+    let beyond = false;
+    const cutoff = candidates[0].importBatch ? baselineSlipCutoff(candidates[0].importBatch.createdAt) : null;
+    if (cutoff && (slipDate ?? new Date()) < cutoff) {
+      const groupKey = `${item.poSaleNumber}::${itemGroupKey(item.itemCode, item.itemName)}`;
+      const baselineQty = candidates.reduce((s, c) => s + Number(c.baselineDeliveredQty ?? 0), 0);
+      const prior = (await priorSlipQtyBeforeCutoff(item, cutoff, slipDate!, thisSlip?.slipNumber ?? "", slipId)) + (preQtyThisRun.get(groupKey) ?? 0);
+      preQtyThisRun.set(groupKey, (preQtyThisRun.get(groupKey) ?? 0) + item.qtyActual);
+      qty = excessBeyondBaseline(prior, item.qtyActual, baselineQty);
+      if (qty <= 0) {
+        skippedBeforeBaseline++;
+        continue;
+      }
+      beyond = true;
+    }
+
     if (candidates.length === 1) {
       const line = candidates[0];
       const res = await createEvent(
-        { id: line.id, contractPrice: line.contractPrice != null ? Number(line.contractPrice) : null, poValue: Number(line.poValue), poQuantity: line.poQuantity != null ? Number(line.poQuantity) : null, salesEmployeeId: line.salesEmployeeId, baselineCutoff: line.importBatch ? baselineSlipCutoff(line.importBatch.createdAt) : null },
-        item.qtyActual
+        { id: line.id, contractPrice: line.contractPrice != null ? Number(line.contractPrice) : null, poValue: Number(line.poValue), poQuantity: line.poQuantity != null ? Number(line.poQuantity) : null, salesEmployeeId: line.salesEmployeeId },
+        qty,
+        beyond
       );
       if (res === "noPrice") {
         unmatchedItems.push(`${item.poSaleNumber} / ${item.itemCode ?? item.itemName} (không có đơn giá để tính giá trị)`);
@@ -512,14 +557,15 @@ export async function applyShipmentSlipDeliveries(
       allocCandidates.push({ lineId: c.id, capacity: Number(c.poQuantity) - used });
     }
 
-    const allocations = allocateQtyAcrossLines(item.qtyActual, allocCandidates);
+    const allocations = allocateQtyAcrossLines(qty, allocCandidates);
     let anyAllocated = false;
     let anyPriceMissing = false;
     for (const alloc of allocations) {
       const line = sorted.find((c) => c.id === alloc.lineId)!;
       const res = await createEvent(
-        { id: line.id, contractPrice: line.contractPrice != null ? Number(line.contractPrice) : null, poValue: Number(line.poValue), poQuantity: Number(line.poQuantity), salesEmployeeId: line.salesEmployeeId, baselineCutoff: line.importBatch ? baselineSlipCutoff(line.importBatch.createdAt) : null },
-        alloc.qty
+        { id: line.id, contractPrice: line.contractPrice != null ? Number(line.contractPrice) : null, poValue: Number(line.poValue), poQuantity: Number(line.poQuantity), salesEmployeeId: line.salesEmployeeId },
+        alloc.qty,
+        beyond
       );
       if (res === "created") anyAllocated = true;
       else if (res === "noPrice") anyPriceMissing = true;
