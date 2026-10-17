@@ -53,7 +53,7 @@ export function SlipTable({ isAdmin }: { isAdmin: boolean }) {
   async function handleResync() {
     if (
       !window.confirm(
-        "Đồng bộ lại toàn bộ Phiếu đi hàng với dữ liệu Tiến độ giao hàng hiện tại? Dùng khi số liệu giao hàng chưa cập nhật đúng sau khi upload phiếu."
+        "Khớp lại toàn bộ Phiếu đi hàng với các dòng PO trong Tiến độ giao hàng? (Không liên quan AMIS — số đi hàng chỉ lấy từ phiếu admin đã nhập.) Dùng khi số giao hàng chưa cập nhật đúng sau khi nhập phiếu."
       )
     ) {
       return;
@@ -64,7 +64,7 @@ export function SlipTable({ isAdmin }: { isAdmin: boolean }) {
     try {
       const res = await fetch("/api/shipment-slips/resync", { method: "POST" });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Không đồng bộ lại được");
+      if (!res.ok) throw new Error(json.error ?? "Không khớp lại được");
       setSyncResult(json);
       queryClient.invalidateQueries({ queryKey: ["shipment-slips"] });
       queryClient.invalidateQueries({ queryKey: ["shipping-status-summary"] });
@@ -133,10 +133,10 @@ export function SlipTable({ isAdmin }: { isAdmin: boolean }) {
               onClick={handleResync}
               disabled={syncing}
               className="flex items-center gap-1.5 rounded-xl border border-gray-200/90 bg-navy-50/70 px-4 py-2 text-xs font-semibold text-ink hover:border-gray-300 hover:bg-navy-50 disabled:opacity-50 transition-all shadow-sm"
-              title="Chạy lại việc khớp toàn bộ phiếu với dữ liệu Tiến độ giao hàng hiện tại"
+              title="Chạy lại việc khớp toàn bộ phiếu với các dòng PO trong Tiến độ giao hàng. Không dùng dữ liệu giao hàng của AMIS."
             >
               <RefreshCw className={syncing ? "h-3.5 w-3.5 animate-spin text-amber-500" : "h-3.5 w-3.5"} />
-              <span>{syncing ? "Đang đồng bộ..." : "Đồng bộ lại giao hàng"}</span>
+              <span>{syncing ? "Đang khớp lại..." : "Khớp lại phiếu với PO"}</span>
             </button>
           )}
           <Link
