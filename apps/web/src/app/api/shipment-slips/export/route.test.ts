@@ -96,10 +96,11 @@ describe("GET /api/shipment-slips/export", () => {
     expect(h.findMany).not.toHaveBeenCalled();
   });
 
-  it("NVKD chỉ xuất được phiếu của mình (scope createdById)", async () => {
+  it("NVKD xuất được toàn bộ phiếu như admin (không giới hạn theo người lập phiếu)", async () => {
     h.auth.mockResolvedValue({ user: { id: "u-tung", role: "SALES" } });
-    await get("from=2026-10-01&to=2026-10-09");
-    expect(h.findMany.mock.calls[0][0].where.createdById).toBe("u-tung");
+    const res = await get("from=2026-10-01&to=2026-10-09");
+    expect(res.status).toBe(200);
+    expect(h.findMany.mock.calls[0][0].where.createdById).toBeUndefined();
   });
 
   it("có từ khoá q: truy vấn thêm điều kiện tìm (số phiếu/khách/đơn/dòng hàng) giống danh sách phiếu + tên file có từ khoá", async () => {

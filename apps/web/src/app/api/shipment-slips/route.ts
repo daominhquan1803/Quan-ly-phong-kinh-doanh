@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@hoanggia/db";
-import { requireSession, scopeByOwner, UnauthorizedError } from "@/lib/rbac";
+import { requireSession, UnauthorizedError } from "@/lib/rbac";
 import { createShipmentSlipSchema } from "@/lib/validation/shipment-slip";
 import { slipItemMatch, slipSearchWhere } from "@/lib/shipment-slip-search";
 
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await requireSession();
+    await requireSession();
     const { searchParams } = new URL(req.url);
     const q = searchParams.get("q")?.trim();
 
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
 
     const slips = await prisma.shipmentSlip.findMany({
       where: {
-        ...scopeByOwner(session, "createdById"),
+        // Mọi người dùng (kể cả NVKD) xem + tìm được toàn bộ phiếu đi hàng (admin chốt 17/10/2026); chỉ đọc.
         ...slipSearchWhere(q),
       },
       orderBy: { createdAt: "desc" },

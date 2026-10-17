@@ -18,9 +18,6 @@ export default async function ShipmentSlipDetailPage({ params }: { params: { id:
   });
 
   if (!slip) notFound();
-  if (session.user.role !== "ADMIN" && slip.createdById !== session.user.id) {
-    redirect("/shipment-slips");
-  }
 
   return (
     <div className="space-y-6 max-w-5xl">
