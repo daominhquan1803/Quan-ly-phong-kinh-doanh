@@ -1,7 +1,7 @@
 import { createHash } from "crypto";
 import { readSheet, parseExcelDate, parseNumber } from "./excel-parser";
 import { normalizeCustomerCode } from "./debt-customer-match";
-import { normalizeVN } from "@hoanggia/db";
+import { paymentDescKey } from "./debt-payment-dedupe";
 
 export interface ParsedPaymentRow {
   rowNumber: number;
@@ -35,21 +35,29 @@ function computeSourceHash(fields: { paymentDate: Date | null; customerCode: str
  * khách hàng, Tên khách hàng, Mô tả giao dịch, Số tiền, (cột trống), Ghi chú. */
 const COL = { date: 0, customerCode: 1, customerName: 2, description: 3, amount: 4, note: 6 } as const;
 
-/** Tìm các số hoá đơn nhắc tới trong mô tả giao dịch, theo sau cụm "hóa đơn"/"hoa don" (không
- * dấu). Đệm về đủ 8 chữ số để khớp đúng định dạng Số hóa đơn thật (vd "00002337"). */
+const INVOICE_KEYWORD = /(?<![a-z0-9])(?:hoa don|hdon|hd|inv|invoice)(?![a-z])|(?<![a-z0-9])hd(?=\d)/g;
+
+/** Tìm các số hoá đơn nhắc tới trong mô tả giao dịch. Nhận cả viết tắt ("HĐ số 00002298", "HD 2148", "inv 123") và
+ * danh sách số cách nhau dấu phẩy/&/+/"và" ("hóa đơn 651,2202,2093"). Chỉ lấy dãy số NGAY SAU từ khoá, bỏ số trong ngày
+ * tháng ("hóa đơn 10/2026"). Khách hay ghi 4 số cuối ("2021") nên đệm về 8 chữ số ("00002021"); khi so khớp dùng
+ * `invoiceKey` (bỏ số 0 đầu) nên hoá đơn 7 chữ số cũ trong app vẫn khớp. */
 export function extractInvoiceNumbersFromDescription(description: string | null): string[] {
   if (!description) return [];
-  const norm = normalizeVN(description);
-  const keyword = "hoa don";
+  const t = paymentDescKey(description); // bỏ dấu + hạ chữ thường, GIỮ dấu phẩy/chấm (normalizeVN xoá hết nên không dùng)
   const results: string[] = [];
-  let searchFrom = 0;
-  while (true) {
-    const idx = norm.indexOf(keyword, searchFrom);
-    if (idx === -1) break;
-    const tail = description.slice(idx + keyword.length, idx + keyword.length + 60);
-    const digitGroups = tail.match(/\d{2,8}/g) ?? [];
-    for (const g of digitGroups) results.push(g.padStart(8, "0"));
-    searchFrom = idx + keyword.length;
+  for (const m of t.matchAll(INVOICE_KEYWORD)) {
+    let pos = (m.index ?? 0) + m[0].length;
+    pos += (t.slice(pos).match(/^\s*(?:so|no|number)?\s*[:#.\-]?\s*/) ?? [""])[0].length;
+    for (;;) {
+      const num = t.slice(pos).match(/^\d{2,8}(?!\d)/);
+      if (!num) break;
+      pos += num[0].length;
+      if (/^[\/.]\d/.test(t.slice(pos))) break; // "10/2026", "12.5": ngày tháng/số thập phân, không phải số hoá đơn
+      results.push(num[0].padStart(8, "0"));
+      const sep = t.slice(pos).match(/^(?:\s*[,;&+]\s*|\s+(?:va|and)\s+|\s+(?=\d{4,8}(?!\d)))/);
+      if (!sep) break;
+      pos += sep[0].length;
+    }
   }
   return Array.from(new Set(results));
 }

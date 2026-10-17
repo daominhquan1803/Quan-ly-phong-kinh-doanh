@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { planPaymentAllocation, AllocationCandidateInvoice } from "./debt-payment-allocation";
+import { planPaymentAllocation, invoiceKey, AllocationCandidateInvoice } from "./debt-payment-allocation";
 
 function inv(id: string, remaining: number, invoiceNumber: string | null, daysAgo: number): AllocationCandidateInvoice {
   return { id, remaining, invoiceNumber, invoiceDate: new Date(Date.now() - daysAgo * 86400000) };
@@ -88,6 +88,16 @@ describe("planPaymentAllocation", () => {
     const plan = planPaymentAllocation({ amount: 800, candidateInvoiceNumbers: ["00000003"] }, invoices);
     expect(plan.allocations).toHaveLength(0);
     expect(plan.unresolvedNumbers).toEqual(["00000003"]);
+  });
+
+  it("khách ghi 4 số cuối ('2021' -> 00002021) khớp hoá đơn cũ trong app chỉ 7 chữ số ('0002021') và hoá đơn 8 chữ số", () => {
+    const invoices = [inv("old7", 500, "0002021", 20), inv("other", 900, "00000007", 5)];
+    const plan = planPaymentAllocation({ amount: 500, candidateInvoiceNumbers: ["00002021"] }, invoices);
+    expect(plan.allocations).toEqual([{ invoiceId: "old7", amount: 500, matchMethod: "INVOICE_NUMBER" }]);
+    expect(plan.unresolvedNumbers).toEqual([]);
+    expect(invoiceKey("00002021")).toBe(invoiceKey("2021"));
+    expect(invoiceKey("BH0126.7053")).toBe(invoiceKey("bh0126.7053"));
+    expect(invoiceKey("000")).toBe("0");
   });
 
   it("khách ghi số HĐ CŨ nhưng hoá đơn mới đã thay thế -> khớp vào hoá đơn mới (supersedes)", () => {

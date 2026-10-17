@@ -72,6 +72,27 @@ describe("extractInvoiceNumbersFromDescription", () => {
     ]);
   });
 
+  it("nhận viết tắt HĐ / HD / inv (nội dung thật của khách)", () => {
+    expect(extractInvoiceNumbersFromDescription("CÔNG TY CỔ PHẦN TRÀNG THI thanh toán nợ tiền mua hàng theo HĐ số 00002298")).toEqual(["00002298"]);
+    expect(extractInvoiceNumbersFromDescription("Công ty TNHH Cầu Vồng Việt TT cho cty Hoang Gia HD 2148")).toEqual(["00002148"]);
+    expect(extractInvoiceNumbersFromDescription("TT inv 2021 va 2022")).toEqual(["00002021", "00002022"]);
+    expect(extractInvoiceNumbersFromDescription("thanh toan HD2148")).toEqual(["00002148"]);
+    expect(extractInvoiceNumbersFromDescription("hoa don so: 1189")).toEqual(["00001189"]);
+  });
+
+  it("không lấy nhầm: từ khác bắt đầu bằng 'hd' (HDSD), số trong ngày tháng, số sau từ khác", () => {
+    expect(extractInvoiceNumbersFromDescription("TU 30 PT GT DON HANG SO 56 XNDH 2026 TRANG THI HG VV MUA TO HDSD")).toEqual([]);
+    expect(extractInvoiceNumbersFromDescription("thanh toan hoa don 00002972 ngay 10/10/2026")).toEqual(["00002972"]);
+    expect(extractInvoiceNumbersFromDescription("thanh toan hoa don thang 10/2026 theo PO 4500012345")).toEqual([]);
+    expect(extractInvoiceNumbersFromDescription("hoa don 00002972 PO 4500012345")).toEqual(["00002972"]);
+  });
+
+  it("danh sách số cách nhau dấu phẩy / & / khoảng trắng; nội dung viết hoa + có dấu (kể cả dạng tổ hợp)", () => {
+    expect(extractInvoiceNumbersFromDescription("HOÁ ĐƠN 2532 & 2531, 2618")).toEqual(["00002532", "00002531", "00002618"]);
+    expect(extractInvoiceNumbersFromDescription("hóa đơn 00002532 00002531")).toEqual(["00002532", "00002531"]);
+    expect(extractInvoiceNumbersFromDescription("hóa đơn 2021".normalize("NFD"))).toEqual(["00002021"]);
+  });
+
   it("đệm về đủ 8 chữ số khi số hoá đơn viết ngắn", () => {
     expect(extractInvoiceNumbersFromDescription("tt tien in tem hoa don 651,2202,2093")).toEqual([
       "00000651",

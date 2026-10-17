@@ -2,7 +2,7 @@
 // Dùng chung cho route nhập hoá đơn (api/debt/import/new-invoices) và script sửa dữ liệu. Chỉ import @hoanggia/db
 // + file thuần bằng đường dẫn tương đối để chạy được bằng tsx trong container worker.
 import { prisma, Prisma } from "@hoanggia/db";
-import { planPaymentAllocation } from "./debt-payment-allocation";
+import { planPaymentAllocation, invoiceKey } from "./debt-payment-allocation";
 import { extractInvoiceNumbersFromDescription } from "./debt-payments-parser";
 import { isFuzzyDuplicate, paymentDescKey } from "./debt-payment-dedupe";
 
@@ -137,11 +137,14 @@ export async function releaseGuessedAllocations(db: Db, paymentId: string): Prom
   const cited = extractInvoiceNumbersFromDescription(p.rawDescription);
   if (cited.length === 0) return 0;
   const invoices = await db.debtInvoice.findMany({ where: { customerCode: p.customerCode }, select: { invoiceNumber: true, supersedes: true } });
-  const known = new Set(invoices.flatMap((i) => [i.invoiceNumber, ...(i.supersedes ?? [])]).filter((n): n is string => !!n));
-  if (cited.every((n) => known.has(n))) return 0;
+  const known = new Set(invoices.flatMap((i) => [i.invoiceNumber, ...(i.supersedes ?? [])]).filter((n): n is string => !!n).map(invoiceKey));
+  if (cited.every((n) => known.has(invoiceKey(n)))) return 0;
+  const citedKeys = new Set(cited.map(invoiceKey));
   // Chỉ nhả khoản FIFO (đoán yếu). Khoản "đúng số tiền" của 1 hoá đơn là căn cứ mạnh nên giữ.
   const guessed = p.allocations.filter(
-    (a) => a.matchMethod === "FIFO" && !cited.some((n) => a.invoice.invoiceNumber === n || (a.invoice.supersedes ?? []).includes(n))
+    (a) =>
+      a.matchMethod === "FIFO" &&
+      ![a.invoice.invoiceNumber, ...(a.invoice.supersedes ?? [])].some((n) => !!n && citedKeys.has(invoiceKey(n)))
   );
   if (guessed.length === 0) return 0;
   await db.$transaction(

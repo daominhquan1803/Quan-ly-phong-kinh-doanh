@@ -34,6 +34,15 @@ function byInvoiceDateAsc(a: AllocationCandidateInvoice, b: AllocationCandidateI
   return a.id.localeCompare(b.id);
 }
 
+/**
+ * Khoá so sánh số hoá đơn: số thuần chữ số bỏ số 0 đứng đầu ("00002021" = "0002021" = "2021") — khách hay ghi 4 số cuối,
+ * và hoá đơn cũ trong app có khi chỉ 7 chữ số; số có chữ (vd "BH0126.7053") so khớp nguyên văn không phân biệt hoa/thường.
+ */
+export function invoiceKey(n: string): string {
+  const s = n.trim();
+  return /^\d+$/.test(s) ? s.replace(/^0+(?=\d)/, "") : s.toUpperCase();
+}
+
 const numbersOf = (i: AllocationCandidateInvoice): string[] => [i.invoiceNumber, ...(i.supersedes ?? [])].filter((n): n is string => !!n);
 
 /** Trừ dần `amount` lần lượt vào các hoá đơn trong `targets` (đã sắp xếp sẵn) theo remaining còn
@@ -86,16 +95,17 @@ export function planPaymentAllocation(
   // 1) Khớp theo số hoá đơn nhắc trong mô tả — trừ vào các hoá đơn khớp trước (sắp cũ->mới nếu
   // khớp nhiều hoá đơn cùng lúc), tiền dư ra (nếu có) chảy tiếp sang FIFO ở bước dưới.
   if (cited.length > 0) {
-    const matched = unpaid.filter((i) => numbersOf(i).some((n) => cited.includes(n)));
+    const citedKeys = new Set(cited.map(invoiceKey));
+    const matched = unpaid.filter((i) => numbersOf(i).some((n) => citedKeys.has(invoiceKey(n))));
     if (matched.length > 0) {
-      for (const i of matched) for (const n of numbersOf(i)) if (cited.includes(n)) matchedNumbers.add(n);
+      for (const i of matched) for (const n of numbersOf(i)) if (citedKeys.has(invoiceKey(n))) matchedNumbers.add(invoiceKey(n));
       const step = consumeFifo(remaining, matched, "INVOICE_NUMBER");
       allocations = allocations.concat(step.allocations);
       remaining = step.remaining;
       usedIds = new Set(step.allocations.map((a) => a.invoiceId));
     }
   }
-  const unresolvedNumbers = cited.filter((n) => !matchedNumbers.has(n));
+  const unresolvedNumbers = cited.filter((n) => !matchedNumbers.has(invoiceKey(n)));
   // Có số hoá đơn không gán được -> dừng ở đây, không đoán.
   const guessAllowed = unresolvedNumbers.length === 0;
 
