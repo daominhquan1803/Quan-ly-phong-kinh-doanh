@@ -62,6 +62,14 @@ export interface ReportNewCustomer {
   createdAt: Date;
 }
 
+/** Doanh số đi hàng so với KPI (chỉ tiêu doanh số tháng). Báo cáo tháng: cả tháng; báo cáo tuần: luỹ kế tháng chứa cuối tuần, tới hết tuần. */
+export interface ReportKpi {
+  /** vd "Tháng 10/2026" hoặc "Luỹ kế tháng 10/2026 (01/10–18/10)". */
+  periodLabel: string;
+  /** Dòng đầu là "Cả phòng" nếu người xem thấy cả phòng; các dòng sau theo tên nhân viên. */
+  rows: { employee: string; delivered: number; target: number }[];
+}
+
 export interface ReportData {
   type: ReportType;
   periods: ReportPeriod[];
@@ -79,6 +87,7 @@ export interface ReportData {
     bucketLabels: string[];
     rows: { employee: string; planned: number[]; collected: number[] }[];
   };
+  kpi: ReportKpi;
 }
 
 const isProductionCode = (code: string | null) => {
@@ -335,6 +344,43 @@ export async function getReportData(opts: {
   if (totalLabel) planRows.push({ employee: totalLabel, ...emit(totalLabel, null) });
   for (const e of employees) planRows.push({ employee: e.name, ...emit(nameById.get(e.id)!, e.id) });
 
+  // ---- Doanh số đi hàng so với KPI ----
+  // Tháng: dùng luôn số đã gom ở trên. Tuần: KPI là chỉ tiêu THÁNG nên so luỹ kế tháng (chứa ngày cuối tuần) tới hết tuần.
+  const deliveredBy = new Map<string, number>();
+  const targetBy = new Map<string, number>();
+  let kpiLabel: string;
+  if (type === "month") {
+    for (const id of empIds) {
+      deliveredBy.set(id, acc.get(`${id}|delivered`)?.[0] ?? 0);
+      targetBy.set(id, acc.get(`${id}|target`)?.[0] ?? 0);
+    }
+    kpiLabel = `Tháng ${current.label}`;
+  } else {
+    const lastDay = new Date(current.end.getFullYear(), current.end.getMonth(), current.end.getDate() - 1);
+    const monthStart = new Date(lastDay.getFullYear(), lastDay.getMonth(), 1);
+    const monthEnd = new Date(lastDay.getFullYear(), lastDay.getMonth() + 1, 1);
+    const upto = current.end < monthEnd ? current.end : monthEnd;
+    const [mtdEvents, monthTargets] = await Promise.all([
+      prisma.poDeliveryEvent.findMany({
+        where: { eventDate: { gte: monthStart, lt: upto }, salesEmployeeId: { in: empIds } },
+        select: { salesEmployeeId: true, value: true, eventDate: true },
+      }),
+      prisma.salesTarget.findMany({ where: { employeeId: { in: empIds }, year: monthStart.getFullYear(), month: monthStart.getMonth() + 1 } }),
+    ]);
+    for (const ev of mtdEvents) {
+      if (!ev.salesEmployeeId || ev.eventDate < monthStart || ev.eventDate >= upto) continue;
+      deliveredBy.set(ev.salesEmployeeId, (deliveredBy.get(ev.salesEmployeeId) ?? 0) + Number(ev.value));
+    }
+    for (const t of monthTargets) targetBy.set(t.employeeId, Number(t.targetRevenue));
+    const lastShown = new Date(upto.getFullYear(), upto.getMonth(), upto.getDate() - 1);
+    kpiLabel = `Luỹ kế tháng ${pad(monthStart.getMonth() + 1)}/${monthStart.getFullYear()} (${dm(monthStart)}–${dm(lastShown)})`;
+  }
+  const sumOver = (m: Map<string, number>) => empIds.reduce((s, id) => s + (m.get(id) ?? 0), 0);
+  const kpiRows: ReportKpi["rows"] = [
+    ...(totalLabel ? [{ employee: totalLabel, delivered: sumOver(deliveredBy), target: sumOver(targetBy) }] : []),
+    ...employees.map((e) => ({ employee: e.name, delivered: deliveredBy.get(e.id) ?? 0, target: targetBy.get(e.id) ?? 0 })),
+  ];
+
   return {
     type,
     periods,
@@ -347,5 +393,6 @@ export async function getReportData(opts: {
     newCustomers: newCustomerList,
     overdueInvoices: snap.overdueInvoices,
     plan: { bucketLabels: planBuckets.map((b) => b.label), rows: planRows },
+    kpi: { periodLabel: kpiLabel, rows: kpiRows },
   };
 }

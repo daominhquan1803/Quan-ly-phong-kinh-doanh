@@ -1,5 +1,5 @@
 import ExcelJS from "exceljs";
-import { embedLogo, addCompanyHeaderLines, NAVY, HEADER_FILL, THIN_BOX } from "@/lib/excel-brand";
+import { embedLogo, addCompanyHeaderLines, NAVY, THIN_BOX } from "@/lib/excel-brand";
 import { DEBT_STATUS_LABEL } from "@/lib/debt-status";
 import { injectCharts, type ChartSpec } from "@/lib/excel-charts";
 import type { ReportData, ReportMetricDef } from "@/lib/report-metrics";
@@ -8,10 +8,24 @@ const VND_FMT = "#,##0";
 const NUM_FMT = "#,##0.##";
 const PCT_POINT_FMT = '0.0"%"'; // giá trị đã là "điểm phần trăm" (12.5 = 12,5%)
 const CHANGE_FMT = "+0.0%;-0.0%;0.0%"; // % tăng giảm so kỳ trước (giá trị là phân số)
+const RATIO_FMT = "0.0%"; // % đạt KPI (giá trị là phân số)
 const DATE_FMT = "dd/mm/yyyy";
 const GREEN = "FF15803D";
 const RED = "FFC8102E";
+const AMBER = "FFB45309";
+const GRAY_TEXT = "FF6B7280";
+const LINE = "FFD5DBE6";
+const ZEBRA = "FFF6F8FC";
+const TOTAL_FILL = "FFE3ECFA";
 const DATA = "Dữ liệu";
+
+const BOX_LIGHT: Partial<ExcelJS.Borders> = {
+  top: { style: "thin", color: { argb: LINE } },
+  left: { style: "thin", color: { argb: LINE } },
+  bottom: { style: "thin", color: { argb: LINE } },
+  right: { style: "thin", color: { argb: LINE } },
+};
+const solid = (argb: string): ExcelJS.Fill => ({ type: "pattern", pattern: "solid", fgColor: { argb } });
 
 const colLetter = (n: number): string => {
   let s = "";
@@ -25,12 +39,17 @@ const colLetter = (n: number): string => {
 
 const unitFmt = (m: ReportMetricDef) => (m.unit === "pct" ? PCT_POINT_FMT : m.unit === "count" ? VND_FMT : VND_FMT);
 
-function headerCell(cell: ExcelJS.Cell, value: string) {
-  cell.value = value;
-  cell.font = { bold: true, color: { argb: NAVY } };
-  cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: HEADER_FILL } };
+/** Tiêu đề cột: nền xanh navy, chữ trắng đậm — dùng chung mọi sheet cho đồng nhất. */
+function headerStyle(cell: ExcelJS.Cell) {
+  cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+  cell.fill = solid(NAVY);
   cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
   cell.border = THIN_BOX;
+}
+
+function headerCell(cell: ExcelJS.Cell, value: string) {
+  cell.value = value;
+  headerStyle(cell);
 }
 
 function changeRules(sheet: ExcelJS.Worksheet, ref: string, priority = 1) {
@@ -43,10 +62,74 @@ function changeRules(sheet: ExcelJS.Worksheet, ref: string, priority = 1) {
   });
 }
 
+/** Màu chữ % đạt KPI: >= 100% xanh, 70–100% cam, dưới 70% đỏ. */
+function kpiRules(sheet: ExcelJS.Worksheet, ref: string, priority: number) {
+  sheet.addConditionalFormatting({
+    ref,
+    rules: [
+      { type: "cellIs", operator: "greaterThan", formulae: [0.99999], priority, style: { font: { color: { argb: GREEN }, bold: true } } },
+      { type: "cellIs", operator: "between", formulae: [0.7, 0.99999], priority: priority + 1, style: { font: { color: { argb: AMBER }, bold: true } } },
+      { type: "cellIs", operator: "lessThan", formulae: [0.7], priority: priority + 2, style: { font: { color: { argb: RED }, bold: true } } },
+    ],
+  });
+}
+
+/** Tiêu đề một khu trong Dashboard (chữ navy đậm, gạch chân xanh). */
+function sectionTitle(sheet: ExcelJS.Worksheet, row: number, col1: number, col2: number, value: ExcelJS.CellValue) {
+  sheet.mergeCells(row, col1, row, col2);
+  const c = sheet.getCell(row, col1);
+  c.value = value;
+  c.font = { bold: true, size: 13, color: { argb: NAVY } };
+  c.alignment = { vertical: "middle" };
+  for (let k = col1; k <= col2; k++) sheet.getCell(row, k).border = { bottom: { style: "medium", color: { argb: NAVY } } };
+  sheet.getRow(row).height = 24;
+}
+
+/** Thẻ số lớn (KPI card): dòng nhãn nhỏ, dòng số lớn, dòng ghi chú. */
+function card(
+  sheet: ExcelJS.Worksheet,
+  row: number,
+  col1: number,
+  col2: number,
+  opts: { label: string; value: ExcelJS.CellValue; fmt: string; note: string; accent: string }
+) {
+  for (let k = 0; k < 3; k++) sheet.mergeCells(row + k, col1, row + k, col2);
+  const fill = solid("FFF4F7FC");
+  const label = sheet.getCell(row, col1);
+  label.value = opts.label;
+  label.font = { bold: true, size: 10, color: { argb: GRAY_TEXT } };
+  label.alignment = { horizontal: "center", vertical: "middle" };
+  const value = sheet.getCell(row + 1, col1);
+  value.value = opts.value;
+  value.numFmt = opts.fmt;
+  value.font = { bold: true, size: 24, color: { argb: opts.accent } };
+  value.alignment = { horizontal: "center", vertical: "middle" };
+  const note = sheet.getCell(row + 2, col1);
+  note.value = opts.note;
+  note.font = { italic: true, size: 9, color: { argb: GRAY_TEXT } };
+  note.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+  for (let k = 0; k < 3; k++) {
+    for (let c = col1; c <= col2; c++) {
+      const cell = sheet.getCell(row + k, c);
+      cell.fill = fill;
+      cell.border = {
+        ...(k === 0 ? { top: { style: "thick", color: { argb: opts.accent } } } : {}),
+        left: c === col1 ? { style: "thin", color: { argb: LINE } } : undefined,
+        right: c === col2 ? { style: "thin", color: { argb: LINE } } : undefined,
+        bottom: k === 2 ? { style: "thin", color: { argb: LINE } } : undefined,
+      };
+    }
+  }
+  sheet.getRow(row).height = 20;
+  sheet.getRow(row + 1).height = 40;
+  sheet.getRow(row + 2).height = 20;
+}
+
 /**
  * Dựng file Excel báo cáo tuần/tháng. Sheet "Dashboard" có 2 ô chọn (Nhân viên, Chỉ số) — mọi số trên
  * Dashboard là công thức SUMIFS lên sheet "Dữ liệu" nên đổi ô chọn là số đổi theo (Excel tự tính lại
- * khi mở, `fullCalcOnLoad`); kèm giá trị tính sẵn cho trình xem không chạy công thức.
+ * khi mở, `fullCalcOnLoad`); kèm giá trị tính sẵn cho trình xem không chạy công thức. Đầu Dashboard có
+ * khối "Doanh số đi hàng so với KPI" (4 thẻ số + bảng từng nhân viên, thanh tiến độ).
  */
 async function buildWorkbookAndCharts(data: ReportData): Promise<{ workbook: ExcelJS.Workbook; charts: ChartSpec[] }> {
   const charts: ChartSpec[] = [];
@@ -63,7 +146,7 @@ async function buildWorkbookAndCharts(data: ReportData): Promise<{ workbook: Exc
     rows.find((r) => r.employee === employee && r.metricKey === key)?.values[i] ?? null;
 
   // ========== Sheet Dashboard (tạo trước để đứng đầu) ==========
-  const dash = wb.addWorksheet("Dashboard", { views: [{ showGridLines: false }] });
+  const dash = wb.addWorksheet("Dashboard", { views: [{ showGridLines: false, zoomScale: 90 }] });
   const dataSheet = wb.addWorksheet(DATA);
   const debtSheet = wb.addWorksheet("Công nợ");
   const overdueSheet = wb.addWorksheet("HĐ quá hạn");
@@ -99,7 +182,10 @@ async function buildWorkbookAndCharts(data: ReportData): Promise<{ workbook: Exc
         c.numFmt = CHANGE_FMT;
       }
     }
-    for (let c = 1; c <= 9; c++) dataSheet.getCell(dr, c).border = THIN_BOX;
+    for (let c = 1; c <= 9; c++) {
+      dataSheet.getCell(dr, c).border = BOX_LIGHT;
+      if (dr % 2 === 1) dataSheet.getCell(dr, c).fill = solid(ZEBRA);
+    }
     dr++;
   }
   const lastData = Math.max(dr - 1, 2);
@@ -113,22 +199,132 @@ async function buildWorkbookAndCharts(data: ReportData): Promise<{ workbook: Exc
   metrics.forEach((m, i) => (listSheet.getCell(i + 1, 2).value = m.label));
 
   // ========== Dashboard ==========
-  [24, 40, 18, 18, 18, 13, 13, 3, 26, 18, 18, 18, 13, 13].forEach((w, i) => (dash.getColumn(i + 1).width = w));
+  // A nhóm | B chỉ số | C-E ba kỳ | F-G % so kỳ trước || H cách | I nhân viên | J-L ba kỳ | M-N %.
+  [13, 38, 17, 17, 17, 11, 11, 2, 24, 17, 17, 17, 11, 11].forEach((w, i) => (dash.getColumn(i + 1).width = w));
+  dash.pageSetup = { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 };
   await embedLogo(wb, dash);
   let r = addCompanyHeaderLines(dash, 1, 3, 5);
   r++;
+  // Biểu ngữ tiêu đề
   dash.mergeCells(r, 1, r, 14);
-  dash.getCell(r, 1).value = `BÁO CÁO ${typeLabel} — ${cur.label}`;
-  dash.getCell(r, 1).font = { bold: true, size: 18, color: { argb: NAVY } };
-  dash.getCell(r, 1).alignment = { horizontal: "center" };
+  const banner = dash.getCell(r, 1);
+  banner.value = `BÁO CÁO ${typeLabel} — ${cur.label}`;
+  banner.font = { bold: true, size: 20, color: { argb: "FFFFFFFF" } };
+  banner.fill = solid(NAVY);
+  banner.alignment = { horizontal: "center", vertical: "middle" };
+  dash.getRow(r).height = 38;
   r++;
   dash.mergeCells(r, 1, r, 14);
   const asOfText = data.asOf ? `chốt cuối ngày ${data.asOf.toLocaleDateString("vi-VN")}` : "số hiện tại";
-  dash.getCell(r, 1).value = `Xuất lúc ${data.generatedAt.toLocaleString("vi-VN")} — công nợ ${asOfText}. So sánh với 2 ${data.type === "month" ? "tháng" : "tuần"} trước.`;
-  dash.getCell(r, 1).font = { italic: true, color: { argb: "FF6B7280" } };
-  dash.getCell(r, 1).alignment = { horizontal: "center" };
+  const sub = dash.getCell(r, 1);
+  sub.value = `Xuất lúc ${data.generatedAt.toLocaleString("vi-VN")} — công nợ ${asOfText}. So sánh với 2 ${data.type === "month" ? "tháng" : "tuần"} trước.`;
+  sub.font = { italic: true, size: 10, color: { argb: GRAY_TEXT } };
+  sub.alignment = { horizontal: "center", vertical: "middle" };
+  dash.getRow(r).height = 20;
   r += 2;
 
+  // ---- Khối 1: Doanh số đi hàng so với KPI ----
+  const kpiRows = data.kpi.rows;
+  const kpiTotal = kpiRows[0]; // "Cả phòng" nếu có, không thì chính người xem
+  sectionTitle(dash, r, 1, 14, `DOANH SỐ ĐI HÀNG SO VỚI KPI — ${data.kpi.periodLabel}`);
+  r++;
+  const cardRow = r + 1;
+  r = cardRow;
+  const pctOf = (delivered: number, target: number) => (target > 0 ? delivered / target : "");
+  const diff = kpiTotal ? kpiTotal.delivered - kpiTotal.target : 0;
+  const achieved = kpiTotal && kpiTotal.target > 0 ? kpiTotal.delivered / kpiTotal.target : null;
+  const accentPct = achieved === null ? GRAY_TEXT : achieved >= 1 ? GREEN : achieved >= 0.7 ? AMBER : RED;
+  card(dash, cardRow, 1, 2, {
+    label: data.totalLabel ? "TỔNG DOANH SỐ ĐI HÀNG (CẢ PHÒNG)" : "TỔNG DOANH SỐ ĐI HÀNG",
+    value: kpiTotal?.delivered ?? 0,
+    fmt: '#,##0" đ"',
+    note: data.kpi.periodLabel,
+    accent: NAVY,
+  });
+  card(dash, cardRow, 3, 5, {
+    label: "KPI — CHỈ TIÊU DOANH SỐ THÁNG",
+    value: kpiTotal?.target ?? 0,
+    fmt: '#,##0" đ"',
+    note: data.type === "month" ? "Tổng chỉ tiêu các nhân viên" : "Báo cáo tuần so luỹ kế tháng với chỉ tiêu cả tháng",
+    accent: "FF1D4ED8",
+  });
+  // Thẻ % đạt: công thức tham chiếu 2 thẻ trên để đổi số là đổi theo.
+  card(dash, cardRow, 6, 10, {
+    label: "ĐẠT SO VỚI KPI",
+    value: { formula: `IF(C${cardRow + 1}=0,"",A${cardRow + 1}/C${cardRow + 1})`, result: achieved === null ? "" : achieved },
+    fmt: RATIO_FMT,
+    note: achieved === null ? "Chưa đặt chỉ tiêu" : achieved >= 1 ? "Đã đạt / vượt KPI" : "Chưa đạt KPI",
+    accent: accentPct,
+  });
+  card(dash, cardRow, 11, 14, {
+    label: diff >= 0 ? "VƯỢT KPI" : "CÒN THIẾU SO VỚI KPI",
+    value: { formula: `ABS(A${cardRow + 1}-C${cardRow + 1})`, result: Math.abs(diff) },
+    fmt: '#,##0" đ"',
+    note: diff >= 0 ? "Doanh số đi hàng trừ KPI" : "KPI trừ doanh số đi hàng",
+    accent: diff >= 0 ? GREEN : RED,
+  });
+  r = cardRow + 4;
+
+  // ---- Bảng KPI theo nhân viên ----
+  const kHead = r;
+  headerCell(dash.getCell(kHead, 1), "Hạng");
+  headerCell(dash.getCell(kHead, 2), "Nhân viên");
+  headerCell(dash.getCell(kHead, 3), "Doanh số đi hàng");
+  headerCell(dash.getCell(kHead, 4), "KPI (chỉ tiêu)");
+  headerCell(dash.getCell(kHead, 5), "Còn thiếu / vượt");
+  dash.mergeCells(kHead, 6, kHead, 7);
+  headerCell(dash.getCell(kHead, 6), "% đạt KPI");
+  headerStyle(dash.getCell(kHead, 7)); // ô phụ của vùng gộp: chỉ tô kiểu, không ghi giá trị (sẽ ghi đè ô chính)
+  dash.mergeCells(kHead, 9, kHead, 14);
+  headerCell(dash.getCell(kHead, 9), "Tiến độ so với KPI (mỗi ô vuông = 5%)");
+  for (let c = 10; c <= 14; c++) headerStyle(dash.getCell(kHead, c));
+  dash.getRow(kHead).height = 26;
+  // Hạng theo % đạt giữa các nhân viên (không tính dòng Cả phòng); nhân viên chưa có KPI xếp cuối, không đánh hạng.
+  const ranked = kpiRows
+    .filter((x) => x.employee !== data.totalLabel && x.target > 0)
+    .sort((a, b) => b.delivered / b.target - a.delivered / a.target)
+    .map((x) => x.employee);
+  kpiRows.forEach((k, i) => {
+    const row = kHead + 1 + i;
+    const isTotal = k.employee === data.totalLabel;
+    const pct = k.target > 0 ? k.delivered / k.target : null;
+    dash.getCell(row, 1).value = isTotal ? "" : ranked.includes(k.employee) ? ranked.indexOf(k.employee) + 1 : "";
+    dash.getCell(row, 2).value = k.employee;
+    dash.getCell(row, 3).value = k.delivered;
+    dash.getCell(row, 4).value = k.target;
+    dash.getCell(row, 5).value = { formula: `IF(D${row}=0,"",C${row}-D${row})`, result: k.target > 0 ? k.delivered - k.target : "" };
+    dash.mergeCells(row, 6, row, 7);
+    dash.getCell(row, 6).value = { formula: `IF(D${row}=0,"",C${row}/D${row})`, result: pct === null ? "" : pct };
+    dash.mergeCells(row, 9, row, 14);
+    dash.getCell(row, 9).value = {
+      formula: `IF(D${row}=0,"",REPT("█",MIN(ROUND(C${row}/D${row}*20,0),30)))`,
+      result: pct === null ? "" : "█".repeat(Math.min(Math.round(pct * 20), 30)),
+    };
+    dash.getCell(row, 9).font = { color: { argb: pct === null ? GRAY_TEXT : pct >= 1 ? GREEN : pct >= 0.7 ? AMBER : RED }, size: 11 };
+    for (const c of [3, 4]) dash.getCell(row, c).numFmt = VND_FMT;
+    dash.getCell(row, 5).numFmt = "+#,##0;-#,##0;0";
+    dash.getCell(row, 6).numFmt = RATIO_FMT;
+    dash.getCell(row, 1).alignment = { horizontal: "center" };
+    dash.getCell(row, 6).alignment = { horizontal: "center" };
+    dash.getCell(row, 9).alignment = { horizontal: "left", vertical: "middle" };
+    for (const c of [1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14]) {
+      const cell = dash.getCell(row, c);
+      cell.border = BOX_LIGHT;
+      cell.fill = solid(isTotal ? TOTAL_FILL : i % 2 === 0 ? "FFFFFFFF" : ZEBRA);
+      if (isTotal && c <= 6) cell.font = { bold: true, color: { argb: NAVY } };
+    }
+    dash.getRow(row).height = 22;
+  });
+  const kLast = kHead + kpiRows.length;
+  kpiRules(dash, `F${kHead + 1}:F${kLast}`, 1);
+  changeRules(dash, `E${kHead + 1}:E${kLast}`, 4);
+  dash.getCell(kLast + 1, 1).value = "KPI = chỉ tiêu doanh số tháng của từng nhân viên (trang Kế hoạch kinh doanh). Doanh số đi hàng = tổng giá trị các đợt giao thật trong kỳ.";
+  dash.getCell(kLast + 1, 1).font = { italic: true, size: 9, color: { argb: GRAY_TEXT } };
+  r = kLast + 3;
+
+  // ---- Bộ lọc: chọn nhân viên / chỉ số ----
+  sectionTitle(dash, r, 1, 14, "CHI TIẾT CHỈ SỐ");
+  r++;
   const selEmpRow = r;
   const selMetricRow = r + 1;
   for (const [row, label, def, list] of [
@@ -141,12 +337,13 @@ async function buildWorkbookAndCharts(data: ReportData): Promise<{ workbook: Exc
     const c = dash.getCell(row, 2);
     c.value = def;
     c.font = { bold: true, size: 12 };
-    c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFEF3C7" } };
+    c.fill = solid("FFFEF3C7");
     c.border = THIN_BOX;
     c.dataValidation = { type: "list", allowBlank: false, formulae: [list], showErrorMessage: true, errorTitle: "Chọn từ danh sách", error: "Hãy chọn một giá trị trong danh sách." };
+    dash.getRow(row).height = 22;
   }
   dash.getCell(selEmpRow, 4).value = "← bấm ô vàng để chọn từ danh sách";
-  dash.getCell(selEmpRow, 4).font = { italic: true, color: { argb: "FF6B7280" } };
+  dash.getCell(selEmpRow, 4).font = { italic: true, color: { argb: GRAY_TEXT } };
   const EMP = `$B$${selEmpRow}`;
   const MET = `$B$${selMetricRow}`;
   r = selMetricRow + 2;
@@ -155,10 +352,18 @@ async function buildWorkbookAndCharts(data: ReportData): Promise<{ workbook: Exc
   const t1Title = r;
   dash.mergeCells(t1Title, 1, t1Title, 7);
   dash.getCell(t1Title, 1).value = { formula: `"TẤT CẢ CHỈ SỐ — "&${EMP}`, result: `TẤT CẢ CHỈ SỐ — ${defaultEmployee}` };
-  dash.getCell(t1Title, 1).font = { bold: true, size: 13, color: { argb: NAVY } };
+  dash.getCell(t1Title, 1).font = { bold: true, size: 12, color: { argb: NAVY } };
+  dash.getRow(t1Title).height = 22;
   const t1Head = r + 1;
   ["Nhóm", "Chỉ số", `${cur.label}`, `${periods[1].label}`, `${periods[2].label}`, "% so kỳ -1", "% so kỳ -2"].forEach((h, i) => headerCell(dash.getCell(t1Head, i + 1), h));
-  dash.getRow(t1Head).height = 26;
+  dash.getRow(t1Head).height = 36;
+  const groupFill: Record<string, string> = {
+    "Doanh số": "FFDBEAFE",
+    "Khách hàng": "FFDCFCE7",
+    "Công tác": "FFFEF3C7",
+    "Công nợ": "FFFEE2E2",
+    "Kế hoạch thu": "FFEDE9FE",
+  };
   metrics.forEach((m, k) => {
     const row = t1Head + 1 + k;
     dash.getCell(row, 1).value = m.group;
@@ -183,20 +388,39 @@ async function buildWorkbookAndCharts(data: ReportData): Promise<{ workbook: Exc
         result: m.multi && base && curV !== null ? curV / base - 1 : "",
       };
       c.numFmt = CHANGE_FMT;
+      c.alignment = { horizontal: "center" };
     }
     for (let c = 1; c <= 7; c++) {
       const cell = dash.getCell(row, c);
-      cell.border = THIN_BOX;
-      if (c <= 2) cell.alignment = { horizontal: "left" };
+      cell.border = BOX_LIGHT;
+      if (c === 2) cell.alignment = { horizontal: "left", vertical: "middle" };
+      if (c >= 2) cell.fill = solid(k % 2 === 0 ? "FFFFFFFF" : ZEBRA);
     }
+    dash.getRow(row).height = 20;
   });
+  // Cột Nhóm: gộp ô theo nhóm, mỗi nhóm một màu nhạt.
+  for (let k = 0; k < metrics.length; ) {
+    let e = k;
+    while (e + 1 < metrics.length && metrics[e + 1].group === metrics[k].group) e++;
+    const top = t1Head + 1 + k;
+    const bottom = t1Head + 1 + e;
+    if (bottom > top) dash.mergeCells(top, 1, bottom, 1);
+    const g = dash.getCell(top, 1);
+    g.font = { bold: true, color: { argb: NAVY } };
+    g.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+    for (let rr = top; rr <= bottom; rr++) {
+      dash.getCell(rr, 1).fill = solid(groupFill[metrics[k].group] ?? "FFF3F4F6");
+      dash.getCell(rr, 1).border = BOX_LIGHT;
+    }
+    k = e + 1;
+  }
   const t1Last = t1Head + metrics.length;
   changeRules(dash, `F${t1Head + 1}:G${t1Last}`);
 
   // --- Bảng 2: xếp hạng nhân viên theo chỉ số đã chọn ---
   dash.mergeCells(t1Title, 9, t1Title, 14);
   dash.getCell(t1Title, 9).value = { formula: `"XẾP HẠNG — "&${MET}`, result: `XẾP HẠNG — ${defaultMetric.label}` };
-  dash.getCell(t1Title, 9).font = { bold: true, size: 13, color: { argb: NAVY } };
+  dash.getCell(t1Title, 9).font = { bold: true, size: 12, color: { argb: NAVY } };
   ["Nhân viên", `${cur.label}`, `${periods[1].label}`, `${periods[2].label}`, "% so kỳ -1", "% so kỳ -2"].forEach((h, i) => headerCell(dash.getCell(t1Head, 9 + i), h));
   employeeOptions.forEach((name, k) => {
     const row = t1Head + 1 + k;
@@ -221,9 +445,15 @@ async function buildWorkbookAndCharts(data: ReportData): Promise<{ workbook: Exc
         result: defaultMetric.multi && base && curV !== null ? curV / base - 1 : "",
       };
       c.numFmt = CHANGE_FMT;
+      c.alignment = { horizontal: "center" };
     }
-    for (let c = 9; c <= 14; c++) dash.getCell(row, c).border = THIN_BOX;
-    if (name === data.totalLabel) for (let c = 9; c <= 14; c++) dash.getCell(row, c).font = { bold: true };
+    const isTotal = name === data.totalLabel;
+    for (let c = 9; c <= 14; c++) {
+      const cell = dash.getCell(row, c);
+      cell.border = BOX_LIGHT;
+      cell.fill = solid(isTotal ? TOTAL_FILL : k % 2 === 0 ? "FFFFFFFF" : ZEBRA);
+      if (isTotal) cell.font = { bold: true, color: { argb: NAVY } };
+    }
   });
   const t2Last = t1Head + employeeOptions.length;
   if (employeeOptions.length > 0) {
@@ -247,7 +477,7 @@ async function buildWorkbookAndCharts(data: ReportData): Promise<{ workbook: Exc
     changeRules(dash, `M${t1Head + 1}:N${t2Last}`, 4);
   }
   dash.getCell(Math.max(t1Last, t2Last) + 2, 1).value = "Ô xanh đậm = giá trị cao hơn giữa các nhân viên (không tính dòng Cả phòng). Xem định nghĩa từng chỉ số ở sheet \"Cách tính\".";
-  dash.getCell(Math.max(t1Last, t2Last) + 2, 1).font = { italic: true, color: { argb: "FF6B7280" } };
+  dash.getCell(Math.max(t1Last, t2Last) + 2, 1).font = { italic: true, size: 9, color: { argb: GRAY_TEXT } };
   // ---- Biểu đồ (chèn vào file sau khi ghi — xem lib/excel-charts.ts). Tiêu đề lấy từ 1 ô nằm ngay dưới
   // biểu đồ (bị biểu đồ che) nên tiêu đề biểu đồ đổi theo ô chọn nhân viên/chỉ số. ----
   const chartRow1 = Math.max(t1Last, t2Last) + 4; // dòng (1-based) đặt ô tiêu đề + đầu biểu đồ hàng 1
@@ -353,7 +583,8 @@ async function buildWorkbookAndCharts(data: ReportData): Promise<{ workbook: Exc
     });
   }
 
-  dash.views = [{ showGridLines: false, state: "frozen", ySplit: selMetricRow }];
+  // Bỏ cố định hàng đầu: khối tiêu đề + KPI cao nên cố định sẽ chiếm hết màn hình.
+  dash.views = [{ showGridLines: false, zoomScale: 90 }];
 
   // ========== Sheet Công nợ (tổng hợp theo nhân viên) ==========
   const debtKeys = ["debt_total", "debt_overdue", "debt_overdue_rate", "debt_bad", "debt_nodue", "debt_open_count", "debt_noschedule_count", "debt_noschedule_amount"];
@@ -369,12 +600,15 @@ async function buildWorkbookAndCharts(data: ReportData): Promise<{ workbook: Exc
       c.numFmt = unitFmt(metricOf(key));
     });
     for (let c = 1; c <= debtKeys.length + 1; c++) {
-      debtSheet.getCell(k + 2, c).border = THIN_BOX;
-      if (name === data.totalLabel) debtSheet.getCell(k + 2, c).font = { bold: true };
+      debtSheet.getCell(k + 2, c).border = BOX_LIGHT;
+      if (name === data.totalLabel) {
+        debtSheet.getCell(k + 2, c).font = { bold: true, color: { argb: NAVY } };
+        debtSheet.getCell(k + 2, c).fill = solid(TOTAL_FILL);
+      } else if (k % 2 === 1) debtSheet.getCell(k + 2, c).fill = solid(ZEBRA);
     }
   });
   debtSheet.getCell(employeeOptions.length + 3, 1).value = `Công nợ ${asOfText}.`;
-  debtSheet.getCell(employeeOptions.length + 3, 1).font = { italic: true, color: { argb: "FF6B7280" } };
+  debtSheet.getCell(employeeOptions.length + 3, 1).font = { italic: true, color: { argb: GRAY_TEXT } };
   debtSheet.views = [{ state: "frozen", ySplit: 1, xSplit: 1 }];
 
   // ========== Sheet HĐ quá hạn (danh sách lọc được) ==========
@@ -388,7 +622,8 @@ async function buildWorkbookAndCharts(data: ReportData): Promise<{ workbook: Exc
     vals.forEach((v, c) => {
       const cell = overdueSheet.getCell(row, c + 1);
       cell.value = v as ExcelJS.CellValue;
-      cell.border = THIN_BOX;
+      cell.border = BOX_LIGHT;
+      if (k % 2 === 1) cell.fill = solid(ZEBRA);
       if (c === 5) cell.numFmt = DATE_FMT;
       if (c === 7) cell.numFmt = VND_FMT;
     });
@@ -438,8 +673,11 @@ async function buildWorkbookAndCharts(data: ReportData): Promise<{ workbook: Exc
     planSheet.getCell(row, 3 + nb * 2).numFmt = VND_FMT;
     planSheet.getCell(row, 4 + nb * 2).numFmt = PCT_POINT_FMT;
     for (let c = 1; c <= nb * 2 + 4; c++) {
-      planSheet.getCell(row, c).border = THIN_BOX;
-      if (pr.employee === data.totalLabel) planSheet.getCell(row, c).font = { bold: true };
+      planSheet.getCell(row, c).border = BOX_LIGHT;
+      if (pr.employee === data.totalLabel) {
+        planSheet.getCell(row, c).font = { bold: true, color: { argb: NAVY } };
+        planSheet.getCell(row, c).fill = solid(TOTAL_FILL);
+      } else if (k % 2 === 1) planSheet.getCell(row, c).fill = solid(ZEBRA);
     }
   });
   const received = data.totalLabel ? valueOf(data.totalLabel, "total_received", 0) : null;
@@ -466,7 +704,8 @@ async function buildWorkbookAndCharts(data: ReportData): Promise<{ workbook: Exc
     vals.forEach((v, i) => {
       const cell = newCusSheet.getCell(row, i + 1);
       cell.value = v;
-      cell.border = THIN_BOX;
+      cell.border = BOX_LIGHT;
+      if (k % 2 === 1) cell.fill = solid(ZEBRA);
       if (i === 1) cell.numFmt = DATE_FMT;
     });
   });
@@ -484,9 +723,10 @@ async function buildWorkbookAndCharts(data: ReportData): Promise<{ workbook: Exc
     ["Đơn hàng / Đi hàng sản xuất", "Như hai chỉ số trên nhưng chỉ tính dòng có mã hàng bắt đầu bằng SI hoặc SB. Dòng chưa có mã hàng không phân loại được nên không nằm trong số sản xuất."],
     ["OIH", "Giá trị còn lại của mọi PO đang mở (không giới hạn theo kỳ). Kỳ đã kết thúc: tính ngược về cuối kỳ (G.Trị PO trừ các đợt giao đến hết kỳ; PO đã đóng/huỷ không rõ ngày thì coi như đóng từ trước). Kỳ đang chạy: số tại lúc xuất file. Chỉ có cột kỳ hiện tại."],
     ["Chỉ tiêu / Hoàn thành (%)", "Chỉ có ở báo cáo tháng: chỉ tiêu doanh số tháng và Doanh số đi hàng ÷ chỉ tiêu."],
+    ["Doanh số đi hàng so với KPI", "KPI = chỉ tiêu doanh số tháng (trang Kế hoạch kinh doanh). Báo cáo tháng: doanh số đi hàng cả tháng ÷ KPI tháng. Báo cáo tuần: luỹ kế doanh số đi hàng của tháng chứa ngày cuối tuần, tính tới hết tuần ÷ KPI cả tháng đó. Dòng Cả phòng = tổng các nhân viên bán hàng đang theo dõi. Hạng xếp theo % đạt giữa các nhân viên có KPI."],
     ["Khách hàng mới", "Số khách hàng được tạo trên trang Khách hàng trong kỳ, theo NVKD phụ trách (dòng Cả phòng gồm cả khách chưa gán NVKD)."],
     ["Công tác", "Số buổi = số ngày có buổi đi công tác đã được duyệt báo cáo (chính hoặc hỗ trợ); số khách = khách có kết quả \"Đã gặp\" trong các báo cáo đã duyệt. Báo cáo chờ duyệt và việc tiếp theo trễ hạn là số tại lúc xuất file."],
-    ["Công nợ", `Chốt ${asOfText}. Quá hạn so với hạn thanh toán; nợ xấu = quá hạn trên 180 ngày. "Cả phòng" tính toàn bộ hoá đơn, kể cả hoá đơn chưa gán NVKD, nên có thể lớn hơn tổng các nhân viên.`],
+    ["Công nợ", `Chốt ${asOfText}. Quá hạn so với hạn thanh toán; nợ xấu = quá hạn trên 180 ngày. "Cả phòng" tính toàn bộ hoá đơn, kể cả hoá đơn chưa gán NVKD, nên có thể lớn hơn tổng các nhân viên. Nợ xấu của Logistic SC, Sữa TH, DP-Pulipha, Licogi được theo dõi riêng: có trong Nợ xấu nhưng không tính vào Quá hạn.`],
     ["Chưa có lịch thanh toán", "Hoá đơn còn nợ mà NVKD chưa điền ngày dự kiến thanh toán."],
     ["Kế hoạch thu", "Tổng giá trị hoá đơn có ngày dự kiến thanh toán nằm trong kỳ (theo tuần nếu là báo cáo tháng)."],
     ["Đã thu trong kỳ", "Tiền về đã khớp vào hoá đơn có ngày tiền về nằm trong kỳ (không phụ thuộc hoá đơn đó hẹn thu tuần nào)."],
@@ -498,10 +738,14 @@ async function buildWorkbookAndCharts(data: ReportData): Promise<{ workbook: Exc
   headerCell(notesSheet.getCell(1, 2), "Cách tính");
   notes.forEach(([a, b], k) => {
     notesSheet.getCell(k + 2, 1).value = a;
-    notesSheet.getCell(k + 2, 1).font = { bold: true };
+    notesSheet.getCell(k + 2, 1).font = { bold: true, color: { argb: NAVY } };
     notesSheet.getCell(k + 2, 2).value = b;
     notesSheet.getCell(k + 2, 2).alignment = { wrapText: true, vertical: "top" };
     notesSheet.getCell(k + 2, 1).alignment = { vertical: "top" };
+    for (const c of [1, 2]) {
+      notesSheet.getCell(k + 2, c).border = BOX_LIGHT;
+      if (k % 2 === 1) notesSheet.getCell(k + 2, c).fill = solid(ZEBRA);
+    }
   });
 
   return { workbook: wb, charts };
