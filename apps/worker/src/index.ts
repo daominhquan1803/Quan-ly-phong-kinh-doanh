@@ -11,6 +11,7 @@ import { runWeekPlanDigest } from "./notifications/weekPlanDigest";
 import { runDebtWeekReminder } from "./notifications/debtWeekReminder";
 import { runZaloDispatch } from "./notifications/zaloDispatch";
 import { runAdminKpiDigest } from "./notifications/adminKpiDigest";
+import { runCustomerAlerts } from "./notifications/customerAlerts";
 import { isZaloConfigured } from "./zalo";
 import { logger } from "./logger";
 
@@ -87,6 +88,7 @@ async function main() {
       runWeekPlanDigest().catch((err) => logger.error("Lỗi tin điểm Kế hoạch tuần hằng ngày:", err));
       runDebtWeekReminder().catch((err) => logger.error("Lỗi nhắc công nợ đầu tuần:", err));
       runAdminKpiDigest().catch((err) => logger.error("Lỗi tin KPI Admin hằng ngày:", err));
+      runCustomerAlerts().catch((err) => logger.error("Lỗi cảnh báo khách hàng:", err));
     },
     { timezone: NOTIFY_CRON_TIMEZONE }
   );

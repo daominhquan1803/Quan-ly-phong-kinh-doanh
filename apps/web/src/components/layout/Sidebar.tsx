@@ -21,6 +21,7 @@ import {
   FileBarChart,
   AlertTriangle,
   ClipboardCheck,
+  HeartHandshake,
 } from "lucide-react";
 import { SidebarBanner } from "./SidebarBanner";
 
@@ -34,6 +35,7 @@ export const NAV_ITEMS = [
   { href: "/quotes", label: "Báo giá", icon: Receipt, adminOnly: false },
   { href: "/debt", label: "Công nợ", icon: Wallet, adminOnly: false },
   { href: "/customers", label: "Khách hàng", icon: Contact, adminOnly: false },
+  { href: "/cham-soc", label: "Chăm sóc khách", icon: HeartHandshake, adminOnly: false },
   { href: "/hang-hoa", label: "Hàng hóa", icon: Package, adminOnly: false },
   { href: "/reports", label: "Báo cáo", icon: FileBarChart, adminOnly: false },
   { href: "/targets", label: "Kế hoạch kinh doanh", icon: Target, adminOnly: false },
