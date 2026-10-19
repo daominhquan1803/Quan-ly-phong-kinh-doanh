@@ -20,7 +20,9 @@ interface NotificationRow {
     | "WEEK_PLAN_DAILY"
     | "DEBT_WEEK_FOLLOWUP"
     | "ADMIN_KPI_DAILY"
-    | "DELAY_REASON_PENDING";
+    | "DELAY_REASON_PENDING"
+    | "CUSTOMER_RISK"
+    | "SEASON_REMINDER";
   title: string;
   message: string;
   link: string | null;

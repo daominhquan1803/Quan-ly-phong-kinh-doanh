@@ -37,6 +37,8 @@ export const ZALO_TYPE_LABEL: Record<string, string> = {
   TRIP_REVIEWED: "Kết quả duyệt báo cáo công tác",
   ADMIN_KPI_DAILY: "Điểm KPI tuần Admin kinh doanh hằng ngày",
   DELAY_REASON_PENDING: "Lý do giao trễ chờ duyệt (quản trị viên)",
+  CUSTOMER_RISK: "Khách có dấu hiệu giảm/ngừng mua",
+  SEASON_REMINDER: "Khách mua theo vụ sắp tới vụ",
 };
 
 /** Mã liên kết 6 chữ số, hết hạn sau 10 phút. */
