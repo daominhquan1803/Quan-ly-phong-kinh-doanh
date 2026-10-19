@@ -1,4 +1,4 @@
-import { prisma } from "@hoanggia/db";
+import { prisma, normalizeCustomerCode } from "@hoanggia/db";
 import {
   analyzeCustomerRisk,
   sortCustomerRisks,
@@ -61,8 +61,23 @@ export async function getCustomerRiskReport(options: {
     return { rows: [], latestOrderDate: null, dataLagDays: 0, analyzedCustomerCount: 0 };
   }
 
+  // Khách mua theo vụ / dự án (NVKD tích ở trang Chăm sóc) KHÔNG chấm theo nhịp đặt hàng — giữa hai vụ im lặng là
+  // bình thường; họ được nhắc riêng theo lịch vụ (xem lib/customer-season.ts).
+  const nonRegular = await prisma.customer.findMany({
+    where: { buyingPattern: { not: "REGULAR" } },
+    select: { customerCode: true, customerName: true },
+  });
+  const skipCodes = new Set(nonRegular.map((c) => normalizeCustomerCode(c.customerCode)));
+  const skipNames = new Set(nonRegular.map((c) => c.customerName.trim().toLowerCase()));
+
   const byCustomer = new Map<string, CustomerRiskInput>();
   for (const o of orders) {
+    if (
+      (o.customerCode && skipCodes.has(normalizeCustomerCode(o.customerCode))) ||
+      skipNames.has(o.customerName.trim().toLowerCase())
+    ) {
+      continue;
+    }
     if (!o.orderDate) continue;
     let entry = byCustomer.get(o.customerName);
     if (!entry) {

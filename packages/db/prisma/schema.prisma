@@ -176,6 +176,7 @@ model User {
   debtInvoices           DebtInvoice[]               @relation("DebtInvoiceSalesEmployee")
   debtImportBatches      DebtImportBatch[]           @relation("DebtImportBatchCreatedBy")
   customers              Customer[]                  @relation("CustomerSalesEmployee")
+  careLogs               CustomerCareLog[]           @relation("CareLogEmployee")
 
   @@map("users")
 }
@@ -225,6 +226,34 @@ model ImportBatch {
   orders Order[]
 
   @@map("import_batches")
+}
+
+// Lịch sử chăm sóc khách do NVKD ghi nhanh trên app (AMIS không có dữ liệu này). Cơ hội bán hàng KHÔNG tách phân hệ riêng:
+// là log có outcome = NEW_NEED kèm needGroup / needValueBand / expectedMonth.
+model CustomerCareLog {
+  id            String      @id @default(cuid())
+  customerId    String
+  customer      Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  employeeId    String
+  employee      User        @relation("CareLogEmployee", fields: [employeeId], references: [id])
+  channel       CareChannel
+  outcome       CareOutcome
+  note          String?
+  // ISSUE: PRICE | QUALITY | DELIVERY | DEBT | OTHER
+  issueType     String?
+  // UPCOMING_ORDER / NEW_NEED: tháng dự kiến có đơn (1-12)
+  expectedMonth Int?
+  // NEW_NEED: nhóm sản phẩm + khoảng giá trị (LT20 | 20_100 | GT100, đơn vị triệu đồng)
+  needGroup     String?
+  needValueBand String?
+  // Hẹn chăm sóc lại — app nhắc đúng ngày
+  followUpAt    DateTime?
+  createdAt     DateTime    @default(now())
+
+  @@index([customerId, createdAt])
+  @@index([employeeId, createdAt])
+  @@index([followUpAt])
+  @@map("customer_care_logs")
 }
 
 model Order {
@@ -462,8 +491,16 @@ model Customer {
   paymentTermDays        Int?
   paymentTermMonthOffset Int?
 
+  // Kiểu mua (xem enum CustomerBuyingPattern). seasonMonths = các tháng vào vụ (1-12); seasonLeadMonths = nhắc NVKD
+  // trước vụ bao nhiêu tháng (mặc định 2: mua tháng 6 thì nhắc từ đầu tháng 4).
+  buyingPattern     CustomerBuyingPattern @default(REGULAR)
+  seasonMonths      Int[]                 @default([])
+  seasonLeadMonths  Int                   @default(2)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  careLogs CustomerCareLog[]
 
   @@map("customers")
 }
@@ -1238,6 +1275,31 @@ enum NotificationType {
   DEBT_WEEK_FOLLOWUP // đầu tuần: tuần này cần thu bao nhiêu, trượt bao nhiêu
   ADMIN_KPI_DAILY // hằng ngày cho Admin kinh doanh: điểm KPI tuần + việc còn thiếu
   DELAY_REASON_PENDING // quản trị hệ thống: lý do giao trễ chờ duyệt
+  CUSTOMER_RISK // khách có dấu hiệu giảm/ngừng mua — nhắc NVKD ghi nhận chăm sóc
+  SEASON_REMINDER // khách mua theo vụ sắp tới vụ — nhắc chào hàng trước
+}
+
+// Kiểu mua của khách: REGULAR = đặt đều đặn (chấm theo nhịp đặt hàng); SEASONAL = mua theo vụ (vd 1 năm 1 lần vào
+// tháng 6) — nhắc trước vụ, KHÔNG chấm theo nhịp; PROJECT = mua theo dự án — không nhắc theo lịch.
+enum CustomerBuyingPattern {
+  REGULAR
+  SEASONAL
+  PROJECT
+}
+
+enum CareChannel {
+  CALL
+  ZALO
+  MEET
+}
+
+enum CareOutcome {
+  NORMAL // vẫn mua bình thường
+  UPCOMING_ORDER // sắp có đơn (kèm tháng dự kiến)
+  NEW_NEED // có nhu cầu mới = cơ hội bán hàng (kèm nhóm SP, khoảng giá trị, tháng)
+  ISSUE // có vấn đề (kèm lý do)
+  NO_CONTACT // không liên lạc được
+  LOST // đã chuyển nhà cung cấp khác
 }
 
 model Notification {
