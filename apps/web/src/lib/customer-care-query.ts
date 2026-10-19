@@ -1,5 +1,63 @@
 import { prisma, normalizeCustomerCode } from "@hoanggia/db";
 import { checkSeason, suggestSeasonMonths, type SeasonCheckResult } from "./customer-season";
+import { getCustomerRiskReport } from "./customer-risk-query";
+
+const DAY_MS = 86_400_000;
+/** Đã có ghi chăm sóc "vẫn mua bình thường" trong ngần này ngày thì không nhắc nguy cơ nữa. */
+const SUPPRESS_NORMAL_DAYS = 30;
+/** Đã có bất kỳ ghi chăm sóc nào trong ngần này ngày thì chưa nhắc lại. */
+const SUPPRESS_ANY_DAYS = 7;
+
+export interface UncaredRisk {
+  employeeId: string;
+  customerId: string;
+  customerName: string;
+  level: string;
+  silentDays: number;
+  medianGapDays: number | null;
+  ratio: number | null;
+  trendPct: number | null;
+  totalValue: number;
+}
+
+/** Khách nguy cơ cao/cảnh báo (theo nhịp đặt hàng) mà NVKD chưa chăm sóc gần đây — dùng chung cho nhắc việc và thống kê phòng. */
+export async function getUncaredRisks(now: Date = new Date()): Promise<UncaredRisk[]> {
+  const report = await getCustomerRiskReport({});
+  const customers = await prisma.customer.findMany({
+    select: {
+      id: true,
+      customerCode: true,
+      customerName: true,
+      careLogs: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true, outcome: true } },
+    },
+  });
+  const byCode = new Map(customers.map((c) => [normalizeCustomerCode(c.customerCode), c]));
+  const byName = new Map(customers.map((c) => [c.customerName.trim().toLowerCase(), c]));
+
+  const risks: UncaredRisk[] = [];
+  for (const r of report.rows) {
+    if (!r.employeeId || (r.level !== "HIGH" && r.level !== "MEDIUM")) continue;
+    const c = (r.customerCode && byCode.get(normalizeCustomerCode(r.customerCode))) || byName.get(r.customerName.trim().toLowerCase());
+    if (!c) continue; // chưa có hồ sơ khách -> chưa ghi chăm sóc được
+    const last = c.careLogs[0];
+    if (last) {
+      const age = (now.getTime() - last.createdAt.getTime()) / DAY_MS;
+      if (age < SUPPRESS_ANY_DAYS || (last.outcome === "NORMAL" && age < SUPPRESS_NORMAL_DAYS)) continue;
+    }
+    risks.push({
+      employeeId: r.employeeId,
+      customerId: c.id,
+      customerName: r.customerName,
+      level: r.level,
+      silentDays: r.silentDays,
+      medianGapDays: r.medianGapDays,
+      ratio: r.ratio,
+      trendPct: r.trendPct,
+      totalValue: r.totalValue,
+    });
+  }
+  return risks;
+}
 
 export interface CareCustomerRow {
   id: string;

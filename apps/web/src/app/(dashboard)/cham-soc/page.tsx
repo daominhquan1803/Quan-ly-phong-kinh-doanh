@@ -1,8 +1,12 @@
 import { Suspense } from "react";
 import { HeartHandshake } from "lucide-react";
-import { CarePanel } from "@/components/care/CarePanel";
+import { auth } from "@/lib/auth";
+import { CareTabs } from "@/components/care/CareTabs";
 
-export default function CarePage() {
+export default async function CarePage() {
+  const session = await auth();
+  const isAdmin = session?.user?.role === "ADMIN";
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3 border-b border-white/10 pb-5">
@@ -12,12 +16,12 @@ export default function CarePage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-white">Chăm Sóc Khách Hàng</h1>
           <p className="text-xs text-gray-400 mt-0.5">
-            Ghi nhanh kết quả liên hệ khách (dưới 15 giây), đánh dấu khách mua theo vụ/dự án và xem các khách cần chăm sóc.
+            Ghi nhanh kết quả liên hệ khách (dưới 15 giây), đánh dấu khách mua theo vụ/dự án; xem thống kê chăm sóc, cảnh báo và vấn đề cần xử lý của phòng.
           </p>
         </div>
       </div>
       <Suspense fallback={null}>
-        <CarePanel />
+        <CareTabs defaultTab={isAdmin ? "team" : "log"} />
       </Suspense>
     </div>
   );
