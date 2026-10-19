@@ -70,6 +70,84 @@ export interface CareTeamReport {
   opportunities: { customerId: string; customerCode: string; customerName: string; employeeId: string; employeeName: string; needGroup: string | null; needValueBand: string | null; expectedMonth: number | null; at: string }[];
 }
 
+const DETAIL_SELECT = {
+  customerId: true,
+  employeeId: true,
+  outcome: true,
+  channel: true,
+  note: true,
+  issueType: true,
+  expectedMonth: true,
+  needGroup: true,
+  needValueBand: true,
+  createdAt: true,
+  employee: { select: { name: true } },
+  customer: { select: { customerCode: true, customerName: true } },
+} as const;
+
+type DetailRow = {
+  customerId: string;
+  employeeId: string;
+  outcome: string;
+  channel: string;
+  note: string | null;
+  issueType: string | null;
+  expectedMonth: number | null;
+  needGroup: string | null;
+  needValueBand: string | null;
+  createdAt: Date;
+  customer: { customerCode: string; customerName: string };
+};
+
+function toDetail(l: DetailRow): CareDetail {
+  return {
+    employeeId: l.employeeId,
+    customerId: l.customerId,
+    customerCode: l.customer.customerCode,
+    customerName: l.customer.customerName,
+    outcome: l.outcome,
+    channel: l.channel,
+    note: l.note,
+    issueType: l.issueType,
+    expectedMonth: l.expectedMonth,
+    needGroup: l.needGroup,
+    needValueBand: l.needValueBand,
+    at: l.createdAt.toISOString(),
+  };
+}
+
+export interface CareDetailsReport {
+  date: string;
+  members: { id: string; name: string; customers: number; logs: number }[];
+  details: CareDetail[];
+}
+
+/** Chỉ phần "Chi tiết chăm sóc" của 1 ngày — nhẹ hơn getCareTeamReport nên đổi ngày xem chi tiết không phải tính lại cảnh báo. */
+export async function getCareDetails(options: { date?: string; onlyEmployeeId?: string }, now: Date = new Date()): Promise<CareDetailsReport> {
+  const date = options.date && /^\d{4}-\d{2}-\d{2}$/.test(options.date) ? options.date : todayYmd(now);
+  const dayStart = vnDayStart(date);
+  const only = options.onlyEmployeeId;
+  const [sales, logs] = await Promise.all([
+    prisma.user.findMany({ where: { active: true, role: "SALES", ...(only ? { id: only } : {}) }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    prisma.customerCareLog.findMany({
+      where: { createdAt: { gte: dayStart, lt: new Date(dayStart.getTime() + DAY) }, ...(only ? { employeeId: only } : {}) },
+      select: DETAIL_SELECT,
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+  const names = new Map(sales.map((s) => [s.id, s.name]));
+  for (const l of logs) if (!names.has(l.employeeId)) names.set(l.employeeId, l.employee.name);
+  const details = logs.map(toDetail);
+  const members = [...names].map(([id, name]) => ({
+    id,
+    name,
+    customers: new Set(details.filter((d) => d.employeeId === id).map((d) => d.customerId)).size,
+    logs: details.filter((d) => d.employeeId === id).length,
+  }));
+  members.sort((a, b) => b.customers - a.customers || a.name.localeCompare(b.name, "vi"));
+  return { date, members, details };
+}
+
 /** `onlyEmployeeId` = phạm vi SALES (chỉ thấy số liệu của mình); bỏ trống = cả phòng (ADMIN). */
 export async function getCareTeamReport(options: { date?: string; onlyEmployeeId?: string }, now: Date = new Date()): Promise<CareTeamReport> {
   const date = options.date && /^\d{4}-\d{2}-\d{2}$/.test(options.date) ? options.date : todayYmd(now);
@@ -88,20 +166,7 @@ export async function getCareTeamReport(options: { date?: string; onlyEmployeeId
     getCareOverview({ onlyEmployeeId: only }, now),
     prisma.customerCareLog.findMany({
       where: { createdAt: { gte: monthStart < weekStart ? monthStart : weekStart, lt: dayEnd }, ...(only ? { employeeId: only } : {}) },
-      select: {
-        customerId: true,
-        employeeId: true,
-        outcome: true,
-        channel: true,
-        note: true,
-        issueType: true,
-        expectedMonth: true,
-        needGroup: true,
-        needValueBand: true,
-        createdAt: true,
-        employee: { select: { name: true } },
-        customer: { select: { customerCode: true, customerName: true } },
-      },
+      select: DETAIL_SELECT,
       orderBy: { createdAt: "desc" },
     }),
     only ? Promise.resolve([] as UncaredRisk[]) : getUncaredRisks(now),
@@ -138,22 +203,7 @@ export async function getCareTeamReport(options: { date?: string; onlyEmployeeId
     const s = stat.get(l.employeeId);
     if (!s) continue;
     const t = l.createdAt.getTime();
-    if (t >= dayStart.getTime()) {
-      details.push({
-        employeeId: l.employeeId,
-        customerId: l.customerId,
-        customerCode: l.customer.customerCode,
-        customerName: l.customer.customerName,
-        outcome: l.outcome,
-        channel: l.channel,
-        note: l.note,
-        issueType: l.issueType,
-        expectedMonth: l.expectedMonth,
-        needGroup: l.needGroup,
-        needValueBand: l.needValueBand,
-        at: l.createdAt.toISOString(),
-      });
-    }
+    if (t >= dayStart.getTime()) details.push(toDetail(l));
     if (t >= monthStart.getTime()) customersMonth.get(l.employeeId)!.add(l.customerId);
     if (t >= weekStart.getTime()) customersWeek.get(l.employeeId)!.add(l.customerId);
     if (t >= dayStart.getTime()) {

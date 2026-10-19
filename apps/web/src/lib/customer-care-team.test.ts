@@ -22,7 +22,7 @@ vi.mock("./customer-care-query", () => ({
   },
 }));
 
-import { getCareTeamReport, todayYmd } from "./customer-care-team";
+import { getCareDetails, getCareTeamReport, todayYmd } from "./customer-care-team";
 
 const NOW = new Date("2026-10-19T05:00:00Z"); // 12h trưa 19/10 giờ VN
 const at = (s: string) => new Date(`${s}+07:00`);
@@ -119,5 +119,27 @@ describe("getCareTeamReport", () => {
     const r = await getCareTeamReport({ onlyEmployeeId: "u1" }, NOW);
     expect(r.members.map((m) => m.id)).toEqual(["u1"]);
     expect(h.risks).not.toHaveBeenCalled();
+  });
+});
+
+describe("getCareDetails (chọn ngày riêng cho Chi tiết chăm sóc)", () => {
+  it("trả đúng chi tiết + số khách mỗi thành viên của ngày chọn, người chưa ghi vẫn có cột", async () => {
+    h.users.mockResolvedValue([
+      { id: "u1", name: "An" },
+      { id: "u2", name: "Bình" },
+    ]);
+    h.logs.mockResolvedValue([
+      { customerId: "c1", employeeId: "u1", outcome: "NORMAL", channel: "CALL", note: null, issueType: null, expectedMonth: null, needGroup: null, needValueBand: null, createdAt: at("2026-10-17T09:00:00"), employee: { name: "An" }, customer: { customerCode: "KH1", customerName: "Khách 1" } },
+      { customerId: "c1", employeeId: "u1", outcome: "NORMAL", channel: "ZALO", note: "ok", issueType: null, expectedMonth: null, needGroup: null, needValueBand: null, createdAt: at("2026-10-17T10:00:00"), employee: { name: "An" }, customer: { customerCode: "KH1", customerName: "Khách 1" } },
+    ]);
+    const r = await getCareDetails({ date: "2026-10-17" }, NOW);
+    expect(r.date).toBe("2026-10-17");
+    expect(r.details).toHaveLength(2);
+    expect(r.members.find((m) => m.id === "u1")).toMatchObject({ customers: 1, logs: 2 });
+    expect(r.members.find((m) => m.id === "u2")).toMatchObject({ customers: 0, logs: 0 });
+    // truy vấn đúng khoảng ngày 17/10 giờ VN
+    const where = h.logs.mock.lastCall![0].where.createdAt;
+    expect(where.gte).toEqual(at("2026-10-17T00:00:00"));
+    expect(where.lt).toEqual(at("2026-10-18T00:00:00"));
   });
 });

@@ -13,7 +13,7 @@ import {
   type CareOutcomeKey,
 } from "@/lib/customer-care";
 import { SEASON_STAGE_LABEL } from "@/lib/customer-season";
-import type { CareDetail, CareTeamReport } from "@/lib/customer-care-team";
+import type { CareDetail, CareDetailsReport, CareTeamReport } from "@/lib/customer-care-team";
 
 const card = "rounded-2xl border border-gray-200/30 p-4";
 const KIND_LABEL = { ISSUE: "Có vấn đề", LOST: "Đã chuyển NCC khác", NO_CONTACT: "Không liên lạc được nhiều lần" } as const;
@@ -75,7 +75,6 @@ function SectionHead({ icon, title, count, right }: { icon: React.ReactNode; tit
 
 export function CareTeam({ onOpenCustomer }: { onOpenCustomer: (customerId: string) => void }) {
   const [date, setDate] = useState(todayYmd());
-  const [fDetail, setFDetail] = useState("");
   const [fIssues, setFIssues] = useState("");
   const [fRisks, setFRisks] = useState("");
   const [fFollow, setFFollow] = useState("");
@@ -188,58 +187,7 @@ export function CareTeam({ onOpenCustomer }: { onOpenCustomer: (customerId: stri
             <p className="mt-2 text-[11px] text-muted-foreground">“Khách hôm nay” = số khách khác nhau đã được ghi chăm sóc trong ngày. 7 ngày tính đến hết ngày chọn.</p>
           </div>
 
-          <div className={card}>
-            <SectionHead
-              icon={<ClipboardList className="h-4 w-4 text-amber-400" />}
-              title={`Chi tiết chăm sóc ${formatDateVN(r.date)}`}
-              count={by(r.details, fDetail).length}
-              right={team && <EmployeeFilter members={r.members} value={fDetail} onChange={setFDetail} />}
-            />
-            {(() => {
-              const cols = r.members.filter((m) => !fDetail || m.id === fDetail);
-              return (
-                <div className="overflow-x-auto">
-                  <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${Math.max(cols.length, 1)}, minmax(230px, 1fr))` }}>
-                    {cols.map((m) => {
-                      const rows: CareDetail[] = r.details.filter((d) => d.employeeId === m.id);
-                      return (
-                        <div key={m.id} className="rounded-xl border border-gray-200/20 p-3">
-                          <p className="mb-2 flex items-center justify-between border-b border-gray-200/20 pb-2 text-sm font-semibold text-ink">
-                            {m.name}
-                            <span className={cn("text-xs font-mono", rows.length === 0 ? "text-alert" : "text-emerald-300")}>{rows.length === 0 ? "Chưa ghi" : `${m.today.customers} khách`}</span>
-                          </p>
-                          {rows.length === 0 ? (
-                            <p className="text-xs text-muted-foreground">Chưa có lần chăm sóc nào.</p>
-                          ) : (
-                            <div className="space-y-2">
-                              {rows.map((d, i) => (
-                                <div key={`${d.customerId}-${d.at}-${i}`} className="text-xs">
-                                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                    <span className="font-mono text-muted-foreground">{hhmm(d.at)}</span>
-                                    {code(d.customerId, d.customerCode, d.customerName)}
-                                    <span className={cn("rounded-full border px-2 py-0.5 text-[11px]", OUTCOME_TONE[d.outcome])}>{CARE_OUTCOME_LABEL[d.outcome as CareOutcomeKey] ?? d.outcome}</span>
-                                    <span className="text-[11px] text-muted-foreground">{CARE_CHANNEL_LABEL[d.channel as CareChannelKey] ?? d.channel}</span>
-                                  </div>
-                                  {(d.issueType || d.needGroup || d.expectedMonth || d.note) && (
-                                    <p className="mt-0.5 text-[11px] text-muted-foreground">
-                                      {d.issueType && <span className="text-alert">{ISSUE_TYPE_LABEL[d.issueType as keyof typeof ISSUE_TYPE_LABEL] ?? d.issueType}. </span>}
-                                      {d.needGroup && <span>{d.needGroup}{d.needValueBand ? ` · ${VALUE_BAND_LABEL[d.needValueBand as keyof typeof VALUE_BAND_LABEL] ?? d.needValueBand}` : ""}. </span>}
-                                      {d.expectedMonth && <span>Dự kiến T{d.expectedMonth}. </span>}
-                                      {d.note}
-                                    </p>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
+          <DetailsSection team={team} onOpenCustomer={onOpenCustomer} />
 
           <div className={card}>
             <SectionHead
@@ -381,6 +329,97 @@ export function CareTeam({ onOpenCustomer }: { onOpenCustomer: (customerId: stri
             )}
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+/** "Chi tiết chăm sóc": có ô chọn ngày RIÊNG (mặc định hôm nay), mỗi thành viên một cột nằm ngang. */
+function DetailsSection({ team, onOpenCustomer }: { team: boolean; onOpenCustomer: (customerId: string) => void }) {
+  const [date, setDate] = useState(todayYmd());
+  const [filter, setFilter] = useState("");
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["care-details", date],
+    queryFn: async () => {
+      const res = await fetch(`/api/customer-care/team?section=details&date=${date}`);
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? "Không tải được chi tiết chăm sóc");
+      return json.details as CareDetailsReport;
+    },
+  });
+
+  const cols = (data?.members ?? []).filter((m) => !filter || m.id === filter);
+  const shown = cols.reduce((s, m) => s + m.logs, 0);
+
+  return (
+    <div className={card}>
+      <SectionHead
+        icon={<ClipboardList className="h-4 w-4 text-amber-400" />}
+        title={`Chi tiết chăm sóc ${formatDateVN(data?.date ?? date)}`}
+        count={data ? shown : undefined}
+        right={
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="date"
+              value={date}
+              max={todayYmd()}
+              onChange={(e) => e.target.value && setDate(e.target.value)}
+              className="rounded-lg border border-gray-200/40 bg-transparent px-2.5 py-1 text-xs text-ink"
+              aria-label="Chọn ngày xem chi tiết chăm sóc"
+            />
+            {date !== todayYmd() && (
+              <button onClick={() => setDate(todayYmd())} className="rounded-full border border-gray-200/40 px-2.5 py-0.5 text-xs text-ink2 hover:bg-white/5">
+                Hôm nay
+              </button>
+            )}
+            {team && data && <EmployeeFilter members={data.members} value={filter} onChange={setFilter} />}
+          </div>
+        }
+      />
+      {isLoading && <p className="text-sm text-muted-foreground">Đang tải...</p>}
+      {error && <p className="text-sm text-alert">{(error as Error).message}</p>}
+      {data && (
+        <div className="overflow-x-auto">
+          <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${Math.max(cols.length, 1)}, minmax(230px, 1fr))` }}>
+            {cols.map((m) => {
+              const rows: CareDetail[] = data.details.filter((d) => d.employeeId === m.id);
+              return (
+                <div key={m.id} className="rounded-xl border border-gray-200/20 p-3">
+                  <p className="mb-2 flex items-center justify-between border-b border-gray-200/20 pb-2 text-sm font-semibold text-ink">
+                    {m.name}
+                    <span className={cn("font-mono text-xs", rows.length === 0 ? "text-alert" : "text-emerald-300")}>{rows.length === 0 ? "Chưa ghi" : `${m.customers} khách`}</span>
+                  </p>
+                  {rows.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Chưa có lần chăm sóc nào.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {rows.map((d, i) => (
+                        <div key={`${d.customerId}-${d.at}-${i}`} className="text-xs">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="font-mono text-muted-foreground">{hhmm(d.at)}</span>
+                            <button onClick={() => onOpenCustomer(d.customerId)} title={d.customerName} className="shrink-0 font-mono text-sm font-semibold text-amber-400 underline-offset-2 hover:underline">
+                              {d.customerCode}
+                            </button>
+                            <span className={cn("rounded-full border px-2 py-0.5 text-[11px]", OUTCOME_TONE[d.outcome])}>{CARE_OUTCOME_LABEL[d.outcome as CareOutcomeKey] ?? d.outcome}</span>
+                            <span className="text-[11px] text-muted-foreground">{CARE_CHANNEL_LABEL[d.channel as CareChannelKey] ?? d.channel}</span>
+                          </div>
+                          {(d.issueType || d.needGroup || d.expectedMonth || d.note) && (
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">
+                              {d.issueType && <span className="text-alert">{ISSUE_TYPE_LABEL[d.issueType as keyof typeof ISSUE_TYPE_LABEL] ?? d.issueType}. </span>}
+                              {d.needGroup && <span>{d.needGroup}{d.needValueBand ? ` · ${VALUE_BAND_LABEL[d.needValueBand as keyof typeof VALUE_BAND_LABEL] ?? d.needValueBand}` : ""}. </span>}
+                              {d.expectedMonth && <span>Dự kiến T{d.expectedMonth}. </span>}
+                              {d.note}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
     </div>
   );
