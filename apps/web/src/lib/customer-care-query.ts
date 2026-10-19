@@ -11,6 +11,7 @@ const SUPPRESS_ANY_DAYS = 7;
 export interface UncaredRisk {
   employeeId: string;
   customerId: string;
+  customerCode: string;
   customerName: string;
   level: string;
   silentDays: number;
@@ -47,6 +48,7 @@ export async function getUncaredRisks(now: Date = new Date()): Promise<UncaredRi
     risks.push({
       employeeId: r.employeeId,
       customerId: c.id,
+      customerCode: c.customerCode,
       customerName: r.customerName,
       level: r.level,
       silentDays: r.silentDays,

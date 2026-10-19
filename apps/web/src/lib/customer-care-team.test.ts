@@ -59,10 +59,10 @@ describe("getCareTeamReport", () => {
     // 1 lần gọi lọc logs kỳ + 1 lần lọc vấn đề + 1 lần cơ hội: trả theo thứ tự gọi
     h.logs
       .mockResolvedValueOnce([
-        { customerId: "c1", employeeId: "u1", outcome: "NORMAL", channel: "CALL", createdAt: at("2026-10-19T09:00:00"), employee: { name: "An" } },
-        { customerId: "c1", employeeId: "u1", outcome: "NORMAL", channel: "ZALO", createdAt: at("2026-10-19T10:00:00"), employee: { name: "An" } },
-        { customerId: "c2", employeeId: "u1", outcome: "ISSUE", channel: "CALL", createdAt: at("2026-10-19T11:00:00"), employee: { name: "An" } },
-        { customerId: "c3", employeeId: "u2", outcome: "NORMAL", channel: "CALL", createdAt: at("2026-10-15T09:00:00"), employee: { name: "Bình" } },
+        { customerId: "c1", employeeId: "u1", outcome: "NORMAL", channel: "CALL", createdAt: at("2026-10-19T09:00:00"), employee: { name: "An" }, customer: { customerCode: "c1", customerName: "Khách c1" } },
+        { customerId: "c1", employeeId: "u1", outcome: "NORMAL", channel: "ZALO", createdAt: at("2026-10-19T10:00:00"), employee: { name: "An" }, customer: { customerCode: "c1", customerName: "Khách c1" } },
+        { customerId: "c2", employeeId: "u1", outcome: "ISSUE", channel: "CALL", createdAt: at("2026-10-19T11:00:00"), employee: { name: "An" }, customer: { customerCode: "c2", customerName: "Khách c2" } },
+        { customerId: "c3", employeeId: "u2", outcome: "NORMAL", channel: "CALL", createdAt: at("2026-10-15T09:00:00"), employee: { name: "Bình" }, customer: { customerCode: "c3", customerName: "Khách c3" } },
       ])
       .mockResolvedValue([]);
     const r = await getCareTeamReport({}, NOW);
@@ -73,6 +73,10 @@ describe("getCareTeamReport", () => {
     expect(binh.today.customers).toBe(0);
     expect(binh.week).toBe(1); // ghi 15/10 nằm trong 7 ngày
     expect(r.totals).toMatchObject({ customers: 2, membersCared: 1, membersTotal: 2 });
+    // chi tiết chỉ gồm các lần ghi trong NGÀY chọn (3 lần của An), có mã khách để hiện gọn
+    expect(r.details).toHaveLength(3);
+    expect(r.details.every((d) => d.employeeId === "u1")).toBe(true);
+    expect(r.details.map((d) => d.customerCode).sort()).toEqual(["c1", "c1", "c2"]);
   });
 
   it("vấn đề: chỉ tính khi lần ghi mới nhất của khách là ISSUE/LOST; ghi mới hơn thì coi như đã xử lý", async () => {
@@ -83,8 +87,8 @@ describe("getCareTeamReport", () => {
     h.logs
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
-        { customerId: "c1", outcome: "ISSUE", issueType: "PRICE", note: "chê giá", createdAt: at("2026-10-16T09:00:00"), customer: { customerName: "Khách c1" }, employee: { name: "An" } },
-        { customerId: "c2", outcome: "ISSUE", issueType: "QUALITY", note: null, createdAt: at("2026-10-10T09:00:00"), customer: { customerName: "Khách c2" }, employee: { name: "An" } },
+        { customerId: "c1", outcome: "ISSUE", issueType: "PRICE", note: "chê giá", createdAt: at("2026-10-16T09:00:00"), customer: { customerCode: "c1", customerName: "Khách c1" }, employee: { name: "An" } },
+        { customerId: "c2", outcome: "ISSUE", issueType: "QUALITY", note: null, createdAt: at("2026-10-10T09:00:00"), customer: { customerCode: "c2", customerName: "Khách c2" }, employee: { name: "An" } },
       ])
       .mockResolvedValue([]);
     const r = await getCareTeamReport({}, NOW);

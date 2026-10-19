@@ -28,8 +28,24 @@ export interface MemberStat {
   openIssues: number;
 }
 
+export interface CareDetail {
+  employeeId: string;
+  customerId: string;
+  customerCode: string;
+  customerName: string;
+  outcome: string;
+  channel: string;
+  note: string | null;
+  issueType: string | null;
+  expectedMonth: number | null;
+  needGroup: string | null;
+  needValueBand: string | null;
+  at: string;
+}
+
 export interface TeamIssue {
   customerId: string;
+  customerCode: string;
   customerName: string;
   employeeId: string | null;
   employeeName: string | null;
@@ -45,11 +61,13 @@ export interface CareTeamReport {
   date: string;
   members: MemberStat[];
   totals: { customers: number; logs: number; membersCared: number; membersTotal: number };
+  /** Chi tiết từng lần ghi chăm sóc TRONG NGÀY chọn, mới nhất trước — UI chia cột theo thành viên. */
+  details: CareDetail[];
   risks: (UncaredRisk & { employeeName: string })[];
-  followUps: { customerId: string; customerName: string; employeeName: string; followUpAt: string; overdueDays: number }[];
-  seasons: { customerId: string; customerName: string; employeeName: string; stage: string; seasonMonth: number }[];
+  followUps: { customerId: string; customerCode: string; customerName: string; employeeId: string; employeeName: string; followUpAt: string; overdueDays: number }[];
+  seasons: { customerId: string; customerCode: string; customerName: string; employeeId: string; employeeName: string; stage: string; seasonMonth: number }[];
   issues: TeamIssue[];
-  opportunities: { customerId: string; customerName: string; employeeName: string; needGroup: string | null; needValueBand: string | null; expectedMonth: number | null; at: string }[];
+  opportunities: { customerId: string; customerCode: string; customerName: string; employeeId: string; employeeName: string; needGroup: string | null; needValueBand: string | null; expectedMonth: number | null; at: string }[];
 }
 
 /** `onlyEmployeeId` = phạm vi SALES (chỉ thấy số liệu của mình); bỏ trống = cả phòng (ADMIN). */
@@ -70,7 +88,21 @@ export async function getCareTeamReport(options: { date?: string; onlyEmployeeId
     getCareOverview({ onlyEmployeeId: only }, now),
     prisma.customerCareLog.findMany({
       where: { createdAt: { gte: monthStart < weekStart ? monthStart : weekStart, lt: dayEnd }, ...(only ? { employeeId: only } : {}) },
-      select: { customerId: true, employeeId: true, outcome: true, channel: true, createdAt: true, employee: { select: { name: true } } },
+      select: {
+        customerId: true,
+        employeeId: true,
+        outcome: true,
+        channel: true,
+        note: true,
+        issueType: true,
+        expectedMonth: true,
+        needGroup: true,
+        needValueBand: true,
+        createdAt: true,
+        employee: { select: { name: true } },
+        customer: { select: { customerCode: true, customerName: true } },
+      },
+      orderBy: { createdAt: "desc" },
     }),
     only ? Promise.resolve([] as UncaredRisk[]) : getUncaredRisks(now),
   ]);
@@ -101,10 +133,27 @@ export async function getCareTeamReport(options: { date?: string; onlyEmployeeId
   }
   for (const c of overview) if (c.salesEmployee && stat.has(c.salesEmployee.id)) stat.get(c.salesEmployee.id)!.assigned++;
 
+  const details: CareDetail[] = [];
   for (const l of logs) {
     const s = stat.get(l.employeeId);
     if (!s) continue;
     const t = l.createdAt.getTime();
+    if (t >= dayStart.getTime()) {
+      details.push({
+        employeeId: l.employeeId,
+        customerId: l.customerId,
+        customerCode: l.customer.customerCode,
+        customerName: l.customer.customerName,
+        outcome: l.outcome,
+        channel: l.channel,
+        note: l.note,
+        issueType: l.issueType,
+        expectedMonth: l.expectedMonth,
+        needGroup: l.needGroup,
+        needValueBand: l.needValueBand,
+        at: l.createdAt.toISOString(),
+      });
+    }
     if (t >= monthStart.getTime()) customersMonth.get(l.employeeId)!.add(l.customerId);
     if (t >= weekStart.getTime()) customersWeek.get(l.employeeId)!.add(l.customerId);
     if (t >= dayStart.getTime()) {
@@ -133,11 +182,11 @@ export async function getCareTeamReport(options: { date?: string; onlyEmployeeId
       // trễ theo NGÀY LỊCH (hẹn 16/10 thì đến 19/10 là trễ 3 ngày), không theo giờ
       const dueDay = Math.floor((new Date(c.followUpAt).getTime() + 7 * 3600_000) / DAY) * DAY - 7 * 3600_000;
       const overdueDays = Math.max(0, Math.round((dayStart.getTime() - dueDay) / DAY));
-      followUps.push({ customerId: c.id, customerName: c.customerName, employeeName: nameOf(emp), followUpAt: c.followUpAt, overdueDays });
+      followUps.push({ customerId: c.id, customerCode: c.customerCode, customerName: c.customerName, employeeId: emp, employeeName: nameOf(emp), followUpAt: c.followUpAt, overdueDays });
       stat.get(emp)!.warnings.followUps++;
     }
     if (c.season) {
-      seasons.push({ customerId: c.id, customerName: c.customerName, employeeName: nameOf(emp), stage: c.season.stage, seasonMonth: c.season.seasonMonth });
+      seasons.push({ customerId: c.id, customerCode: c.customerCode, customerName: c.customerName, employeeId: emp, employeeName: nameOf(emp), stage: c.season.stage, seasonMonth: c.season.seasonMonth });
       stat.get(emp)!.warnings.season++;
     }
   }
@@ -156,7 +205,7 @@ export async function getCareTeamReport(options: { date?: string; onlyEmployeeId
       issueType: true,
       note: true,
       createdAt: true,
-      customer: { select: { customerName: true } },
+      customer: { select: { customerCode: true, customerName: true } },
       employee: { select: { name: true } },
     },
   });
@@ -175,6 +224,7 @@ export async function getCareTeamReport(options: { date?: string; onlyEmployeeId
     const emp = empByCustomer.get(l.customerId);
     issues.push({
       customerId: l.customerId,
+      customerCode: l.customer.customerCode,
       customerName: l.customer.customerName,
       employeeId: emp?.id ?? null,
       employeeName: emp?.name ?? null,
@@ -212,7 +262,7 @@ export async function getCareTeamReport(options: { date?: string; onlyEmployeeId
     where: { outcome: "NEW_NEED", createdAt: { gte: new Date(dayEnd.getTime() - 30 * DAY), lt: dayEnd }, ...(only ? { employeeId: only } : {}) },
     orderBy: { createdAt: "desc" },
     take: 30,
-    select: { customerId: true, needGroup: true, needValueBand: true, expectedMonth: true, createdAt: true, customer: { select: { customerName: true } }, employee: { select: { name: true } } },
+    select: { customerId: true, employeeId: true, needGroup: true, needValueBand: true, expectedMonth: true, createdAt: true, customer: { select: { customerCode: true, customerName: true } }, employee: { select: { name: true } } },
   });
 
   const members = [...stat.values()].sort((a, b) => b.today.customers - a.today.customers || a.name.localeCompare(b.name, "vi"));
@@ -225,13 +275,16 @@ export async function getCareTeamReport(options: { date?: string; onlyEmployeeId
       membersCared: members.filter((m) => m.today.customers > 0).length,
       membersTotal: members.length,
     },
+    details,
     risks: riskRows,
     followUps,
     seasons,
     issues,
     opportunities: needs.map((n) => ({
       customerId: n.customerId,
+      customerCode: n.customer.customerCode,
       customerName: n.customer.customerName,
+      employeeId: n.employeeId,
       employeeName: n.employee.name,
       needGroup: n.needGroup,
       needValueBand: n.needValueBand,
