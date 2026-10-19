@@ -3,10 +3,11 @@ import { prisma } from "./index";
 /**
  * Hàng mẫu (anh Quân chốt 19/10/2026): đơn/dòng hàng AMIS có ghi chú "Hàng mẫu" thì KHÔNG tính doanh số.
  * Ghi chú nằm ở cột tuỳ biến của dòng hàng (custom_field3/4/6/7 tuỳ mẫu phiếu) hoặc ở mô tả; cả đơn mẫu thì ghi ở tên đơn
- * ("Hàng Mẫu không tính tiền"). KHÔNG quét custom_field5 (quy cách kỹ thuật, hay có "bám màu theo hàng mẫu của khách") và
- * KHÔNG nhận "FOC bù hao" (anh chưa yêu cầu).
+ * ("Hàng Mẫu không tính tiền"). KHÔNG quét custom_field5 (quy cách kỹ thuật, hay có "bám màu theo hàng mẫu của khách").
+ * Hàng FOC bù hao (hàng tặng bù hao, anh Quân chốt 19/10/2026) cũng không tính doanh số: ghi chú có chữ FOC, hoặc kết thúc bằng
+ * "bù hao" (vd "hàng bù hao"). KHÔNG nhận câu chỉ dẫn sản xuất "dư thì bù hao" — đó là hàng tính tiền bình thường.
  */
-const SAMPLE_RE = /hàng\s*mẫu|^\s*mẫu\s*$|\bsample\b|mẫu\s*không\s*tính\s*tiền/i;
+const SAMPLE_RE = /hàng\s*mẫu|^\s*mẫu\s*$|\bsample\b|mẫu\s*không\s*tính\s*tiền|\bFOC\b|(?<!thì\s)bù\s*hao\s*$/i;
 
 export function isSampleNote(text: string | null | undefined): boolean {
   return !!text && text.length <= 200 && SAMPLE_RE.test(text);

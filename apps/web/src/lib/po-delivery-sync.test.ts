@@ -175,7 +175,7 @@ describe("hàng mẫu không tính doanh số", () => {
     expect(isSampleNote("Quyển mẫu màu tôn 139mmx265mm")).toBe(false);
     expect(isSampleNote("Nhãn giấy Nhãn dán lưu mẫu 100mmx50mm")).toBe(false);
     expect(isSampleNote("Lưu ý: túi mở 2 đầu. có mẫu gửi kèm theo")).toBe(false);
-    expect(isSampleNote("FOC-Bù Hao-VNPTTech/145/26")).toBe(false);
+    // FOC bù hao cũng không tính doanh số\n    expect(isSampleNote("FOC-Bù Hao-VNPTTech/145/26")).toBe(true);\n    expect(isSampleNote("K5BXKQ4M000203EF- BÙ HAO-FOC")).toBe(true);\n    expect(isSampleNote("VNPTTech/071/26\nBÙ HAO")).toBe(true);\n    expect(isSampleNote("hàng bù hao")).toBe(true);\n    expect(isSampleNote("Chú ý sx đủ, không thiếu, dư thì bù hao.")).toBe(false);\n    expect(isSampleNote("Tờ HDSD ANTIFREEZE INSTRUCTION C")).toBe(false);
     expect(isSampleNote(null)).toBe(false);
   });
   it("dòng AMIS: ghi chú nằm ở custom_field3/4/6/7; quy cách (custom_field5) không tính", () => {
