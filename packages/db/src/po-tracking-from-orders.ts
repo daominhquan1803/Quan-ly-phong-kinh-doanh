@@ -1,5 +1,6 @@
 import { prisma } from "./index";
 import { computeLineDeliveryFields, getSlipAggForAllLines, stripItemCodeVersionSuffix } from "./po-delivery-sync";
+import { zeroSampleLineValues } from "./sample-lines";
 
 /**
  * Đồng bộ PoTrackingLine (Tiến độ giao hàng) TRỰC TIẾP từ Order/OrderItem đã đồng bộ AMIS —
@@ -53,7 +54,7 @@ export async function syncPoTrackingFromOrders(orderCodes?: string[]): Promise<S
       expectedDeliveryDate: true,
       status: true,
       items: {
-        select: { lineOrder: true, itemCode: true, itemName: true, quantity: true, unitPrice: true, totalPrice: true, unit: true, poCustomerItemCode: true },
+        select: { lineOrder: true, itemCode: true, itemName: true, quantity: true, unitPrice: true, totalPrice: true, unit: true, poCustomerItemCode: true, isSample: true },
         orderBy: { lineOrder: "asc" },
       },
     },
@@ -168,7 +169,7 @@ export async function syncPoTrackingFromOrders(orderCodes?: string[]): Promise<S
             l.itemName === item.itemName &&
             item.itemName != null &&
             Number(l.poQuantity) === qty &&
-            Number(l.contractPrice) === price &&
+            Number(l.contractPrice) === (item.isSample ? 0 : price) &&
             sameDay(l.requestedDeliveryDate, order.expectedDeliveryDate)
         );
         if (candidates.length === 1) {
@@ -181,7 +182,8 @@ export async function syncPoTrackingFromOrders(orderCodes?: string[]): Promise<S
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
         const poQuantity = Number(item.quantity);
-        const contractPrice = Number(item.unitPrice);
+        // Hàng mẫu: giá 0 → G.Trị PO, giá trị giao và doanh số đều 0 (SL vẫn theo dõi).
+        const contractPrice = item.isSample ? 0 : Number(item.unitPrice);
         // KHÔNG dùng item.totalPrice (= "total" của AMIS) làm G.Trị PO — đã xác nhận bằng dữ
         // liệu thật rằng field này của AMIS BAO GỒM thuế GTGT 8% (vd SL 22.300 × Giá 280 =
         // 6.244.000, nhưng AMIS "total" = 6.743.520 = ×1.08), trong khi "G.Trị PO" ở file Excel
@@ -200,6 +202,7 @@ export async function syncPoTrackingFromOrders(orderCodes?: string[]): Promise<S
             baselineDeliveredQty: existing?.baselineDeliveredQty != null ? Number(existing.baselineDeliveredQty) : 0,
             baselineClosed: existing ? existing.baselineClosed || baselineClosed : baselineClosed,
             manuallyClosed: existing?.manuallyClosed ?? false,
+            isSample: item.isSample,
           },
           slipAgg
         );
@@ -223,6 +226,7 @@ export async function syncPoTrackingFromOrders(orderCodes?: string[]): Promise<S
           contractPrice,
           requestedDeliveryDate: order.expectedDeliveryDate,
           poValue,
+          isSample: item.isSample,
           baselineClosed: existing ? existing.baselineClosed || baselineClosed : baselineClosed,
           ...computed,
         };
@@ -245,5 +249,6 @@ export async function syncPoTrackingFromOrders(orderCodes?: string[]): Promise<S
     }
   }
 
+  await zeroSampleLineValues(); // chắc chắn hàng mẫu không mang giá trị (kể cả đợt giao từ file Excel / phiếu cũ)
   return { ordersScanned: orders.length, linesCreated, linesUpdated, linesMigrated, ambiguousGroups };
 }

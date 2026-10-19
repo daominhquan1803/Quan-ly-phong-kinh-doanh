@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import { prisma } from "./index";
+import { zeroSampleLineValues } from "./sample-lines";
 import {
   getSlipAggForAllLines,
   baselineSlipCutoff,
@@ -197,9 +198,10 @@ export async function importPoTrackingRows(rows: ParsedPoTrackingRow[], batchId:
   });
   const employeeByAmisCode = new Map(knownEmployees.map((e) => [e.amisEmployeeCode as string, e.id]));
 
-  const existing = await prisma.poTrackingLine.findMany({ select: { id: true, naturalKey: true, manuallyClosed: true } });
+  const existing = await prisma.poTrackingLine.findMany({ select: { id: true, naturalKey: true, manuallyClosed: true, isSample: true } });
   const existingByKey = new Map(existing.map((e) => [e.naturalKey, e.id]));
   const manuallyClosedById = new Map(existing.map((e) => [e.id, e.manuallyClosed]));
+  const sampleById = new Map(existing.map((e) => [e.id, e.isSample]));
 
   // Mốc thời điểm nhập file NÀY — nền vừa ghi coi như đã bao gồm mọi đợt giao Phiếu đi hàng TRƯỚC
   // mốc này (xem getSlipAggForAllLines), nên chỉ cộng slip TỪ mốc này trở đi, và xoá luôn các đợt
@@ -239,6 +241,7 @@ export async function importPoTrackingRows(rows: ParsedPoTrackingRow[], batchId:
           baselineDeliveredQty: r.totalDeliveredQty,
           baselineClosed,
           manuallyClosed: existingId ? manuallyClosedById.get(existingId) ?? false : false,
+          isSample: existingId ? sampleById.get(existingId) ?? false : false,
         },
         slipAgg
       );
@@ -311,6 +314,7 @@ export async function importPoTrackingRows(rows: ParsedPoTrackingRow[], batchId:
     await Promise.all(chunk.map(({ r, naturalKey }) => processRow(r, naturalKey)));
   }
 
+  await zeroSampleLineValues(); // hàng mẫu không tính doanh số dù file Excel ghi giá trị
   await prisma.poTrackingImportBatch.update({
     where: { id: batchId },
     data: {

@@ -198,6 +198,8 @@ export function computeLineDeliveryFields(
     // baselineClosed (ép statusRaw = "Kết thúc" dù chưa giao đủ), nhưng khác ở chỗ chỉ đổi qua
     // nút bấm, không bị 1 lần nhập lại file PO tracking Excel ghi đè/mở lại.
     manuallyClosed: boolean;
+    // Hàng mẫu: giá trị luôn 0 nên KHÔNG được coi là "hết giá trị còn lại" — chỉ đóng khi giao đủ SL / đóng tay.
+    isSample?: boolean;
   },
   slipAgg: SlipAgg
 ): LineDeliveryFields {
@@ -209,7 +211,7 @@ export function computeLineDeliveryFields(
   // Hết giá trị còn lại (remainingValue = 0) thì cũng coi là xong, KỂ CẢ khi SL PO (nếu có)
   // chưa khớp đúng số đã giao — 1 số dòng lệch SL nhỏ do làm tròn/điều chỉnh giá không còn ý
   // nghĩa về tiền, theo anh Quân xác nhận: hết giá trị chưa giao thì không cần giao tiếp nữa.
-  const noRemainingValue = remainingValue === 0;
+  const noRemainingValue = !line.isSample && remainingValue === 0;
   const statusRaw =
     line.baselineClosed || line.manuallyClosed || fullyDelivered || noRemainingValue ? "Kết thúc" : "Đang thực hiện";
   return { deliveredValue, remainingValue, totalDeliveredQty, remainingQty, statusRaw };
@@ -235,6 +237,7 @@ export async function recomputeLineDeliveryFields(lineId: string): Promise<void>
       baselineDeliveredQty: true,
       baselineClosed: true,
       manuallyClosed: true,
+      isSample: true,
       importBatch: { select: { createdAt: true } },
     },
   });
@@ -248,6 +251,7 @@ export async function recomputeLineDeliveryFields(lineId: string): Promise<void>
       baselineDeliveredQty: line.baselineDeliveredQty != null ? Number(line.baselineDeliveredQty) : null,
       baselineClosed: line.baselineClosed,
       manuallyClosed: line.manuallyClosed,
+      isSample: line.isSample,
     },
     slipAgg
   );

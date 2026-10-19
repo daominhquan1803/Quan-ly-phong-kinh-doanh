@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeLineDeliveryFields, contentIndicatesNoLongerNeeded, allocateQtyAcrossLines, excessBeyondBaseline } from "@hoanggia/db";
+import { computeLineDeliveryFields, contentIndicatesNoLongerNeeded, allocateQtyAcrossLines, excessBeyondBaseline, isSampleNote, isSampleMapping, isSampleOrder } from "@hoanggia/db";
 
 describe("computeLineDeliveryFields", () => {
   it("cộng phần giao qua Phiếu đi hàng lên trên nền từ file PO tracking", () => {
@@ -161,5 +161,34 @@ describe("excessBeyondBaseline (phiếu trước mốc nhập file PO tracking)"
   });
   it("file đã ghi đủ cả 2 phiếu -> không tính thêm", () => {
     expect(excessBeyondBaseline(30000, 30000, 60000)).toBe(0);
+  });
+});
+
+describe("hàng mẫu không tính doanh số", () => {
+  it("nhận diện ghi chú Hàng mẫu, không nhầm quy cách kỹ thuật hay tên sản phẩm", () => {
+    expect(isSampleNote("Hàng mẫu")).toBe(true);
+    expect(isSampleNote("HÀNG MẪU")).toBe(true);
+    expect(isSampleNote("Mẫu")).toBe(true);
+    expect(isSampleNote("4 tem 1 tờ, 400 tem/ bọc. Hàng Mẫu")).toBe(true);
+    expect(isSampleNote("Túi PE 37cm x 58cm 51471 (hàng mẫu không tính tiền)")).toBe(true);
+    expect(isSampleNote("PO OCA MS THUÝ SAMPLE")).toBe(true);
+    expect(isSampleNote("Quyển mẫu màu tôn 139mmx265mm")).toBe(false);
+    expect(isSampleNote("Nhãn giấy Nhãn dán lưu mẫu 100mmx50mm")).toBe(false);
+    expect(isSampleNote("Lưu ý: túi mở 2 đầu. có mẫu gửi kèm theo")).toBe(false);
+    expect(isSampleNote("FOC-Bù Hao-VNPTTech/145/26")).toBe(false);
+    expect(isSampleNote(null)).toBe(false);
+  });
+  it("dòng AMIS: ghi chú nằm ở custom_field3/4/6/7; quy cách (custom_field5) không tính", () => {
+    expect(isSampleMapping({ custom_field4: "Hàng mẫu" })).toBe(true);
+    expect(isSampleMapping({ custom_field3: "Hàng mẫu" })).toBe(true);
+    expect(isSampleMapping({ custom_field4: "AWW9288CMNC0-0C0" })).toBe(false);
+    expect(isSampleOrder({ sale_order_name: "Hàng Mẫu không tính tiền" })).toBe(true);
+    expect(isSampleOrder({ sale_order_name: "Đơn hàng bán cho PANASONIC" })).toBe(false);
+  });
+  it("dòng mẫu giá trị 0 vẫn không tự 'Kết thúc' khi chưa giao đủ SL", () => {
+    const line = { poValue: 0, poQuantity: 10, baselineDeliveredValue: 0, baselineDeliveredQty: 0, baselineClosed: false, manuallyClosed: false };
+    expect(computeLineDeliveryFields({ ...line, isSample: true }, { qty: 0, value: 0 }).statusRaw).toBe("Đang thực hiện");
+    expect(computeLineDeliveryFields({ ...line, isSample: true }, { qty: 10, value: 0 }).statusRaw).toBe("Kết thúc");
+    expect(computeLineDeliveryFields(line, { qty: 0, value: 0 }).statusRaw).toBe("Kết thúc"); // dòng thường giá 0 như cũ
   });
 });

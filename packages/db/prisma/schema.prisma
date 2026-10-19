@@ -326,6 +326,8 @@ model OrderItem {
   totalPrice         Decimal @default(0) @db.Decimal(18, 2)
   warehouse          String?
   poCustomerItemCode String?
+  // Hàng mẫu (AMIS ghi chú "Hàng mẫu"...) — không tính doanh số (xem sample-lines.ts)
+  isSample           Boolean @default(false)
 
   @@index([orderId])
   @@index([itemCode])
@@ -1096,6 +1098,10 @@ model PoTrackingLine {
   manuallyClosedAt       DateTime?
   manuallyClosedByUserId String?
   manuallyClosedByUser   User?     @relation("PoLineManuallyClosedBy", fields: [manuallyClosedByUserId], references: [id])
+
+  // Hàng mẫu (AMIS ghi chú "Hàng mẫu"...): giá trị luôn 0 nên KHÔNG tính doanh số/giá trị còn lại, nhưng vẫn
+  // theo dõi SL giao và hạn giao. Đặt khi đồng bộ đơn AMIS (xem sample-lines.ts, po-tracking-from-orders.ts).
+  isSample Boolean @default(false)
 
   importBatchId String?
   importBatch   PoTrackingImportBatch? @relation(fields: [importBatchId], references: [id])

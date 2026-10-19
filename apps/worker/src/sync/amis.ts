@@ -7,6 +7,8 @@ import {
   getManagedAmisEmployeeCodes,
   normalizeVN,
   syncPoTrackingFromOrders,
+  isSampleMapping,
+  isSampleOrder,
 } from "@hoanggia/db";
 import { logger } from "../logger";
 
@@ -27,11 +29,17 @@ interface AmisProductMapping {
   total?: number | null; // thành tiền
   stock_name?: string | null; // kho
   custom_field3?: string | null; // "Số PO/Mã hàng KH" theo mẫu phiếu Hoàng Gia
+  // Cột ghi chú tuỳ biến (tuỳ mẫu phiếu) — nơi ghi "Hàng mẫu", xem isSampleMapping.
+  custom_field4?: string | null;
+  custom_field6?: string | null;
+  custom_field7?: string | null;
 }
 
 interface AmisSaleOrder {
   id: number;
   sale_order_no: string;
+  sale_order_name?: string | null;
+  custom_field4?: string | null;
   account_name: string | null;
   account_code: string | null;
   sale_order_date: string | null;
@@ -206,8 +214,16 @@ function mapAmisStatus(deliveryStatus: string | null, status: string | null): Or
   return OrderStatus.NEW;
 }
 
+/** Giá trị đơn KHÔNG gồm hàng mẫu (hàng mẫu không tính doanh số): trừ thành tiền các dòng mẫu; đơn mẫu cả đơn = 0. */
+function orderValueExcludingSamples(o: AmisSaleOrder): number {
+  const total = o.sale_order_amount ?? o.total_summary ?? 0;
+  if (isSampleOrder(o)) return 0;
+  const sample = (o.sale_order_product_mappings ?? []).filter((m) => isSampleMapping(m)).reduce((s, m) => s + (m.total ?? (m.amount ?? 0) * (m.price ?? 0)), 0);
+  return Math.max(0, total - sample);
+}
+
 /** Ghi đè toàn bộ bảng hàng hoá của 1 đơn — khớp với cách AMIS xử lý khi sửa đơn hàng. */
-async function syncOrderItems(orderId: string, mappings: AmisProductMapping[] | null) {
+async function syncOrderItems(orderId: string, mappings: AmisProductMapping[] | null, wholeOrderSample = false) {
   await prisma.orderItem.deleteMany({ where: { orderId } });
   if (!mappings?.length) return;
 
@@ -222,7 +238,8 @@ async function syncOrderItems(orderId: string, mappings: AmisProductMapping[] | 
       unitPrice: m.price ?? 0,
       totalPrice: m.total ?? 0,
       warehouse: m.stock_name || null,
-      poCustomerItemCode: m.custom_field3?.trim() || null,
+      poCustomerItemCode: isSampleMapping(m) ? null : m.custom_field3?.trim() || null,
+      isSample: wholeOrderSample || isSampleMapping(m),
     })),
   });
 }
@@ -287,7 +304,7 @@ async function upsertOrderFromAmis(o: AmisSaleOrder, managedCodes: Set<string>):
     expectedDeliveryDate: o.deadline_date ? new Date(o.deadline_date) : null,
     actualDeliveryDate: o.delivery_date ? new Date(o.delivery_date) : null,
     status: o.is_deleted ? OrderStatus.CANCELLED : mapAmisStatus(o.delivery_status, o.status),
-    totalValue: o.sale_order_amount ?? o.total_summary ?? 0,
+    totalValue: orderValueExcludingSamples(o),
     deliveredValue: o.total_amount_delivered_summary ?? 0,
     poCode,
     rawData: o as object,
@@ -297,7 +314,7 @@ async function upsertOrderFromAmis(o: AmisSaleOrder, managedCodes: Set<string>):
     ? await prisma.order.update({ where: { id: existing.id }, data })
     : await prisma.order.create({ data });
 
-  await syncOrderItems(order.id, o.sale_order_product_mappings);
+  await syncOrderItems(order.id, o.sale_order_product_mappings, isSampleOrder(o));
   await recordDeliveryDelta({
     orderId: order.id,
     salesEmployeeId,
