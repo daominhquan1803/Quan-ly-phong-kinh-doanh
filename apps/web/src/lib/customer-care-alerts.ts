@@ -88,7 +88,7 @@ export async function buildCareAlerts(now: Date = new Date(), opts: { weekly?: b
 
   // ----- thứ 2: tổng kết tuần trước -----
   const weekly: CareMsg[] = [];
-  if (opts.weekly) {
+  if (opts.weekly && lastWeekRangeVN(now).to >= vnDayOf(CARE_TRACKING_START)) {
     const range = lastWeekRangeVN(now);
     const evals = await evaluateCare(range, {}, now, plan);
     const pct = (x: number | null) => (x == null ? "—" : `${Math.round(x)}%`);
