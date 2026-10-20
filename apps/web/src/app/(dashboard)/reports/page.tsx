@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { isSystemAdmin } from "@/lib/rbac";
 import { ReportsTabs } from "@/components/reports/ReportsTabs";
 import { FileBarChart } from "lucide-react";
 
@@ -15,11 +16,11 @@ export default async function ReportsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-white">Báo cáo</h1>
           <p className="text-xs text-gray-400 mt-0.5">
-            Báo cáo tuần / tháng ra Excel dashboard, và Thống kê khách hàng / mã hàng lâu chưa mua, hoá đơn theo khách
+            Báo cáo tuần / tháng ra Excel dashboard, Thống kê khách hàng / mã hàng lâu chưa mua, và Danh sách khách hàng (hồ sơ, đang mua gì, tiến trình, tình trạng)
           </p>
         </div>
       </div>
-      <ReportsTabs isAdmin={isAdmin} />
+      <ReportsTabs isAdmin={isAdmin} isSystem={isSystemAdmin(session)} />
     </div>
   );
 }

@@ -4,11 +4,12 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { ReportsPanel } from "./ReportsPanel";
 import { StatsPanel } from "./StatsPanel";
+import { CustomerReportPanel } from "@/components/customer-report/CustomerReportPanel";
 
-type Tab = "period" | "stats";
+type Tab = "period" | "stats" | "customers";
 
 /** Trang Báo cáo có 2 khu: báo cáo tuần/tháng (dashboard) và Thống kê (khách/mã hàng lâu chưa mua, hoá đơn theo khách). */
-export function ReportsTabs({ isAdmin }: { isAdmin: boolean }) {
+export function ReportsTabs({ isAdmin, isSystem }: { isAdmin: boolean; isSystem: boolean }) {
   const [tab, setTab] = useState<Tab>("period");
   return (
     <div className="space-y-5">
@@ -17,6 +18,7 @@ export function ReportsTabs({ isAdmin }: { isAdmin: boolean }) {
           [
             ["period", "Báo cáo tuần / tháng"],
             ["stats", "Thống kê"],
+            ["customers", "Danh sách khách hàng"],
           ] as [Tab, string][]
         ).map(([k, label]) => (
           <button
@@ -31,7 +33,7 @@ export function ReportsTabs({ isAdmin }: { isAdmin: boolean }) {
           </button>
         ))}
       </div>
-      {tab === "period" ? <ReportsPanel /> : <StatsPanel isAdmin={isAdmin} />}
+      {tab === "period" ? <ReportsPanel /> : tab === "stats" ? <StatsPanel isAdmin={isAdmin} /> : <CustomerReportPanel isAdmin={isAdmin} canFixGroups={isSystem} />}
     </div>
   );
 }

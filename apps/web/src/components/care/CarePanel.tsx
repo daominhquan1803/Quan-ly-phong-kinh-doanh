@@ -21,6 +21,7 @@ import {
 } from "@/lib/customer-care";
 import { SEASON_STAGE_LABEL } from "@/lib/customer-season";
 import { DuePlan } from "./DuePlan";
+import { ProfileBox } from "@/components/customer-report/ProfileForm";
 import type { CareCustomerRow } from "@/lib/customer-care-query";
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
@@ -164,6 +165,7 @@ export function CarePanel() {
                 queryClient.invalidateQueries({ queryKey: ["care-plan"] });
               }}
             />
+            <ProfileBox key={`pf-${selected.id}`} customerId={selected.id} />
             <History customerId={selected.id} />
           </>
         ) : (

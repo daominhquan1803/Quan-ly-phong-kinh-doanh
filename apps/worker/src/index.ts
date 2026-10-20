@@ -13,6 +13,7 @@ import { runZaloDispatch } from "./notifications/zaloDispatch";
 import { runAdminKpiDigest } from "./notifications/adminKpiDigest";
 import { runCustomerAlerts } from "./notifications/customerAlerts";
 import { runCareDaily, runCareEscalations } from "./notifications/carePlan";
+import { runCustomerReportSnapshot } from "./notifications/customerReportSnapshot";
 import { isZaloConfigured } from "./zalo";
 import { logger } from "./logger";
 
@@ -91,6 +92,15 @@ async function main() {
       runAdminKpiDigest().catch((err) => logger.error("Lỗi tin KPI Admin hằng ngày:", err));
       runCustomerAlerts().catch((err) => logger.error("Lỗi cảnh báo khách hàng:", err));
       runCareDaily().catch((err) => logger.error("Lỗi lịch chăm sóc 8h:", err));
+    },
+    { timezone: NOTIFY_CRON_TIMEZONE }
+  );
+
+  // 05:30 ngày 1 hằng tháng: chụp báo cáo Danh sách khách hàng (tiến trình/tình trạng cuối tháng trước) để so sánh.
+  cron.schedule(
+    "30 5 1 * *",
+    () => {
+      runCustomerReportSnapshot().catch((err) => logger.error("Lỗi chụp báo cáo danh sách khách:", err));
     },
     { timezone: NOTIFY_CRON_TIMEZONE }
   );

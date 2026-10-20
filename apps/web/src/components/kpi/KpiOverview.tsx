@@ -38,6 +38,7 @@ interface KpiRow {
   defectCount?: number;
   defectPenalty: number;
   carePenalty?: number;
+  profilePenalty?: number;
   careFraction?: number | null;
   totalScore: number;
   grade: "A" | "B" | "C" | "D" | "F";
@@ -242,6 +243,7 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
                     <td className="px-2.5 py-2 text-right border-l border-white/5 font-mono font-semibold text-alert" title={`${r.defectCount ?? 0} biên bản hàng lỗi`}>
                       {r.defectPenalty > 0 ? `−${r.defectPenalty}` : "0"}
                       {(r.carePenalty ?? 0) > 0 && <span className="block text-[10px]" title="Kiểm tra chéo phát hiện ghi chăm sóc khống">ghi khống −{r.carePenalty}</span>}
+                      {(r.profilePenalty ?? 0) > 0 && <span className="block text-[10px]" title="% hồ sơ đầy đủ khách A/B dưới 90% (−2đ) / dưới 70% (−5đ)">hồ sơ khách −{r.profilePenalty}</span>}
                     </td>
                     <td className="px-2.5 py-2 text-right border-l border-white/5 font-mono font-bold text-amber-400 text-sm">{r.totalScore}</td>
                     <td className="px-2.5 py-2 text-center">

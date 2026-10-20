@@ -273,6 +273,42 @@ model CareSpotCheck {
   @@map("care_spot_checks")
 }
 
+// Lịch sử đổi bước tiến trình mua hàng của khách — xem khách đi qua các bước mất bao lâu.
+model CustomerStageHistory {
+  id          String   @id @default(cuid())
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  fromStage   String?
+  toStage     String
+  changedById String?
+  source      String   @default("APP") // APP | EXCEL
+  createdAt   DateTime @default(now())
+
+  @@index([customerId, createdAt])
+  @@map("customer_stage_history")
+}
+
+// Nhóm sản phẩm gán tay cho mã hàng không tự gom được (xem lib/product-groups.ts).
+model ItemGroupOverride {
+  itemCode  String   @id
+  groupKey  String
+  updatedAt DateTime @updatedAt
+
+  @@map("item_group_overrides")
+}
+
+// Bản chụp cuối tháng của báo cáo Danh sách khách hàng — so tháng này với tháng trước.
+model CustomerReportSnapshot {
+  id        String   @id @default(cuid())
+  year      Int
+  month     Int
+  rows      Json
+  createdAt DateTime @default(now())
+
+  @@unique([year, month])
+  @@map("customer_report_snapshots")
+}
+
 model Order {
   id                       String       @id @default(cuid())
   orderCode                String       @unique
@@ -513,6 +549,21 @@ model Customer {
   buyingPattern    CustomerBuyingPattern @default(REGULAR)
   seasonMonths     Int[]                 @default([])
   seasonLeadMonths Int                   @default(2)
+
+  // ----- Hồ sơ khách cho báo cáo Danh sách khách hàng (anh Quân 20/10/2026) — NVKD nhập trên app hoặc nhập ngược từ Excel -----
+  address          String? // địa chỉ (trống = lấy từ đơn AMIS gần nhất)
+  province         String?
+  industry         String? // mã ngành, xem lib/customer-profile.ts INDUSTRIES
+  staffSize        String? // LT50 | 50_200 | 200_1000 | GT1000
+  ownership        String? // FDI | VN
+  contactPhone     String?
+  competitors      String? // đối thủ đang cung cấp
+  potentialYear    Decimal?               @db.Decimal(18, 0) // ước khách mua bao bì / năm (VND)
+  painPoint        String? // vấn đề / khó khăn NVKD ghi thêm
+  stage            String? // tiến trình mua hàng đã xác nhận, xem STAGES
+  stageUpdatedAt   DateTime?
+  profileUpdatedAt DateTime?
+  stageHistory     CustomerStageHistory[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
