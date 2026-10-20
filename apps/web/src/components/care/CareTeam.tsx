@@ -16,6 +16,7 @@ import { SEASON_STAGE_LABEL } from "@/lib/customer-season";
 import type { CareDetail, CareDetailsReport, CareTeamReport } from "@/lib/customer-care-team";
 import { CareEvaluation, SpotChecks } from "./CareEvaluation";
 import { UnassignedPanel } from "./UnassignedPanel";
+import { TransferPanel } from "./TransferPanel";
 
 const card = "rounded-2xl border border-gray-200/30 p-4";
 const KIND_LABEL = { ISSUE: "Có vấn đề", LOST: "Đã chuyển NCC khác", NO_CONTACT: "Không liên lạc được nhiều lần" } as const;
@@ -137,6 +138,7 @@ export function CareTeam({ onOpenCustomer, canVerify }: { onOpenCustomer: (custo
           <CareEvaluation onOpenCustomer={onOpenCustomer} />
 
           {team && <UnassignedPanel canAssign={canVerify} onOpenCustomer={onOpenCustomer} />}
+          {team && canVerify && <TransferPanel onOpenCustomer={onOpenCustomer} />}
 
           <div className={cn(card, "overflow-x-auto")}>
             <SectionHead icon={<Users className="h-4 w-4 text-amber-400" />} title="Chăm sóc theo thành viên" />
