@@ -128,7 +128,7 @@ export async function getCareDetails(options: { date?: string; onlyEmployeeId?: 
   const dayStart = vnDayStart(date);
   const only = options.onlyEmployeeId;
   const [sales, logs] = await Promise.all([
-    prisma.user.findMany({ where: { active: true, role: "SALES", ...(only ? { id: only } : {}) }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    prisma.user.findMany({ where: { active: true, OR: [{ role: "SALES" }, { customers: { some: {} } }], ...(only ? { id: only } : {}) }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     prisma.customerCareLog.findMany({
       where: { createdAt: { gte: dayStart, lt: new Date(dayStart.getTime() + DAY) }, ...(only ? { employeeId: only } : {}) },
       select: DETAIL_SELECT,
@@ -176,7 +176,7 @@ export async function getCareTeamReport(options: { date?: string; onlyEmployeeId
 
   const [sales, overview, logs, risks] = await Promise.all([
     prisma.user.findMany({
-      where: { active: true, role: "SALES", ...(only ? { id: only } : {}) },
+      where: { active: true, OR: [{ role: "SALES" }, { customers: { some: {} } }], ...(only ? { id: only } : {}) },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),

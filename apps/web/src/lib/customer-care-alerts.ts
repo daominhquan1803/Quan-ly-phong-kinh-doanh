@@ -14,6 +14,7 @@ import {
 } from "./customer-care-plan";
 import { openProblem } from "./customer-care-team";
 import { workingDeadline } from "./admin-kpi";
+import { getUnassignedCustomers } from "./customer-care-unassigned";
 
 /**
  * Tin nhắc của lịch chăm sóc (anh Quân chốt 20/10/2026):
@@ -187,13 +188,25 @@ async function buildEscalations(plan: CarePlan, managerIds: string[], nameOf: Ma
     });
     const ok = new Set(logged.map((l) => l.employeeId));
     for (const e of plan.employees) {
-      if (ok.has(e.id)) continue;
+      if (ok.has(e.id) || e.role !== "SALES") continue; // quản trị viên tự phụ trách khách thì không tự báo chính mình
       toManagers(
         `${e.name} 2 ngày làm việc không ghi chăm sóc`,
         `${e.name} không có lần ghi chăm sóc khách nào ngày ${dm(prevDays[0])} và ${dm(prevDays[1])}.`,
         `/cham-soc?esc=NOLOG&emp=${e.id}&d=${ymd(plan.today)}`
       );
     }
+  }
+  // (6) khách đang mua nhưng chưa có người phụ trách — nhắc anh phân, mỗi tuần 1 lần cho tới khi phân xong
+  const unassigned = (await getUnassignedCustomers(now)).filter((u) => u.orders12 > 0);
+  if (unassigned.length > 0) {
+    const dow = (new Date(plan.today + 7 * 3600_000).getUTCDay() + 6) % 7;
+    const monday = plan.today - dow * DAY;
+    const top = unassigned.slice(0, 5).map((u) => u.customerCode ?? u.customerName).join(", ");
+    toManagers(
+      `${unassigned.length} khách đang mua chưa có người phụ trách`,
+      `${top}${unassigned.length > 5 ? ` và ${unassigned.length - 5} khách nữa` : ""} chưa nằm trong lịch chăm sóc của ai. Vào trang Chăm sóc, mục Khách chưa có người phụ trách để phân.`,
+      `/cham-soc?unassigned=${ymd(monday)}`
+    );
   }
   return out;
 }

@@ -133,7 +133,7 @@ export interface PlanCustomer {
 
 export interface CarePlan {
   today: number;
-  employees: { id: string; name: string }[];
+  employees: { id: string; name: string; role: string }[];
   customers: PlanCustomer[];
   /** mọi lần chạm theo khách (kể cả khách ngoài lịch) — dùng cho phản ứng cảnh báo */
   touchesByCustomer: Map<string, number[]>;
@@ -146,9 +146,10 @@ export async function loadCarePlan(options: { onlyEmployeeId?: string } = {}, no
   const monthStart = Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), 1) - VN;
   const only = options.onlyEmployeeId;
 
+  // NVKD + người quản trị trực tiếp phụ trách khách (anh Quân 20/10/2026: khách anh phụ trách cũng vào lịch)
   const employees = await prisma.user.findMany({
-    where: { active: true, role: "SALES", ...(only ? { id: only } : {}) },
-    select: { id: true, name: true },
+    where: { active: true, OR: [{ role: "SALES" }, { customers: { some: {} } }], ...(only ? { id: only } : {}) },
+    select: { id: true, name: true, role: true },
     orderBy: { name: "asc" },
   });
   const empIds = employees.map((e) => e.id);
