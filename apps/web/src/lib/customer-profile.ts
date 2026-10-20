@@ -33,7 +33,7 @@ export const STATUSES = {
   NEW: "Khách mới (mua ≤ 90 ngày)",
   ACTIVE: "Mua bình thường",
   INACTIVE: "Không mua 12 tháng",
-  NEVER: "Chưa mua",
+  NEVER: "Chưa có đơn (từ 4/2026)", // đơn hàng trong app chỉ có từ 01/04/2026 (đồng bộ AMIS)
 } as const;
 
 export type IndustryKey = keyof typeof INDUSTRIES;

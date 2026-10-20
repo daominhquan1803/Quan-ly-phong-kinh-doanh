@@ -190,7 +190,7 @@ export function CustomerReportPanel({ isAdmin, canFixGroups }: { isAdmin: boolea
               </tbody>
             </table>
             <p className="mt-2 text-[11px] text-muted-foreground">
-              Hồ sơ đầy đủ = có địa chỉ, ngành, quy mô, loại hình, người liên hệ + SĐT, tiến trình đã xác nhận, tiềm năng/năm. Từ 12/2026 % hồ sơ khách A/B tính vào KPI tháng NVKD.
+              Số liệu đơn hàng trong app có từ 01/04/2026 (đồng bộ AMIS), nên “doanh số 12 tháng” hiện là từ 4/2026 và khách mua trước đó hiện “Chưa có đơn”. Hồ sơ đầy đủ = có địa chỉ, ngành, quy mô, loại hình, người liên hệ + SĐT, tiến trình đã xác nhận, tiềm năng/năm. Từ 12/2026 % hồ sơ khách A/B tính vào KPI tháng NVKD.
               {data.report.prevSnapshot && ` So sánh tiến trình với cuối tháng ${data.report.prevSnapshot.month}/${data.report.prevSnapshot.year}.`}
             </p>
           </div>

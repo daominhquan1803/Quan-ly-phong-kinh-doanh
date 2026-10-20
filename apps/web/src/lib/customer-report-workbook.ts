@@ -208,7 +208,7 @@ export async function buildCustomerReportFile(report: CustomerReport, rows: Cust
   dash.mergeCells(1, 1, 1, 8);
   dash.getCell(1, 1).value = `BÁO CÁO DANH SÁCH KHÁCH HÀNG — ${opts.scopeLabel.toUpperCase()}`;
   dash.getCell(1, 1).font = { bold: true, size: 16, color: { argb: NAVY } };
-  dash.getCell(2, 1).value = `${COMPANY_NAME} · Lập lúc ${new Date(report.generatedAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })} · Số liệu tính bằng công thức theo sheet "${LIST_SHEET}" — sửa danh sách thì dashboard tự tính lại.`;
+  dash.getCell(2, 1).value = `${COMPANY_NAME} · Lập lúc ${new Date(report.generatedAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })} · Số liệu tính bằng công thức theo sheet "${LIST_SHEET}" — sửa danh sách thì dashboard tự tính lại. Đơn hàng trong app có từ 01/04/2026.`;
   dash.getCell(2, 1).font = { italic: true, color: { argb: "FF6B7280" } };
 
   // Thẻ số liệu
