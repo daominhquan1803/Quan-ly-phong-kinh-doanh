@@ -37,6 +37,8 @@ interface KpiRow {
   scoreWeek: number;
   defectCount?: number;
   defectPenalty: number;
+  carePenalty?: number;
+  careFraction?: number | null;
   totalScore: number;
   grade: "A" | "B" | "C" | "D" | "F";
   gradeLabel: string;
@@ -222,8 +224,11 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
                     <td className="px-2.5 py-2 text-right font-mono text-ink">{numOrDash(r.actualNewCustomers)}</td>
                     <td className="px-2.5 py-2 text-right font-mono text-muted2">{r.weightNewCustomers}</td>
                     <td className="px-2.5 py-2 text-right font-mono font-semibold text-ink">{r.scoreNewCustomers}</td>
-                    <td className="px-2.5 py-2 text-right border-l border-white/5 font-mono text-muted2">
-                      {r.approvedVisitCount}/{r.visitTarget}
+                    <td
+                      className="px-2.5 py-2 text-right border-l border-white/5 font-mono text-muted2"
+                      title={r.careFraction != null ? "Từ 12/2026: điểm CSKH theo lịch chăm sóc (50% chạm đúng hạn + 30% phủ khách A + 20% phản ứng cảnh báo & xử lý vấn đề)" : undefined}
+                    >
+                      {r.careFraction != null ? `${Math.round(r.careFraction * 100)}% lịch` : `${r.approvedVisitCount}/${r.visitTarget}`}
                     </td>
                     <td className="px-2.5 py-2 text-right font-mono text-muted2">{r.weightVisit}</td>
                     <td className="px-2.5 py-2 text-right font-mono font-semibold text-ink">{r.scoreVisit}</td>
@@ -236,6 +241,7 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
                     <td className="px-2.5 py-2 text-right border-l border-white/5 font-mono font-semibold text-amber-300">{r.scoreWeek}</td>
                     <td className="px-2.5 py-2 text-right border-l border-white/5 font-mono font-semibold text-alert" title={`${r.defectCount ?? 0} biên bản hàng lỗi`}>
                       {r.defectPenalty > 0 ? `−${r.defectPenalty}` : "0"}
+                      {(r.carePenalty ?? 0) > 0 && <span className="block text-[10px]" title="Kiểm tra chéo phát hiện ghi chăm sóc khống">ghi khống −{r.carePenalty}</span>}
                     </td>
                     <td className="px-2.5 py-2 text-right border-l border-white/5 font-mono font-bold text-amber-400 text-sm">{r.totalScore}</td>
                     <td className="px-2.5 py-2 text-center">

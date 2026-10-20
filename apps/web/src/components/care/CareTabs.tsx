@@ -9,7 +9,7 @@ import { CareTeam } from "./CareTeam";
 type Tab = "log" | "team";
 
 /** Hai tab của trang Chăm sóc: ghi nhanh (NVKD dùng hằng ngày) và thống kê phòng (quản trị mặc định mở tab này). */
-export function CareTabs({ defaultTab }: { defaultTab: Tab }) {
+export function CareTabs({ defaultTab, canVerify }: { defaultTab: Tab; canVerify: boolean }) {
   const router = useRouter();
   const params = useSearchParams();
   const customer = params.get("customer") ?? "";
@@ -39,7 +39,7 @@ export function CareTabs({ defaultTab }: { defaultTab: Tab }) {
           </button>
         ))}
       </div>
-      {tab === "log" ? <CarePanel key={customer} /> : <CareTeam onOpenCustomer={openCustomer} />}
+      {tab === "log" ? <CarePanel key={customer} /> : <CareTeam onOpenCustomer={openCustomer} canVerify={canVerify} />}
     </div>
   );
 }

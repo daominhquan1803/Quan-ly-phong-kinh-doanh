@@ -3,6 +3,7 @@ import { monthRange, getEmployeeTargetVsActual, getProductGroupTargetVsActual } 
 import { getMonthlyWeekPlanScore } from "./week-plan";
 import { computeDebtStatus, countsAsOverdue, remainingAmount } from "./debt-status";
 import { COUNTED_STOP_WHERE, COUNTED_TRIP_WHERE } from "./business-trip-report";
+import { CARE_KPI_FROM, evaluateCare, fakePenalty, monthRangeVN } from "./customer-care-plan";
 
 /**
  * Công thức tính điểm KPI hàng tháng — dựa theo file mẫu KPI_KD_HoanggiaPS.xlsx / KPI_PKD1_
@@ -69,6 +70,10 @@ export interface KpiScoreInput {
   weekScore: number;
   // Số biên bản hàng lỗi trong tháng mà NVKD được ghi chịu trách nhiệm — trừ 2đ/biên bản, tối đa 10đ (anh Quân chốt 17/10/2026).
   defectCount?: number;
+  // Từ 12/2026: điểm CSKH theo lịch chăm sóc (0–1, xem customer-care-plan.ts) THAY cho đếm lượt đi gặp; và số lần
+  // kiểm tra chéo phát hiện ghi khống (trừ 5đ/lần, tối đa 10đ). Không truyền = cách tính cũ.
+  careFraction?: number | null;
+  careFakes?: number;
 }
 
 export const DEFECT_PENALTY_PER_REPORT = 2;
@@ -93,6 +98,7 @@ export interface KpiScoreResult {
   scoreAttitude: number;
   scoreWeek: number;
   defectPenalty: number;
+  carePenalty: number;
   totalScore: number;
   grade: KpiGrade;
   gradeLabel: string;
@@ -159,7 +165,10 @@ export function computeKpiScores(input: KpiScoreInput): KpiScoreResult {
   const scoreDebtCollection =
     input.debtCollectionRatePct != null ? clamp((input.debtCollectionRatePct / 100) * 10, 0, 10) : 0;
 
-  const scoreVisit = scoreRatioCapped(input.approvedVisitCount, input.visitTarget, input.weightVisit);
+  const scoreVisit =
+    input.careFraction != null
+      ? clamp(input.careFraction, 0, 1) * input.weightVisit
+      : scoreRatioCapped(input.approvedVisitCount, input.visitTarget, input.weightVisit);
 
   const scoreAttitude = clamp(2 - input.violationCount, 0, 2);
 
@@ -177,9 +186,10 @@ export function computeKpiScores(input: KpiScoreInput): KpiScoreResult {
   const rWeek = round1(scoreWeek);
 
   const defectPenalty = Math.min(DEFECT_PENALTY_MAX, DEFECT_PENALTY_PER_REPORT * (input.defectCount ?? 0));
+  const carePenalty = fakePenalty(input.careFakes ?? 0);
   const totalScore = Math.max(
     0,
-    round1(rRevenue + rSX + rNewCustomers + scoreDebtOverdue + rDebtCollection + rVisit + rAttitude + rWeek - defectPenalty)
+    round1(rRevenue + rSX + rNewCustomers + scoreDebtOverdue + rDebtCollection + rVisit + rAttitude + rWeek - defectPenalty - carePenalty)
   );
   const { grade, label, bonus } = gradeOf(totalScore);
 
@@ -197,6 +207,7 @@ export function computeKpiScores(input: KpiScoreInput): KpiScoreResult {
     scoreAttitude: rAttitude,
     scoreWeek: rWeek,
     defectPenalty,
+    carePenalty,
     totalScore,
     grade,
     gradeLabel: label,
@@ -372,6 +383,11 @@ export async function getKpiMonthlyReport(
     }),
   ]);
   const defectByEmployee = new Map(defectCounts.map((d) => [d.userId, d._count._all]));
+  // Điểm CSKH theo lịch chăm sóc — áp dụng từ CARE_KPI_FROM (tháng 11/2026 chạy thử, xem ở trang Chăm sóc).
+  const careOn = year * 12 + month >= CARE_KPI_FROM.year * 12 + CARE_KPI_FROM.month;
+  const careByEmployee = new Map(
+    careOn ? (await evaluateCare(monthRangeVN(year, month), { onlyEmployeeId })).map((e) => [e.employeeId, e]) : []
+  );
 
   const entryByEmployee = new Map(entries.map((e) => [e.employeeId, e]));
   const visitByEmployee = new Map<string, number>();
@@ -414,6 +430,8 @@ export async function getKpiMonthlyReport(
       violationCount: entry?.violationCount ?? 0,
       weekScore,
       defectCount: defectByEmployee.get(r.employeeId) ?? 0,
+      careFraction: careByEmployee.has(r.employeeId) ? careByEmployee.get(r.employeeId)!.score / 10 : null,
+      careFakes: careByEmployee.get(r.employeeId)?.fakes ?? 0,
     };
 
     const scores = computeKpiScores(input);

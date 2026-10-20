@@ -5,7 +5,9 @@
 import { z } from "zod";
 
 export const CARE_CHANNELS = ["CALL", "ZALO", "MEET"] as const;
-export const CARE_OUTCOMES = ["NORMAL", "UPCOMING_ORDER", "NEW_NEED", "ISSUE", "NO_CONTACT", "LOST"] as const;
+export const CARE_OUTCOMES = ["NORMAL", "UPCOMING_ORDER", "NEW_NEED", "ISSUE", "NO_CONTACT", "LOST", "RESOLVED"] as const;
+/** Kết quả bắt buộc ghi chú: có vấn đề (vấn đề gì), mất khách (vì sao), đã xử lý xong (xử lý thế nào). */
+export const NOTE_REQUIRED: readonly string[] = ["ISSUE", "LOST", "RESOLVED"];
 export const ISSUE_TYPES = ["PRICE", "QUALITY", "DELIVERY", "DEBT", "OTHER"] as const;
 export const VALUE_BANDS = ["LT20", "20_100", "GT100"] as const;
 
@@ -20,6 +22,7 @@ export const CARE_OUTCOME_LABEL: Record<CareOutcomeKey, string> = {
   ISSUE: "Có vấn đề",
   NO_CONTACT: "Không liên lạc được",
   LOST: "Đã chuyển NCC khác",
+  RESOLVED: "Đã xử lý xong vấn đề",
 };
 export const ISSUE_TYPE_LABEL: Record<(typeof ISSUE_TYPES)[number], string> = {
   PRICE: "Giá",
@@ -53,6 +56,13 @@ export const careLogSchema = z
   .superRefine((v, ctx) => {
     if (v.outcome === "ISSUE" && !v.issueType) {
       ctx.addIssue({ code: "custom", path: ["issueType"], message: "Chọn lý do có vấn đề" });
+    }
+    if (NOTE_REQUIRED.includes(v.outcome) && !v.note?.trim()) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["note"],
+        message: v.outcome === "RESOLVED" ? "Ghi rõ đã xử lý thế nào" : v.outcome === "LOST" ? "Ghi rõ vì sao khách chuyển NCC khác" : "Ghi rõ vấn đề của khách",
+      });
     }
     if (v.outcome === "UPCOMING_ORDER" && !v.expectedMonth) {
       ctx.addIssue({ code: "custom", path: ["expectedMonth"], message: "Chọn tháng dự kiến có đơn" });

@@ -39,6 +39,9 @@ export const ZALO_TYPE_LABEL: Record<string, string> = {
   DELAY_REASON_PENDING: "Lý do giao trễ chờ duyệt (quản trị viên)",
   CUSTOMER_RISK: "Khách có dấu hiệu giảm/ngừng mua",
   SEASON_REMINDER: "Khách mua theo vụ sắp tới vụ",
+  CARE_DUE_DAILY: "Lịch chăm sóc khách hằng ngày",
+  CARE_ESCALATION: "Cảnh báo chăm sóc khách (trưởng phòng)",
+  CARE_WEEKLY: "Tổng kết chăm sóc khách hằng tuần (trưởng phòng)",
 };
 
 /** Mã liên kết 6 chữ số, hết hạn sau 10 phút. */

@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { HeartHandshake } from "lucide-react";
 import { auth } from "@/lib/auth";
+import { isSystemAdmin } from "@/lib/rbac";
 import { CareTabs } from "@/components/care/CareTabs";
 
 export default async function CarePage() {
@@ -21,7 +22,7 @@ export default async function CarePage() {
         </div>
       </div>
       <Suspense fallback={null}>
-        <CareTabs defaultTab={isAdmin ? "team" : "log"} />
+        <CareTabs defaultTab={isAdmin ? "team" : "log"} canVerify={isSystemAdmin(session)} />
       </Suspense>
     </div>
   );

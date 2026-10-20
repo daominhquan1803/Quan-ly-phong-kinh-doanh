@@ -22,7 +22,10 @@ interface NotificationRow {
     | "ADMIN_KPI_DAILY"
     | "DELAY_REASON_PENDING"
     | "CUSTOMER_RISK"
-    | "SEASON_REMINDER";
+    | "SEASON_REMINDER"
+    | "CARE_DUE_DAILY"
+    | "CARE_ESCALATION"
+    | "CARE_WEEKLY";
   title: string;
   message: string;
   link: string | null;

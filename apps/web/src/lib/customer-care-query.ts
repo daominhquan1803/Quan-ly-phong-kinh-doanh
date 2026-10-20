@@ -75,6 +75,8 @@ export interface CareCustomerRow {
   lastCareOutcome: string | null;
   followUpAt: string | null;
   season: SeasonCheckResult | null;
+  /** Có vấn đề (ISSUE) chưa được ghi "Đã xử lý xong" — chỉ khi đó mới hiện lựa chọn RESOLVED. */
+  openIssue: boolean;
 }
 
 /** Hôm nay theo giờ Việt Nam. */
@@ -110,6 +112,15 @@ export async function loadOrderDates(
     out.get(id)!.push(o.orderDate.getTime());
   }
   return out;
+}
+
+/** Lịch sử ghi (mới nhất trước): còn vấn đề mở nếu gặp ISSUE trước khi gặp RESOLVED. */
+export function hasOpenIssue(logsDesc: { outcome: string }[]): boolean {
+  for (const l of logsDesc) {
+    if (l.outcome === "RESOLVED") return false;
+    if (l.outcome === "ISSUE") return true;
+  }
+  return false;
 }
 
 /** Tổng hợp cho trang Chăm sóc: mỗi khách kèm lần chăm sóc cuối, hẹn lại, trạng thái vụ. `onlyEmployeeId` = phạm vi SALES. */
@@ -154,6 +165,7 @@ export async function getCareOverview(options: { onlyEmployeeId?: string }, now:
       lastCareOutcome: last ? last.outcome : null,
       followUpAt: pendingFollowUp ? pendingFollowUp.toISOString() : null,
       season,
+      openIssue: hasOpenIssue(cares),
     };
   });
 }

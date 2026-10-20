@@ -148,6 +148,23 @@ export async function getCareDetails(options: { date?: string; onlyEmployeeId?: 
   return { date, members, details };
 }
 
+const CONTACTED = new Set(["NORMAL", "UPCOMING_ORDER", "NEW_NEED", "RESOLVED"]);
+
+/**
+ * Vấn đề còn mở của 1 khách từ lịch sử ghi (mới nhất trước) — trả vị trí lần ghi gây ra vấn đề:
+ * - ISSUE: mở cho tới khi có lần ghi "Đã xử lý xong vấn đề" (RESOLVED) sau nó — ghi khác KHÔNG tự đóng vấn đề.
+ * - LOST: mở cho tới khi khách quay lại (lần ghi sau là mua bình thường / sắp có đơn / nhu cầu mới / đã xử lý).
+ * - NO_CONTACT: chỉ tính khi 2 lần ghi mới nhất liên tiếp đều không liên lạc được.
+ * Ưu tiên ISSUE > LOST > NO_CONTACT.
+ */
+export function openProblem(logsDesc: { outcome: string }[]): { kind: TeamIssue["kind"]; index: number } | null {
+  const issueIdx = logsDesc.findIndex((l) => l.outcome === "ISSUE" || l.outcome === "RESOLVED");
+  if (issueIdx >= 0 && logsDesc[issueIdx].outcome === "ISSUE") return { kind: "ISSUE", index: issueIdx };
+  const lostIdx = logsDesc.findIndex((l) => l.outcome === "LOST" || CONTACTED.has(l.outcome));
+  if (lostIdx >= 0 && logsDesc[lostIdx].outcome === "LOST") return { kind: "LOST", index: lostIdx };
+  if (logsDesc.length >= 2 && logsDesc[0].outcome === "NO_CONTACT" && logsDesc[1].outcome === "NO_CONTACT") return { kind: "NO_CONTACT", index: 0 };
+  return null;
+}
 /** `onlyEmployeeId` = phạm vi SALES (chỉ thấy số liệu của mình); bỏ trống = cả phòng (ADMIN). */
 export async function getCareTeamReport(options: { date?: string; onlyEmployeeId?: string }, now: Date = new Date()): Promise<CareTeamReport> {
   const date = options.date && /^\d{4}-\d{2}-\d{2}$/.test(options.date) ? options.date : todayYmd(now);
@@ -242,67 +259,55 @@ export async function getCareTeamReport(options: { date?: string; onlyEmployeeId
   }
   followUps.sort((a, b) => b.overdueDays - a.overdueDays);
 
-  // ----- vấn đề cần xử lý: lần ghi MỚI NHẤT của khách là ISSUE / LOST, hoặc không liên lạc được từ 2 lần liên tiếp -----
-  const lastAtByCustomer = new Map(overview.map((c) => [c.id, c.lastCareAt]));
+  // ----- vấn đề cần xử lý (xem openProblem) -----
   const empByCustomer = new Map(overview.map((c) => [c.id, c.salesEmployee]));
-  const customerIds = new Set(overview.map((c) => c.id));
-  const problemLogs = await prisma.customerCareLog.findMany({
-    where: { outcome: { in: ["ISSUE", "LOST", "NO_CONTACT"] }, ...(only ? { customerId: { in: [...customerIds] } } : {}) },
-    orderBy: { createdAt: "desc" },
-    select: {
-      customerId: true,
-      outcome: true,
-      issueType: true,
-      note: true,
-      createdAt: true,
-      customer: { select: { customerCode: true, customerName: true } },
-      employee: { select: { name: true } },
-    },
+  const customerIds = [...new Set(overview.map((c) => c.id))];
+  const flagged = await prisma.customerCareLog.findMany({
+    where: { outcome: { in: ["ISSUE", "LOST", "NO_CONTACT"] }, ...(only ? { customerId: { in: customerIds } } : {}) },
+    select: { customerId: true },
+    distinct: ["customerId"],
   });
+  const history = flagged.length
+    ? await prisma.customerCareLog.findMany({
+        where: { customerId: { in: flagged.map((f) => f.customerId) } },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          customerId: true,
+          outcome: true,
+          issueType: true,
+          note: true,
+          createdAt: true,
+          customer: { select: { customerCode: true, customerName: true } },
+          employee: { select: { name: true } },
+        },
+      })
+    : [];
+  const byCustomer = new Map<string, typeof history>();
+  for (const l of history) {
+    if (!byCustomer.has(l.customerId)) byCustomer.set(l.customerId, []);
+    byCustomer.get(l.customerId)!.push(l);
+  }
   const issues: TeamIssue[] = [];
-  const noContactCount = new Map<string, number>();
-  const seen = new Set<string>();
-  for (const l of problemLogs) {
-    const last = lastAtByCustomer.get(l.customerId);
-    if (!last || new Date(last).getTime() !== l.createdAt.getTime()) continue; // đã có ghi chăm sóc mới hơn -> coi như đã xử lý
-    if (seen.has(l.customerId)) continue;
-    seen.add(l.customerId);
-    if (l.outcome === "NO_CONTACT") {
-      // đếm số lần không liên lạc được liên tiếp tính ngược từ lần mới nhất
-      noContactCount.set(l.customerId, 1);
-    }
-    const emp = empByCustomer.get(l.customerId);
+  for (const [customerId, logsDesc] of byCustomer) {
+    const p = openProblem(logsDesc);
+    if (!p) continue;
+    const l = logsDesc[p.index];
+    const emp = empByCustomer.get(customerId);
+    if (only && !emp) continue;
     issues.push({
-      customerId: l.customerId,
+      customerId,
       customerCode: l.customer.customerCode,
       customerName: l.customer.customerName,
       employeeId: emp?.id ?? null,
       employeeName: emp?.name ?? null,
-      kind: l.outcome as TeamIssue["kind"],
+      kind: p.kind,
       issueType: l.issueType,
       note: l.note,
       since: l.createdAt.toISOString(),
       days: Math.max(0, Math.floor((now.getTime() - l.createdAt.getTime()) / DAY)),
       loggedBy: l.employee.name,
     });
-  }
-  // NO_CONTACT chỉ coi là vấn đề khi liên tiếp từ 2 lần trở lên
-  if (noContactCount.size > 0) {
-    const consecutive = new Map<string, number>();
-    const all = await prisma.customerCareLog.findMany({
-      where: { customerId: { in: [...noContactCount.keys()] } },
-      orderBy: { createdAt: "desc" },
-      select: { customerId: true, outcome: true },
-    });
-    const done = new Set<string>();
-    for (const l of all) {
-      if (done.has(l.customerId)) continue;
-      if (l.outcome === "NO_CONTACT") consecutive.set(l.customerId, (consecutive.get(l.customerId) ?? 0) + 1);
-      else done.add(l.customerId);
-    }
-    for (let i = issues.length - 1; i >= 0; i--) {
-      if (issues[i].kind === "NO_CONTACT" && (consecutive.get(issues[i].customerId) ?? 0) < 2) issues.splice(i, 1);
-    }
   }
   issues.sort((a, b) => (a.kind === b.kind ? b.days - a.days : a.kind === "LOST" ? -1 : b.kind === "LOST" ? 1 : a.kind === "ISSUE" ? -1 : 1));
   for (const i of issues) if (i.employeeId && stat.has(i.employeeId)) stat.get(i.employeeId)!.openIssues++;

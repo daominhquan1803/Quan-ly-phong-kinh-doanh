@@ -22,7 +22,7 @@ vi.mock("./customer-care-query", () => ({
   },
 }));
 
-import { getCareDetails, getCareTeamReport, todayYmd } from "./customer-care-team";
+import { getCareDetails, getCareTeamReport, openProblem, todayYmd } from "./customer-care-team";
 
 const NOW = new Date("2026-10-19T05:00:00Z"); // 12h trưa 19/10 giờ VN
 const at = (s: string) => new Date(`${s}+07:00`);
@@ -79,22 +79,43 @@ describe("getCareTeamReport", () => {
     expect(r.details.map((d) => d.customerCode).sort()).toEqual(["c1", "c1", "c2"]);
   });
 
-  it("vấn đề: chỉ tính khi lần ghi mới nhất của khách là ISSUE/LOST; ghi mới hơn thì coi như đã xử lý", async () => {
-    h.overview.mockResolvedValue([
-      cust("c1", "u1", { lastCareAt: at("2026-10-16T09:00:00").toISOString() }), // mới nhất là ISSUE
-      cust("c2", "u1", { lastCareAt: at("2026-10-18T09:00:00").toISOString() }), // có ghi mới hơn ISSUE cũ
-    ]);
+  it("vấn đề: ISSUE chỉ đóng khi có 'Đã xử lý xong' sau nó; ghi khác không tự đóng", async () => {
+    h.overview.mockResolvedValue([cust("c1", "u1"), cust("c2", "u1"), cust("c3", "u1")]);
+    const log = (customerId: string, outcome: string, when: string, extra: Record<string, unknown> = {}) => ({
+      id: `${customerId}-${when}`,
+      customerId,
+      outcome,
+      issueType: null,
+      note: null,
+      createdAt: at(when),
+      customer: { customerCode: customerId, customerName: `Khách ${customerId}` },
+      employee: { name: "An" },
+      ...extra,
+    });
     h.logs
-      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]) // log trong kỳ
+      .mockResolvedValueOnce([{ customerId: "c1" }, { customerId: "c2" }, { customerId: "c3" }]) // khách từng có vấn đề
       .mockResolvedValueOnce([
-        { customerId: "c1", outcome: "ISSUE", issueType: "PRICE", note: "chê giá", createdAt: at("2026-10-16T09:00:00"), customer: { customerCode: "c1", customerName: "Khách c1" }, employee: { name: "An" } },
-        { customerId: "c2", outcome: "ISSUE", issueType: "QUALITY", note: null, createdAt: at("2026-10-10T09:00:00"), customer: { customerCode: "c2", customerName: "Khách c2" }, employee: { name: "An" } },
+        log("c1", "ISSUE", "2026-10-16T09:00:00", { issueType: "PRICE", note: "chê giá" }),
+        log("c2", "RESOLVED", "2026-10-18T09:00:00"),
+        log("c2", "ISSUE", "2026-10-10T09:00:00", { issueType: "QUALITY" }),
+        log("c3", "NORMAL", "2026-10-18T09:00:00"),
+        log("c3", "ISSUE", "2026-10-12T09:00:00", { issueType: "DELIVERY" }),
       ])
       .mockResolvedValue([]);
     const r = await getCareTeamReport({}, NOW);
-    expect(r.issues.map((i) => i.customerId)).toEqual(["c1"]);
-    expect(r.issues[0]).toMatchObject({ kind: "ISSUE", issueType: "PRICE", days: 3 });
-    expect(r.members.find((m) => m.id === "u1")!.openIssues).toBe(1);
+    expect(r.issues.map((i) => i.customerId).sort()).toEqual(["c1", "c3"]);
+    expect(r.issues.find((i) => i.customerId === "c1")).toMatchObject({ kind: "ISSUE", issueType: "PRICE", days: 3 });
+    expect(r.members.find((m) => m.id === "u1")!.openIssues).toBe(2);
+  });
+
+  it("openProblem: mất khách mở tới khi khách quay lại; không liên lạc được phải 2 lần liên tiếp", () => {
+    expect(openProblem([{ outcome: "LOST" }, { outcome: "NORMAL" }])).toEqual({ kind: "LOST", index: 0 });
+    expect(openProblem([{ outcome: "UPCOMING_ORDER" }, { outcome: "LOST" }])).toBeNull();
+    expect(openProblem([{ outcome: "NO_CONTACT" }, { outcome: "LOST" }])).toEqual({ kind: "LOST", index: 1 });
+    expect(openProblem([{ outcome: "NO_CONTACT" }, { outcome: "NORMAL" }])).toBeNull();
+    expect(openProblem([{ outcome: "NO_CONTACT" }, { outcome: "NO_CONTACT" }])).toEqual({ kind: "NO_CONTACT", index: 0 });
+    expect(openProblem([{ outcome: "NORMAL" }, { outcome: "ISSUE" }, { outcome: "LOST" }])).toEqual({ kind: "ISSUE", index: 1 });
   });
 
   it("hẹn chăm sóc lại đến hạn và khách vào vụ được tính vào cảnh báo của người phụ trách", async () => {

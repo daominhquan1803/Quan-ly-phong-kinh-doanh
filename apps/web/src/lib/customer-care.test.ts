@@ -7,7 +7,14 @@ const base = { customerId: "c1", channel: "CALL" as const };
 describe("careLogSchema", () => {
   it("ISSUE bắt buộc chọn lý do", () => {
     expect(careLogSchema.safeParse({ ...base, outcome: "ISSUE" }).success).toBe(false);
-    expect(careLogSchema.safeParse({ ...base, outcome: "ISSUE", issueType: "PRICE" }).success).toBe(true);
+    expect(careLogSchema.safeParse({ ...base, outcome: "ISSUE", issueType: "PRICE" }).success).toBe(false); // thiếu ghi chú
+    expect(careLogSchema.safeParse({ ...base, outcome: "ISSUE", issueType: "PRICE", note: "chê giá cao" }).success).toBe(true);
+  });
+  it("Có vấn đề / Mất khách / Đã xử lý xong bắt buộc ghi chú", () => {
+    expect(careLogSchema.safeParse({ ...base, outcome: "LOST" }).success).toBe(false);
+    expect(careLogSchema.safeParse({ ...base, outcome: "LOST", note: "chuyển sang NCC giá rẻ" }).success).toBe(true);
+    expect(careLogSchema.safeParse({ ...base, outcome: "RESOLVED", note: "   " }).success).toBe(false);
+    expect(careLogSchema.safeParse({ ...base, outcome: "RESOLVED", note: "đã giảm giá 3%" }).success).toBe(true);
   });
   it("UPCOMING_ORDER bắt buộc tháng dự kiến", () => {
     expect(careLogSchema.safeParse({ ...base, outcome: "UPCOMING_ORDER" }).success).toBe(false);

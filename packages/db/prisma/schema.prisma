@@ -177,6 +177,7 @@ model User {
   debtImportBatches      DebtImportBatch[]           @relation("DebtImportBatchCreatedBy")
   customers              Customer[]                  @relation("CustomerSalesEmployee")
   careLogs               CustomerCareLog[]           @relation("CareLogEmployee")
+  careSpotChecks         CareSpotCheck[]             @relation("CareSpotCheckBy")
 
   @@map("users")
 }
@@ -231,11 +232,11 @@ model ImportBatch {
 // Lịch sử chăm sóc khách do NVKD ghi nhanh trên app (AMIS không có dữ liệu này). Cơ hội bán hàng KHÔNG tách phân hệ riêng:
 // là log có outcome = NEW_NEED kèm needGroup / needValueBand / expectedMonth.
 model CustomerCareLog {
-  id            String      @id @default(cuid())
+  id            String         @id @default(cuid())
   customerId    String
-  customer      Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customer      Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
   employeeId    String
-  employee      User        @relation("CareLogEmployee", fields: [employeeId], references: [id])
+  employee      User           @relation("CareLogEmployee", fields: [employeeId], references: [id])
   channel       CareChannel
   outcome       CareOutcome
   note          String?
@@ -248,12 +249,28 @@ model CustomerCareLog {
   needValueBand String?
   // Hẹn chăm sóc lại — app nhắc đúng ngày
   followUpAt    DateTime?
-  createdAt     DateTime    @default(now())
+  createdAt     DateTime       @default(now())
+  spotCheck     CareSpotCheck?
 
   @@index([customerId, createdAt])
   @@index([employeeId, createdAt])
   @@index([followUpAt])
   @@map("customer_care_logs")
+}
+
+// Kiểm tra chéo (anh Quân chốt 20/10/2026): mỗi tuần app chọn ngẫu nhiên vài lần ghi chăm sóc của mỗi NVKD để trưởng phòng
+// gọi lại khách xác minh. FAKE = ghi khống -> trừ điểm KPI tháng của NVKD (xem customer-care-plan.ts).
+model CareSpotCheck {
+  id          String          @id @default(cuid())
+  logId       String          @unique
+  log         CustomerCareLog @relation(fields: [logId], references: [id], onDelete: Cascade)
+  result      String // OK | FAKE
+  note        String?
+  checkedById String
+  checkedBy   User            @relation("CareSpotCheckBy", fields: [checkedById], references: [id])
+  createdAt   DateTime        @default(now())
+
+  @@map("care_spot_checks")
 }
 
 model Order {
@@ -493,9 +510,9 @@ model Customer {
 
   // Kiểu mua (xem enum CustomerBuyingPattern). seasonMonths = các tháng vào vụ (1-12); seasonLeadMonths = nhắc NVKD
   // trước vụ bao nhiêu tháng (mặc định 2: mua tháng 6 thì nhắc từ đầu tháng 4).
-  buyingPattern     CustomerBuyingPattern @default(REGULAR)
-  seasonMonths      Int[]                 @default([])
-  seasonLeadMonths  Int                   @default(2)
+  buyingPattern    CustomerBuyingPattern @default(REGULAR)
+  seasonMonths     Int[]                 @default([])
+  seasonLeadMonths Int                   @default(2)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1277,6 +1294,9 @@ enum NotificationType {
   DELAY_REASON_PENDING // quản trị hệ thống: lý do giao trễ chờ duyệt
   CUSTOMER_RISK // khách có dấu hiệu giảm/ngừng mua — nhắc NVKD ghi nhận chăm sóc
   SEASON_REMINDER // khách mua theo vụ sắp tới vụ — nhắc chào hàng trước
+  CARE_DUE_DAILY // 8h: NVKD hôm nay cần chạm những khách nào (lịch chăm sóc theo hạng khách)
+  CARE_ESCALATION // gửi ngay cho trưởng phòng: khách A quá hạn, nguy cơ cao không ai chạm, vấn đề mở lâu, mất khách, NVKD không ghi
+  CARE_WEEKLY // sáng thứ 2: tổng kết chăm sóc tuần trước cho trưởng phòng
 }
 
 // Kiểu mua của khách: REGULAR = đặt đều đặn (chấm theo nhịp đặt hàng); SEASONAL = mua theo vụ (vd 1 năm 1 lần vào
@@ -1300,6 +1320,7 @@ enum CareOutcome {
   ISSUE // có vấn đề (kèm lý do)
   NO_CONTACT // không liên lạc được
   LOST // đã chuyển nhà cung cấp khác
+  RESOLVED // đã xử lý xong vấn đề trước đó (bắt buộc ghi cách xử lý) — chỉ RESOLVED mới đóng vấn đề ISSUE
 }
 
 model Notification {

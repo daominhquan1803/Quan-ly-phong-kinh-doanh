@@ -15,10 +15,12 @@ import {
   ISSUE_TYPE_LABEL,
   VALUE_BANDS,
   VALUE_BAND_LABEL,
+  NOTE_REQUIRED,
   type CareChannelKey,
   type CareOutcomeKey,
 } from "@/lib/customer-care";
 import { SEASON_STAGE_LABEL } from "@/lib/customer-season";
+import { DuePlan } from "./DuePlan";
 import type { CareCustomerRow } from "@/lib/customer-care-query";
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
@@ -90,6 +92,7 @@ export function CarePanel() {
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
       <div className="space-y-4">
+        <DuePlan onSelect={setSelectedId} />
         {needAttention.length > 0 && (
           <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4">
             <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-400">
@@ -148,12 +151,18 @@ export function CarePanel() {
             <QuickLog
               key={selected.id}
               customer={selected}
-              onSaved={() => queryClient.invalidateQueries({ queryKey: ["care-overview"] })}
+              onSaved={() => {
+                queryClient.invalidateQueries({ queryKey: ["care-overview"] });
+                queryClient.invalidateQueries({ queryKey: ["care-plan"] });
+              }}
             />
             <PatternBox
               key={`p-${selected.id}-${selected.buyingPattern}`}
               customer={selected}
-              onSaved={() => queryClient.invalidateQueries({ queryKey: ["care-overview"] })}
+              onSaved={() => {
+                queryClient.invalidateQueries({ queryKey: ["care-overview"] });
+                queryClient.invalidateQueries({ queryKey: ["care-plan"] });
+              }}
             />
             <History customerId={selected.id} />
           </>
@@ -240,7 +249,7 @@ function QuickLog({ customer, onSaved }: { customer: CareCustomerRow; onSaved: (
 
       <Label>Kết quả</Label>
       <div className="flex flex-wrap gap-2">
-        {CARE_OUTCOMES.map((o) => (
+        {CARE_OUTCOMES.filter((o) => o !== "RESOLVED" || customer.openIssue).map((o) => (
           <Chip key={o} active={outcome === o} onClick={() => setOutcome(o)}>{CARE_OUTCOME_LABEL[o]}</Chip>
         ))}
       </div>
@@ -283,7 +292,10 @@ function QuickLog({ customer, onSaved }: { customer: CareCustomerRow; onSaved: (
         </>
       )}
 
-      <Label>Ghi chú (không bắt buộc)</Label>
+      {customer.openIssue && outcome !== "RESOLVED" && (
+        <p className="mt-3 text-xs text-amber-400">Khách đang có vấn đề chưa xử lý. Giải quyết xong thì chọn “Đã xử lý xong vấn đề”.</p>
+      )}
+      <Label>{outcome && NOTE_REQUIRED.includes(outcome) ? (outcome === "RESOLVED" ? "Đã xử lý thế nào (bắt buộc)" : "Ghi chú (bắt buộc)") : "Ghi chú (không bắt buộc)"}</Label>
       <input
         value={note}
         onChange={(e) => setNote(e.target.value)}
@@ -311,7 +323,7 @@ function QuickLog({ customer, onSaved }: { customer: CareCustomerRow; onSaved: (
         </p>
       )}
       <button
-        disabled={!outcome || save.isPending}
+        disabled={!outcome || save.isPending || (NOTE_REQUIRED.includes(outcome) && !note.trim())}
         onClick={() => save.mutate()}
         className="mt-4 w-full rounded-lg bg-amber-500 py-2.5 text-sm font-semibold text-black disabled:opacity-40"
       >

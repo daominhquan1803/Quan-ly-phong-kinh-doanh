@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@hoanggia/db";
 import { requireSession, UnauthorizedError } from "@/lib/rbac";
 import { careLogSchema, normalizeCareLog } from "@/lib/customer-care";
+import { lostMessages } from "@/lib/customer-care-alerts";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,20 @@ export async function POST(req: NextRequest) {
     }
     const data = normalizeCareLog(parsed.data, new Date());
     const log = await prisma.customerCareLog.create({ data: { ...data, employeeId: session.user.id } });
+    if (log.outcome === "LOST") {
+      // Mất khách: báo trưởng phòng NGAY (Zalo bot gửi trong ~1 phút). Lỗi báo không làm hỏng việc ghi.
+      try {
+        const [c, managers] = await Promise.all([
+          prisma.customer.findUnique({ where: { id: log.customerId }, select: { customerCode: true, customerName: true } }),
+          prisma.user.findMany({ where: { role: "ADMIN", accessLevel: "FULL", active: true }, select: { id: true } }),
+        ]);
+        if (c && managers.length) {
+          await prisma.notification.createMany({ data: lostMessages(managers.map((m) => m.id), log.customerId, log.id, c, session.user.name ?? "NVKD", log.note) });
+        }
+      } catch (e) {
+        console.error("customer-care LOST notify error", e);
+      }
+    }
     return NextResponse.json({ log }, { status: 201 });
   } catch (err) {
     if (err instanceof UnauthorizedError) return NextResponse.json({ error: err.message }, { status: 401 });

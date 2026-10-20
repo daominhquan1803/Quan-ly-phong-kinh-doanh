@@ -12,6 +12,7 @@ import { runDebtWeekReminder } from "./notifications/debtWeekReminder";
 import { runZaloDispatch } from "./notifications/zaloDispatch";
 import { runAdminKpiDigest } from "./notifications/adminKpiDigest";
 import { runCustomerAlerts } from "./notifications/customerAlerts";
+import { runCareDaily, runCareEscalations } from "./notifications/carePlan";
 import { isZaloConfigured } from "./zalo";
 import { logger } from "./logger";
 
@@ -89,6 +90,16 @@ async function main() {
       runDebtWeekReminder().catch((err) => logger.error("Lỗi nhắc công nợ đầu tuần:", err));
       runAdminKpiDigest().catch((err) => logger.error("Lỗi tin KPI Admin hằng ngày:", err));
       runCustomerAlerts().catch((err) => logger.error("Lỗi cảnh báo khách hàng:", err));
+      runCareDaily().catch((err) => logger.error("Lỗi lịch chăm sóc 8h:", err));
+    },
+    { timezone: NOTIFY_CRON_TIMEZONE }
+  );
+
+  // Cảnh báo chăm sóc leo thang cho trưởng phòng: quét 15 phút/lần (hàm tự giới hạn 7h30–18h, trừ Chủ nhật).
+  cron.schedule(
+    "*/15 * * * *",
+    () => {
+      runCareEscalations().catch((err) => logger.error("Lỗi cảnh báo chăm sóc:", err));
     },
     { timezone: NOTIFY_CRON_TIMEZONE }
   );

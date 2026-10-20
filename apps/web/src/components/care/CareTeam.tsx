@@ -14,6 +14,7 @@ import {
 } from "@/lib/customer-care";
 import { SEASON_STAGE_LABEL } from "@/lib/customer-season";
 import type { CareDetail, CareDetailsReport, CareTeamReport } from "@/lib/customer-care-team";
+import { CareEvaluation, SpotChecks } from "./CareEvaluation";
 
 const card = "rounded-2xl border border-gray-200/30 p-4";
 const KIND_LABEL = { ISSUE: "Có vấn đề", LOST: "Đã chuyển NCC khác", NO_CONTACT: "Không liên lạc được nhiều lần" } as const;
@@ -73,7 +74,7 @@ function SectionHead({ icon, title, count, right }: { icon: React.ReactNode; tit
   );
 }
 
-export function CareTeam({ onOpenCustomer }: { onOpenCustomer: (customerId: string) => void }) {
+export function CareTeam({ onOpenCustomer, canVerify }: { onOpenCustomer: (customerId: string) => void; canVerify: boolean }) {
   const [date, setDate] = useState(todayYmd());
   const [fIssues, setFIssues] = useState("");
   const [fRisks, setFRisks] = useState("");
@@ -131,6 +132,8 @@ export function CareTeam({ onOpenCustomer }: { onOpenCustomer: (customerId: stri
             <Stat label="Cảnh báo" value={warningTotal} sub={`${r.risks.length} nguy cơ · ${r.followUps.length} đến hạn hẹn · ${r.seasons.length} tới vụ`} tone={warningTotal > 0 ? "bad" : "good"} />
             <Stat label="Vấn đề cần xử lý" value={r.issues.length} sub={`${r.issues.filter((i) => i.kind === "LOST").length} khách đã chuyển NCC`} tone={r.issues.length > 0 ? "bad" : "good"} />
           </div>
+
+          <CareEvaluation onOpenCustomer={onOpenCustomer} />
 
           <div className={cn(card, "overflow-x-auto")}>
             <SectionHead icon={<Users className="h-4 w-4 text-amber-400" />} title="Chăm sóc theo thành viên" />
@@ -328,6 +331,7 @@ export function CareTeam({ onOpenCustomer }: { onOpenCustomer: (customerId: stri
               </div>
             )}
           </div>
+          {team && <SpotChecks canVerify={canVerify} onOpenCustomer={onOpenCustomer} />}
         </>
       )}
     </div>
