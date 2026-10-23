@@ -18,7 +18,8 @@ import { COUNTED_STOP_WHERE, COUNTED_TRIP_WHERE } from "./business-trip-report";
  *        đăng ký với lịch sử Order trên toàn công ty, đúng định nghĩa "khách cũ" đã dùng cho
  *        NEW_CONTACT/NEW_MEETING/NEW_CUSTOMER_SALE). Tính điểm cho CẢ người đăng ký chính lẫn
  *        người đi cùng hỗ trợ (BusinessTripSupporter) — ai cũng được cộng nếu có tên trong
- *        chuyến đi đó, giống hệt cách BUSINESS_TRIP đang làm.
+ *        chuyến đi đó, giống hệt cách BUSINESS_TRIP đang làm. Cộng thêm khách cũ được chăm sóc
+ *        (CustomerCareLog liên lạc được: gọi/nhắn Zalo/gặp) trong tuần — xem careContactsForWeek.
  *      NEW_CUSTOMER_SALE: khách hàng có đơn hàng trong tuần mà CHƯA TỪNG mua hàng trước đó, hoặc
  *        đã dừng mua ít nhất 1 năm tính từ đơn hàng cuối cùng — đối chiếu lịch sử đơn hàng của
  *        khách trên TOÀN CÔNG TY (Order, mọi NVKD từng bán cho khách đó), không giới hạn riêng
@@ -85,7 +86,7 @@ export const WEEK_PLAN_METRIC_NOTE: Record<WeekPlanMetric, string> = {
   NEW_MEETING:
     "Khách hàng chưa từng mua hàng, hoặc khách cũ đã dừng mua ít nhất 1 năm tính từ đơn hàng cuối cùng — NVKD tự ghi lại danh sách đã hẹn gặp.",
   EXISTING_VISIT:
-    "Tự động — lấy từ Đăng ký đi công tác đã duyệt trong tuần, đếm khách hàng cũ (đang mua hàng, hoặc dừng mua dưới 1 năm) được đăng ký gặp; tính điểm cho cả người đăng ký chính lẫn người đi cùng hỗ trợ.",
+    "Tự động — đếm khách hàng cũ (đang mua hàng, hoặc dừng mua dưới 1 năm) được gặp trong Đăng ký đi công tác đã duyệt (cả người đi chính lẫn người hỗ trợ) hoặc được chăm sóc (gọi, nhắn Zalo, gặp — liên lạc được) ở trang Chăm sóc khách; mỗi khách tính 1 lần/tuần.",
   NEW_CUSTOMER_SALE:
     "Tự động — đếm khách hàng có đơn trong tuần mà chưa từng mua hàng trước đó, hoặc đã dừng mua ít nhất 1 năm tính từ đơn hàng cuối cùng (đối chiếu toàn công ty).",
   NEW_QUOTE: "Tự động — đếm số báo giá phát sinh trong tuần theo dữ liệu Báo giá.",
@@ -285,6 +286,54 @@ async function lastPriorOrderForVisitedCompanies(companyNames: Set<string>, befo
   return result;
 }
 
+/** Lượt chăm sóc (gọi / nhắn Zalo / gặp, liên lạc được) trong tuần với khách CŨ — cộng vào
+ * EXISTING_VISIT (anh Quân chốt 23/10/2026: NVKD nhắn tin khách cũ cũng tính). Mỗi khách tính 1
+ * lần/NVKD/tuần; khách đã có trong danh sách đi công tác (tên tắt nằm trong tên đầy đủ) thì bỏ qua
+ * để không đếm trùng. */
+async function careContactsForWeek(employeeIds: string[], start: Date, end: Date) {
+  const logs = await prisma.customerCareLog.findMany({
+    where: { employeeId: { in: employeeIds }, createdAt: { gte: start, lt: end }, outcome: { not: "NO_CONTACT" } },
+    select: { employeeId: true, channel: true, note: true, createdAt: true, customer: { select: { customerCode: true, customerName: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+  const codes = Array.from(new Set(logs.map((l) => l.customer.customerCode)));
+  const names = Array.from(new Set(logs.map((l) => l.customer.customerName)));
+  const [byCode, byName] = codes.length
+    ? await Promise.all([
+        prisma.order.groupBy({ by: ["customerCode"], where: { customerCode: { in: codes }, orderDate: { lt: start } }, _max: { orderDate: true } }),
+        prisma.order.groupBy({ by: ["customerName"], where: { customerName: { in: names }, orderDate: { lt: start } }, _max: { orderDate: true } }),
+      ])
+    : [[], []];
+  const lastByCode = new Map(byCode.map((p) => [p.customerCode, p._max.orderDate]));
+  const lastByName = new Map(byName.map((p) => [p.customerName, p._max.orderDate]));
+  const latest = (a?: Date | null, b?: Date | null) => (a && b ? (a > b ? a : b) : (a ?? b ?? null));
+  const byEmployee = new Map<string, Map<string, { name: string; date: Date; channel: string; note: string | null; lastPrior: Date | null }>>();
+  for (const l of logs) {
+    const m = byEmployee.get(l.employeeId) ?? new Map();
+    byEmployee.set(l.employeeId, m);
+    if (m.has(l.customer.customerCode)) continue;
+    m.set(l.customer.customerCode, {
+      name: l.customer.customerName,
+      date: l.createdAt,
+      channel: l.channel,
+      note: l.note,
+      lastPrior: latest(lastByCode.get(l.customer.customerCode), lastByName.get(l.customer.customerName)),
+    });
+  }
+  return byEmployee;
+}
+
+const coveredByTrip = (customerName: string, tripCompanies: Iterable<string>) => {
+  const n = normalizeVN(customerName);
+  for (const c of tripCompanies) {
+    const nc = normalizeVN(c);
+    if (nc.length >= 3 && n.includes(nc)) return true;
+  }
+  return false;
+};
+
+const CARE_CHANNEL_VN: Record<string, string> = { CALL: "Gọi điện", ZALO: "Nhắn Zalo", MEET: "Gặp" };
+
 async function computeAutoMetrics(
   weekStart: Date,
   employees: { id: string; quoteAssigneeCode: string | null }[]
@@ -368,12 +417,19 @@ async function computeAutoMetrics(
   // ponytail: heuristic substring 1 chiều, có thể khớp nhầm nếu tên khách viết quá ngắn/chung
   // chung (vd "Việt", "Vina") trùng nhiều công ty khác nhau — nếu phát sinh sai lệch rõ, nâng cấp
   // lên so khớp có trọng số/độ dài tối thiểu chặt hơn thay vì quay lại exact-match (đã biết là sai).
-  const lastPriorOrderByVisitedCompany = await lastPriorOrderForVisitedCompanies(allVisitCompanyNames, start);
-  for (const [employeeId, companySet] of visitCompaniesByEmployee) {
+  const [lastPriorOrderByVisitedCompany, careByEmployee] = await Promise.all([
+    lastPriorOrderForVisitedCompanies(allVisitCompanyNames, start),
+    careContactsForWeek(employeeIds, start, end),
+  ]);
+  for (const employeeId of employeeIds) {
+    const companySet = visitCompaniesByEmployee.get(employeeId) ?? new Set<string>();
     let existingCount = 0;
     for (const company of companySet) {
       const lastPrior = lastPriorOrderByVisitedCompany.get(company);
       if (lastPrior && lastPrior > oneYearBeforeStart) existingCount++;
+    }
+    for (const c of careByEmployee.get(employeeId)?.values() ?? []) {
+      if (c.lastPrior && c.lastPrior > oneYearBeforeStart && !coveredByTrip(c.name, companySet)) existingCount++;
     }
     result.get(employeeId)!.EXISTING_VISIT = existingCount;
   }
@@ -683,9 +739,28 @@ export async function getWeekPlanMetricDetail(
         if (!firstVisit.has(s.companyName)) firstVisit.set(s.companyName, { date: t.visitDate, content: s.content, role: t.role });
       }
     }
-    const lastPrior = await lastPriorOrderForVisitedCompanies(new Set(firstVisit.keys()), start);
+    const [lastPrior, careByEmployee] = await Promise.all([
+      lastPriorOrderForVisitedCompanies(new Set(firstVisit.keys()), start),
+      careContactsForWeek([employeeId], start, end),
+    ]);
+    const careItems: WeekPlanDetailItem[] = Array.from(careByEmployee.get(employeeId)?.values() ?? [])
+      .filter((c) => !coveredByTrip(c.name, firstVisit.keys()))
+      .map((c) => {
+        const isExisting = !!c.lastPrior && c.lastPrior > oneYearBeforeStart;
+        return {
+          date: c.date.toISOString(),
+          title: c.name,
+          subtitle: `Chăm sóc · ${CARE_CHANNEL_VN[c.channel] ?? c.channel}${c.note ? ` · ${c.note}` : ""}`,
+          note: isExisting
+            ? `Khách cũ — đơn gần nhất ${fmtVN(c.lastPrior!)}`
+            : c.lastPrior
+              ? `Không tính: đã dừng mua ≥ 1 năm (đơn cuối ${fmtVN(c.lastPrior)})`
+              : "Không tính: chưa có đơn hàng trước tuần này (đơn hàng trong app có từ 01/04/2026)",
+          counted: isExisting,
+        };
+      });
     return Array.from(firstVisit.entries())
-      .map(([company, v]) => {
+      .map(([company, v]): WeekPlanDetailItem => {
         const last = lastPrior.get(company);
         const isExisting = !!last && last > oneYearBeforeStart;
         return {
@@ -700,6 +775,7 @@ export async function getWeekPlanMetricDetail(
           counted: isExisting,
         };
       })
+      .concat(careItems)
       .sort((a, b) => Number(b.counted) - Number(a.counted));
   }
 

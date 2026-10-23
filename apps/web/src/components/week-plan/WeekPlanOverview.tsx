@@ -23,7 +23,7 @@ const METRIC_LABEL: Record<Metric, string> = {
 const METRIC_NOTE: Record<Metric, string> = {
   NEW_CONTACT: "Khách chưa từng mua, hoặc khách cũ dừng mua ≥ 1 năm tính từ đơn cuối — tự ghi danh sách bên dưới.",
   NEW_MEETING: "Khách chưa từng mua, hoặc khách cũ dừng mua ≥ 1 năm tính từ đơn cuối — tự ghi danh sách bên dưới.",
-  EXISTING_VISIT: "Tự động từ Đăng ký đi công tác đã duyệt — khách cũ (đang mua, hoặc dừng mua < 1 năm) được đăng ký gặp trong tuần, tính cả người đi cùng hỗ trợ.",
+  EXISTING_VISIT: "Tự động — khách cũ (đang mua, hoặc dừng mua < 1 năm) được gặp qua Đăng ký đi công tác đã duyệt (tính cả người hỗ trợ) hoặc được chăm sóc (gọi, nhắn Zalo, gặp) ở trang Chăm sóc khách; mỗi khách 1 lần/tuần.",
   NEW_CUSTOMER_SALE: "Tự động từ Đơn hàng — khách chưa từng mua, hoặc dừng mua ≥ 1 năm (đối chiếu toàn công ty).",
   NEW_QUOTE: "Tự động từ Báo giá — cần gán \"Mã Báo giá\" ở trang Nhân viên.",
   BUSINESS_TRIP: "Tự động từ Đăng ký đi công tác — mỗi ngày tính 1 buổi.",
@@ -873,7 +873,7 @@ function UploadPanel({
       <p className="text-xs text-muted-foreground">
         File cần đúng cấu trúc sheet &quot;KẾT QUẢ&quot; trong file mẫu (STT, Mục, Ngày tháng, Khách hàng, Địa chỉ, Thông tin liên hệ, Nội dung, Sản phẩm quan tâm) —
         1 file có thể chứa cả 2 mục, mỗi dòng tự xếp đúng tuần theo Ngày tháng. (Mục &quot;Khách hàng cũ liên hệ gặp
-        thăm hỏi&quot; giờ tính tự động từ Đăng ký đi công tác, không cần nhập ở đây nữa.)
+        thăm hỏi&quot; giờ tính tự động từ Đăng ký đi công tác và trang Chăm sóc khách, không cần nhập ở đây nữa.)
       </p>
       <div className="flex items-center gap-2 flex-wrap">
         {isAdmin && employees.length > 0 && (
