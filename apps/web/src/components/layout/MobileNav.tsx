@@ -6,7 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { NAV_ITEMS, canSeeNavItem } from "./Sidebar";
+import { NAV_ITEMS, canSeeNavItem, showGroupTitle } from "./Sidebar";
 
 /** Menu điều hướng cho màn hình nhỏ (điện thoại) — Sidebar chính bị ẩn hẳn dưới breakpoint "md"
  * (xem Sidebar.tsx: "hidden md:flex"), nên trên điện thoại cần 1 cách khác để sang các mục như
@@ -15,6 +15,7 @@ import { NAV_ITEMS, canSeeNavItem } from "./Sidebar";
 export function MobileNav({ role, accessLevel }: { role?: "ADMIN" | "SALES"; accessLevel?: "FULL" | "OPERATOR" | "VIEWER" }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+  const visible = NAV_ITEMS.filter((item) => canSeeNavItem(item, role, accessLevel));
 
   return (
     <div className="md:hidden">
@@ -55,12 +56,15 @@ export function MobileNav({ role, accessLevel }: { role?: "ADMIN" | "SALES"; acc
             </div>
 
             <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-              {NAV_ITEMS.filter((item) => canSeeNavItem(item, role, accessLevel)).map((item) => {
+              {visible.map((item, i) => {
                 const active = pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href + "/"));
                 const Icon = item.icon;
                 return (
+                  <div key={item.href}>
+                  {showGroupTitle(visible, i) && (
+                    <p className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-white/40">{item.group}</p>
+                  )}
                   <Link
-                    key={item.href}
                     href={item.href}
                     onClick={() => setOpen(false)}
                     className={cn(
@@ -73,6 +77,7 @@ export function MobileNav({ role, accessLevel }: { role?: "ADMIN" | "SALES"; acc
                     <Icon className="h-4 w-4 shrink-0" />
                     {item.label}
                   </Link>
+                  </div>
                 );
               })}
             </nav>

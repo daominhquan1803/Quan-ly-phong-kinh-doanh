@@ -25,26 +25,32 @@ import {
 } from "lucide-react";
 import { SidebarBanner } from "./SidebarBanner";
 
+/** Thứ tự theo luồng làm việc (anh Quân duyệt 23/10/2026): việc hằng ngày → khách & bán hàng →
+ * giao hàng & thu tiền → kế hoạch & đánh giá → hệ thống. `group` null = đứng đầu, không có tiêu đề. */
 export const NAV_ITEMS = [
-  { href: "/", label: "Tổng quan", icon: LayoutDashboard, adminOnly: false },
-  { href: "/week-plan", label: "Kế hoạch làm việc tuần", icon: ClipboardList, adminOnly: false },
-  { href: "/orders", label: "Đơn hàng", icon: ShoppingCart, adminOnly: false },
-  { href: "/shipping-status", label: "Tiến độ giao hàng", icon: Gauge, adminOnly: false },
-  { href: "/shipment-slips", label: "Phiếu đi hàng", icon: Truck, adminOnly: false },
-  { href: "/picking-slips", label: "Phiếu soạn hàng", icon: PackageCheck, adminOnly: false },
-  { href: "/quotes", label: "Báo giá", icon: Receipt, adminOnly: false },
-  { href: "/debt", label: "Công nợ", icon: Wallet, adminOnly: false },
-  { href: "/customers", label: "Khách hàng", icon: Contact, adminOnly: false },
-  { href: "/cham-soc", label: "Chăm sóc khách", icon: HeartHandshake, adminOnly: false },
-  { href: "/hang-hoa", label: "Hàng hóa", icon: Package, adminOnly: false },
-  { href: "/reports", label: "Báo cáo", icon: FileBarChart, adminOnly: false },
-  { href: "/targets", label: "Kế hoạch kinh doanh", icon: Target, adminOnly: false },
-  { href: "/kpi", label: "Đánh giá KPI", icon: Award, adminOnly: false },
-  { href: "/kpi-admin", label: "KPI Admin", icon: ClipboardCheck, adminOnly: false },
-  { href: "/business-trips", label: "Đăng ký đi công tác", icon: Briefcase, adminOnly: false },
-  { href: "/defects", label: "Báo cáo hàng lỗi", icon: AlertTriangle, adminOnly: false },
-  { href: "/admin/users", label: "Nhân viên", icon: Users, adminOnly: true },
+  { href: "/", label: "Tổng quan", icon: LayoutDashboard, adminOnly: false, group: null as string | null },
+  { href: "/week-plan", label: "Kế hoạch làm việc tuần", icon: ClipboardList, adminOnly: false, group: "Làm việc hằng ngày" },
+  { href: "/cham-soc", label: "Chăm sóc khách", icon: HeartHandshake, adminOnly: false, group: "Làm việc hằng ngày" },
+  { href: "/business-trips", label: "Đăng ký đi công tác", icon: Briefcase, adminOnly: false, group: "Làm việc hằng ngày" },
+  { href: "/customers", label: "Khách hàng", icon: Contact, adminOnly: false, group: "Khách hàng & bán hàng" },
+  { href: "/quotes", label: "Báo giá", icon: Receipt, adminOnly: false, group: "Khách hàng & bán hàng" },
+  { href: "/orders", label: "Đơn hàng", icon: ShoppingCart, adminOnly: false, group: "Khách hàng & bán hàng" },
+  { href: "/hang-hoa", label: "Hàng hóa", icon: Package, adminOnly: false, group: "Khách hàng & bán hàng" },
+  { href: "/shipping-status", label: "Tiến độ giao hàng", icon: Gauge, adminOnly: false, group: "Giao hàng & thu tiền" },
+  { href: "/picking-slips", label: "Phiếu soạn hàng", icon: PackageCheck, adminOnly: false, group: "Giao hàng & thu tiền" },
+  { href: "/shipment-slips", label: "Phiếu đi hàng", icon: Truck, adminOnly: false, group: "Giao hàng & thu tiền" },
+  { href: "/debt", label: "Công nợ", icon: Wallet, adminOnly: false, group: "Giao hàng & thu tiền" },
+  { href: "/defects", label: "Báo cáo hàng lỗi", icon: AlertTriangle, adminOnly: false, group: "Giao hàng & thu tiền" },
+  { href: "/targets", label: "Kế hoạch kinh doanh", icon: Target, adminOnly: false, group: "Kế hoạch & đánh giá" },
+  { href: "/kpi", label: "Đánh giá KPI", icon: Award, adminOnly: false, group: "Kế hoạch & đánh giá" },
+  { href: "/kpi-admin", label: "KPI Admin", icon: ClipboardCheck, adminOnly: false, group: "Kế hoạch & đánh giá" },
+  { href: "/reports", label: "Báo cáo", icon: FileBarChart, adminOnly: false, group: "Kế hoạch & đánh giá" },
+  { href: "/admin/users", label: "Nhân viên", icon: Users, adminOnly: true, group: "Hệ thống" },
 ];
+
+/** Tiêu đề nhóm chỉ hiện ở mục đầu tiên của nhóm (sau khi đã lọc theo quyền, nên nhóm rỗng tự biến mất). */
+export const showGroupTitle = <T extends { group: string | null }>(items: T[], i: number) =>
+  items[i].group !== null && items[i].group !== items[i - 1]?.group;
 
 type AccessLevel = "FULL" | "OPERATOR" | "VIEWER";
 
@@ -54,6 +60,7 @@ export const canSeeNavItem = (item: { adminOnly: boolean }, role?: "ADMIN" | "SA
 
 export function Sidebar({ role, accessLevel }: { role?: "ADMIN" | "SALES"; accessLevel?: AccessLevel }) {
   const pathname = usePathname();
+  const visible = NAV_ITEMS.filter((item) => canSeeNavItem(item, role, accessLevel));
 
   return (
     <aside className="hidden md:flex md:w-64 md:flex-col bg-navy-900/95 backdrop-blur-2xl border-r border-gray-200/80 text-ink shadow-[4px_0_24px_rgba(0,0,0,0.35)] select-none">
@@ -74,12 +81,15 @@ export function Sidebar({ role, accessLevel }: { role?: "ADMIN" | "SALES"; acces
 
       {/* Navigation List */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        {NAV_ITEMS.filter((item) => canSeeNavItem(item, role, accessLevel)).map((item) => {
+        {visible.map((item, i) => {
           const active = pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href + "/"));
           const Icon = item.icon;
           return (
+            <div key={item.href}>
+            {showGroupTitle(visible, i) && (
+              <p className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted2/70">{item.group}</p>
+            )}
             <Link
-              key={item.href}
               href={item.href}
               className={cn(
                 "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200",
@@ -96,6 +106,7 @@ export function Sidebar({ role, accessLevel }: { role?: "ADMIN" | "SALES"; acces
               />
               <span className="truncate">{item.label}</span>
             </Link>
+            </div>
           );
         })}
       </nav>
