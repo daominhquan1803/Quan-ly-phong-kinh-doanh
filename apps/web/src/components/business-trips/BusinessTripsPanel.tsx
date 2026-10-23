@@ -168,7 +168,7 @@ export function BusinessTripsPanel({ isAdmin, canApprove = isAdmin }: { isAdmin:
       )}
 
       {tab === "trips" && (
-        <div className="glass-card border border-white/10 rounded-2xl overflow-hidden shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
+        <div className="glass-card border border-white/10 rounded-2xl overflow-x-auto shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
           <table className="min-w-full text-xs">
             <thead className="bg-white/[0.04] text-muted-foreground border-b border-white/5 backdrop-blur-md">
               <tr>
