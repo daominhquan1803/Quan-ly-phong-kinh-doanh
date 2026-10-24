@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import { prisma, fixSwappedDayMonth } from "@hoanggia/db";
 import { parseExcelDate } from "@/lib/excel-parser";
 import { requireSession, UnauthorizedError } from "@/lib/rbac";
-import { contactInfoOf, entryCounts, NATIONALITIES, SCALE_KEYS, SCALE_LABEL } from "@/lib/week-plan-entry";
+import { contactInfoOf, entryCounts, mapImportColumns, NATIONALITIES, SCALE_KEYS, SCALE_LABEL } from "@/lib/week-plan-entry";
 import { normalizeVN } from "@/lib/text-normalize";
 import { isWeekEntryLocked, matchMetricFromSectionLabel, snapToWeekStart, weekLockedMessage } from "@/lib/week-plan";
 
@@ -52,23 +52,7 @@ export async function POST(req: NextRequest) {
     const [headerRow, ...dataRows] = rows;
     const headers = (headerRow ?? []).map((h) => String(h ?? "").trim());
 
-    const colIdx = {
-      metric: headers.findIndex((h) => /mục/i.test(h)),
-      date: headers.findIndex((h) => /ngày/i.test(h) && !/hẹn|nhắc/i.test(h)),
-      customer: headers.findIndex((h) => /khách/i.test(h)),
-      address: headers.findIndex((h) => /địa chỉ/i.test(h)),
-      content: headers.findIndex((h) => /nội dung/i.test(h)),
-      productInterest: headers.findIndex((h) => /sản phẩm/i.test(h)),
-      contactInfo: headers.findIndex((h) => /thông tin liên hệ/i.test(h)),
-      nationality: headers.findIndex((h) => /quốc tịch/i.test(h)),
-      scale: headers.findIndex((h) => /quy mô/i.test(h)),
-      contactName: headers.findIndex((h) => /người liên hệ/i.test(h)),
-      contactPhone: headers.findIndex((h) => /điện thoại|sđt|sdt/i.test(h)),
-      need: headers.findIndex((h) => /nhu cầu/i.test(h)),
-      workDone: headers.findIndex((h) => /việc đã làm/i.test(h)),
-      nextAction: headers.findIndex((h) => /hành động/i.test(h)),
-      nextActionAt: headers.findIndex((h) => /hẹn nhắc|ngày hẹn/i.test(h)),
-    };
+    const colIdx = mapImportColumns(headers);
     const cell = (row: unknown[], idx: number) => (idx >= 0 ? String(row[idx] ?? "").trim() || null : null);
     const natOf = (v: string | null) => NATIONALITIES.find((n) => normalizeVN(n) === normalizeVN(v ?? "")) ?? null;
     const scaleOf = (v: string | null) => SCALE_KEYS.find((k) => normalizeVN(k) === normalizeVN(v ?? "") || normalizeVN(SCALE_LABEL[k]) === normalizeVN(v ?? "")) ?? null;

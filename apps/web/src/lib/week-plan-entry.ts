@@ -102,3 +102,36 @@ export function validateNewEntry(entryDate: Date, customerName: string, d: Entry
 
 /** Gộp tên + SĐT vào contactInfo cũ để các chỗ hiển thị/Excel cũ vẫn thấy. */
 export const contactInfoOf = (name: string | null, phone: string | null) => [name, phone].filter(Boolean).join(" - ") || null;
+
+/** Cột của file Excel nhập "KẾT QUẢ" (theo đúng thứ tự trong file mẫu): tiêu đề mẫu + cách nhận diện cột khi nhập. */
+export const IMPORT_COLUMNS = {
+  metric: { header: "Mục", re: /mục/i, width: 28 },
+  date: { header: "Ngày tháng", re: /ngày/i, exclude: /hẹn|nhắc/i, width: 13 },
+  customer: { header: "Khách hàng (tên công ty)", re: /khách/i, width: 32 },
+  address: { header: "Địa chỉ", re: /địa chỉ/i, width: 34 },
+  nationality: { header: "Quốc tịch", re: /quốc tịch/i, width: 13 },
+  scale: { header: "Quy mô", re: /quy mô/i, width: 18 },
+  contactName: { header: "Người liên hệ", re: /người liên hệ/i, width: 22 },
+  contactPhone: { header: "Số điện thoại", re: /điện thoại|sđt|sdt/i, width: 16 },
+  need: { header: "Nhu cầu", re: /nhu cầu/i, width: 34 },
+  workDone: { header: "Việc đã làm", re: /việc đã làm/i, width: 34 },
+  nextAction: { header: "Hành động tiếp theo", re: /hành động/i, width: 30 },
+  nextActionAt: { header: "Ngày hẹn nhắc", re: /hẹn nhắc|ngày hẹn/i, width: 14 },
+  productInterest: { header: "Sản phẩm quan tâm", re: /sản phẩm/i, width: 24 },
+  content: { header: "Nội dung / Ghi chú", re: /nội dung/i, width: 28 },
+  contactInfo: { header: "Thông tin liên hệ (file cũ)", re: /thông tin liên hệ/i, width: 24 },
+} as const;
+
+type ColumnSpec = { re: RegExp; exclude?: RegExp };
+
+/** Vị trí từng cột (−1 nếu không có) theo hàng tiêu đề. */
+export function mapImportColumns(headers: string[]): Record<keyof typeof IMPORT_COLUMNS, number> {
+  const out = {} as Record<keyof typeof IMPORT_COLUMNS, number>;
+  for (const key of Object.keys(IMPORT_COLUMNS) as (keyof typeof IMPORT_COLUMNS)[]) {
+    const spec: ColumnSpec = IMPORT_COLUMNS[key];
+    out[key] = headers.findIndex((h) => spec.re.test(h) && !(spec.exclude && spec.exclude.test(h)));
+  }
+  return out;
+}
+
+export const METRIC_IMPORT_LABEL = { NEW_CONTACT: "Khách hàng mới liên hệ", NEW_MEETING: "Khách hàng mới hẹn gặp được" } as const;

@@ -971,8 +971,7 @@ function UploadPanel({
   return (
     <div className="rounded-md border border-gray-200 bg-gray-50 p-3 mb-4 space-y-3">
       <p className="text-xs text-muted-foreground">
-        File cần đúng cấu trúc sheet &quot;KẾT QUẢ&quot; trong file mẫu (STT, Mục, Ngày tháng, Khách hàng, Địa chỉ, Quốc tịch, Quy mô, Người liên hệ, Số điện thoại, Nhu cầu, Việc đã làm, Hành động tiếp theo, Ngày hẹn nhắc, Sản phẩm quan tâm) — từ 26/10/2026 dòng thiếu cột nào vẫn được nhập nhưng chưa tính, bổ sung lại trên app —
-        1 file có thể chứa cả 2 mục, mỗi dòng tự xếp đúng tuần theo Ngày tháng. (Mục &quot;Khách hàng cũ liên hệ gặp
+        Dùng đúng file mẫu để cột không bị lệch: <a href="/api/week-plan/results/template" className="font-semibold text-amber-400 underline">Tải file Excel mẫu</a>. Các cột tiêu đề màu cam là bắt buộc — từ 26/10/2026 dòng thiếu cột nào vẫn được nhập nhưng chưa tính, bổ sung lại trên app. 1 file có thể chứa cả 2 mục, mỗi dòng tự xếp đúng tuần theo Ngày tháng. (Mục &quot;Khách hàng cũ liên hệ gặp
         thăm hỏi&quot; giờ tính tự động từ Đăng ký đi công tác và trang Chăm sóc khách, không cần nhập ở đây nữa.)
       </p>
       <div className="flex items-center gap-2 flex-wrap">
