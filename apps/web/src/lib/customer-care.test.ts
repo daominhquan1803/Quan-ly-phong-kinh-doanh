@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { careLogSchema, normalizeCareLog } from "./customer-care";
 
 const now = new Date("2026-10-19T03:00:00Z");
-const base = { customerId: "c1", channel: "CALL" as const };
+const base = { customerId: "c1", channel: "CALL" as const, photoIds: ["p1"] };
 
 describe("careLogSchema", () => {
   it("ISSUE bắt buộc chọn lý do", () => {
@@ -19,6 +19,13 @@ describe("careLogSchema", () => {
   it("UPCOMING_ORDER bắt buộc tháng dự kiến", () => {
     expect(careLogSchema.safeParse({ ...base, outcome: "UPCOMING_ORDER" }).success).toBe(false);
     expect(careLogSchema.safeParse({ ...base, outcome: "UPCOMING_ORDER", expectedMonth: 11 }).success).toBe(true);
+  });
+  it("bắt buộc ít nhất 1 ảnh minh chứng, tối đa 3", () => {
+    const ok = { ...base, outcome: "NORMAL" as const };
+    expect(careLogSchema.safeParse({ ...ok, photoIds: [] }).success).toBe(false);
+    expect(careLogSchema.safeParse({ customerId: "c1", channel: "CALL", outcome: "NORMAL" }).success).toBe(false);
+    expect(careLogSchema.safeParse({ ...ok, photoIds: ["a", "b", "c"] }).success).toBe(true);
+    expect(careLogSchema.safeParse({ ...ok, photoIds: ["a", "b", "c", "d"] }).success).toBe(false);
   });
   it("từ chối kết quả ngoài danh sách (không cho gõ tự do)", () => {
     expect(careLogSchema.safeParse({ ...base, outcome: "ĐÃ LIÊN HỆ" }).success).toBe(false);

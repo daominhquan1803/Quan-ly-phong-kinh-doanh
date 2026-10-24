@@ -59,10 +59,10 @@ describe("getCareTeamReport", () => {
     // 1 lần gọi lọc logs kỳ + 1 lần lọc vấn đề + 1 lần cơ hội: trả theo thứ tự gọi
     h.logs
       .mockResolvedValueOnce([
-        { customerId: "c1", employeeId: "u1", outcome: "NORMAL", channel: "CALL", createdAt: at("2026-10-19T09:00:00"), employee: { name: "An" }, customer: { customerCode: "c1", customerName: "Khách c1" } },
-        { customerId: "c1", employeeId: "u1", outcome: "NORMAL", channel: "ZALO", createdAt: at("2026-10-19T10:00:00"), employee: { name: "An" }, customer: { customerCode: "c1", customerName: "Khách c1" } },
-        { customerId: "c2", employeeId: "u1", outcome: "ISSUE", channel: "CALL", createdAt: at("2026-10-19T11:00:00"), employee: { name: "An" }, customer: { customerCode: "c2", customerName: "Khách c2" } },
-        { customerId: "c3", employeeId: "u2", outcome: "NORMAL", channel: "CALL", createdAt: at("2026-10-15T09:00:00"), employee: { name: "Bình" }, customer: { customerCode: "c3", customerName: "Khách c3" } },
+        { customerId: "c1", employeeId: "u1", outcome: "NORMAL", channel: "CALL", createdAt: at("2026-10-19T09:00:00"), photos: [], employee: { name: "An" }, customer: { customerCode: "c1", customerName: "Khách c1" } },
+        { customerId: "c1", employeeId: "u1", outcome: "NORMAL", channel: "ZALO", createdAt: at("2026-10-19T10:00:00"), photos: [], employee: { name: "An" }, customer: { customerCode: "c1", customerName: "Khách c1" } },
+        { customerId: "c2", employeeId: "u1", outcome: "ISSUE", channel: "CALL", createdAt: at("2026-10-19T11:00:00"), photos: [], employee: { name: "An" }, customer: { customerCode: "c2", customerName: "Khách c2" } },
+        { customerId: "c3", employeeId: "u2", outcome: "NORMAL", channel: "CALL", createdAt: at("2026-10-15T09:00:00"), photos: [], employee: { name: "Bình" }, customer: { customerCode: "c3", customerName: "Khách c3" } },
       ])
       .mockResolvedValue([]);
     const r = await getCareTeamReport({}, NOW);
@@ -89,7 +89,7 @@ describe("getCareTeamReport", () => {
       note: null,
       createdAt: at(when),
       customer: { customerCode: customerId, customerName: `Khách ${customerId}` },
-      employee: { name: "An" },
+      photos: [], employee: { name: "An" },
       ...extra,
     });
     h.logs
@@ -150,8 +150,8 @@ describe("getCareDetails (chọn ngày riêng cho Chi tiết chăm sóc)", () =>
       { id: "u2", name: "Bình" },
     ]);
     h.logs.mockResolvedValue([
-      { customerId: "c1", employeeId: "u1", outcome: "NORMAL", channel: "CALL", note: null, issueType: null, expectedMonth: null, needGroup: null, needValueBand: null, createdAt: at("2026-10-17T09:00:00"), employee: { name: "An" }, customer: { customerCode: "KH1", customerName: "Khách 1" } },
-      { customerId: "c1", employeeId: "u1", outcome: "NORMAL", channel: "ZALO", note: "ok", issueType: null, expectedMonth: null, needGroup: null, needValueBand: null, createdAt: at("2026-10-17T10:00:00"), employee: { name: "An" }, customer: { customerCode: "KH1", customerName: "Khách 1" } },
+      { customerId: "c1", employeeId: "u1", outcome: "NORMAL", channel: "CALL", note: null, issueType: null, expectedMonth: null, needGroup: null, needValueBand: null, createdAt: at("2026-10-17T09:00:00"), photos: [], employee: { name: "An" }, customer: { customerCode: "KH1", customerName: "Khách 1" } },
+      { customerId: "c1", employeeId: "u1", outcome: "NORMAL", channel: "ZALO", note: "ok", issueType: null, expectedMonth: null, needGroup: null, needValueBand: null, createdAt: at("2026-10-17T10:00:00"), photos: [], employee: { name: "An" }, customer: { customerCode: "KH1", customerName: "Khách 1" } },
     ]);
     const r = await getCareDetails({ date: "2026-10-17" }, NOW);
     expect(r.date).toBe("2026-10-17");

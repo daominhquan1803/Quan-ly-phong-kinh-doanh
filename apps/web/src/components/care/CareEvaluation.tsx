@@ -7,6 +7,7 @@ import { cn, formatDateVN } from "@/lib/utils";
 import { CARE_CHANNEL_LABEL, CARE_OUTCOME_LABEL, type CareChannelKey, type CareOutcomeKey } from "@/lib/customer-care";
 import type { CareEvaluation as Eval } from "@/lib/customer-care-plan";
 import { TIER_STYLE, TIER_TEXT, usePlan } from "./DuePlan";
+import { PhotoThumbs } from "./CarePhotos";
 
 const card = "rounded-2xl border border-gray-200/30 p-4";
 const ymNow = () => new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 7);
@@ -143,6 +144,7 @@ interface Sample {
   outcome: string;
   note: string | null;
   createdAt: string;
+  photos?: { id: string }[];
   employee: { name: string };
   customer: { id: string; customerCode: string; customerName: string; contactPerson: string | null };
   spotCheck: { result: "OK" | "FAKE"; note: string | null; createdAt: string; checkedBy: { name: string } } | null;
@@ -200,6 +202,7 @@ export function SpotChecks({ canVerify, onOpenCustomer }: { canVerify: boolean; 
                   {s.customer.contactPerson ? ` · liên hệ: ${s.customer.contactPerson}` : ""}
                   {s.note ? ` — ${s.note}` : ""}
                 </p>
+                <PhotoThumbs ids={s.photos?.map((p) => p.id)} />
               </div>
               <div className="shrink-0 text-right">
                 {s.spotCheck && (

@@ -40,6 +40,8 @@ export interface CareDetail {
   expectedMonth: number | null;
   needGroup: string | null;
   needValueBand: string | null;
+  /** Ảnh minh chứng (xem /api/customer-care/photos/[id]). */
+  photoIds?: string[];
   at: string;
 }
 
@@ -81,6 +83,7 @@ const DETAIL_SELECT = {
   needGroup: true,
   needValueBand: true,
   createdAt: true,
+  photos: { select: { id: true } },
   employee: { select: { name: true } },
   customer: { select: { customerCode: true, customerName: true } },
 } as const;
@@ -96,6 +99,7 @@ type DetailRow = {
   needGroup: string | null;
   needValueBand: string | null;
   createdAt: Date;
+  photos: { id: string }[];
   customer: { customerCode: string; customerName: string };
 };
 
@@ -112,6 +116,7 @@ function toDetail(l: DetailRow): CareDetail {
     expectedMonth: l.expectedMonth,
     needGroup: l.needGroup,
     needValueBand: l.needValueBand,
+    photoIds: l.photos.map((p) => p.id),
     at: l.createdAt.toISOString(),
   };
 }

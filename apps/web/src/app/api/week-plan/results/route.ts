@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@hoanggia/db";
 import { requireSession, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
+import { contactInfoOf, entryCounts, entryDetailSchema, missingFields, validateNewEntry } from "@/lib/week-plan-entry";
 import { isManualMetric, isWeekEntryLocked, MANUAL_METRICS, snapToWeekStart, weekLockedMessage, weekRange } from "@/lib/week-plan";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +37,8 @@ export async function GET(req: NextRequest) {
       take: 500,
     });
 
-    return NextResponse.json({ entries });
+    // `missing`: các mục còn thiếu của dòng mới (từ 26/10/2026) — dòng thiếu chưa được tính vào kế hoạch tuần.
+    return NextResponse.json({ entries: entries.map((e) => ({ ...e, missing: entryCounts(e) ? [] : missingFields(e) })) });
   } catch (err) {
     if (err instanceof UnauthorizedError) return NextResponse.json({ error: err.message }, { status: 401 });
     console.error("week-plan results GET error", err);
@@ -44,12 +46,11 @@ export async function GET(req: NextRequest) {
   }
 }
 
-const createSchema = z.object({
+const createSchema = entryDetailSchema.extend({
   weekStart: z.string().min(1),
   metric: z.enum(MANUAL_METRICS as [string, ...string[]]),
   entryDate: z.string().min(1),
   customerName: z.string().trim().min(1, "Thiếu tên khách hàng"),
-  address: z.string().trim().max(500).optional().nullable(),
   content: z.string().trim().max(1000).optional().nullable(),
   productInterest: z.string().trim().max(500).optional().nullable(),
   contactInfo: z.string().trim().max(500).optional().nullable(),
@@ -86,6 +87,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: weekLockedMessage(weekStart) }, { status: 403 });
     }
 
+    const invalid = validateNewEntry(entryDate, parsed.data.customerName, parsed.data);
+    if (invalid) return NextResponse.json({ error: invalid }, { status: 400 });
+
+    const d = parsed.data;
     const entry = await prisma.weekPlanResultEntry.create({
       data: {
         employeeId,
@@ -96,7 +101,15 @@ export async function POST(req: NextRequest) {
         address: parsed.data.address?.trim() || null,
         content: parsed.data.content?.trim() || null,
         productInterest: parsed.data.productInterest?.trim() || null,
-        contactInfo: parsed.data.contactInfo?.trim() || null,
+        contactInfo: contactInfoOf(d.contactName?.trim() || null, d.contactPhone?.trim() || null) ?? (d.contactInfo?.trim() || null),
+        nationality: d.nationality ?? null,
+        scale: d.scale ?? null,
+        contactName: d.contactName?.trim() || null,
+        contactPhone: d.contactPhone?.trim() || null,
+        need: d.need?.trim() || null,
+        workDone: d.workDone?.trim() || null,
+        nextAction: d.nextAction?.trim() || null,
+        nextActionAt: d.nextActionAt ? new Date(d.nextActionAt) : null,
         createdById: session.user.id,
       },
     });

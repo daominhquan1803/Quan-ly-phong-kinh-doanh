@@ -1,6 +1,7 @@
 import { prisma } from "@hoanggia/db";
 import { WeekPlanMetric } from "@prisma/client";
 import { normalizeVN } from "./text-normalize";
+import { entryCounts, missingFields } from "./week-plan-entry";
 import { COUNTED_STOP_WHERE, COUNTED_TRIP_WHERE } from "./business-trip-report";
 
 /**
@@ -520,10 +521,9 @@ export async function getWeekPlanReport(
       ? prisma.weekPlanTarget.findMany({ where: { weekStart: start, employeeId: { in: employeeIds } } })
       : Promise.resolve([]),
     employeeIds.length
-      ? prisma.weekPlanResultEntry.groupBy({
-          by: ["employeeId", "metric"],
+      ? prisma.weekPlanResultEntry.findMany({
           where: { weekStart: start, employeeId: { in: employeeIds } },
-          _count: { _all: true },
+          select: { employeeId: true, metric: true, entryDate: true, customerName: true, address: true, nationality: true, scale: true, contactName: true, contactPhone: true, need: true, workDone: true, nextAction: true, nextActionAt: true },
         })
       : Promise.resolve([]),
     computeAutoMetrics(start, employees),
@@ -531,7 +531,13 @@ export async function getWeekPlanReport(
 
   const targetMap = new Map(targets.map((t) => [`${t.employeeId}:${t.metric}`, t.targetValue]));
   const weightMap = new Map(targets.map((t) => [`${t.employeeId}:${t.metric}`, t.weight]));
-  const manualMap = new Map(manualCounts.map((c) => [`${c.employeeId}:${c.metric}`, c._count._all]));
+  // Dòng nhập tay chỉ tính khi đủ thông tin (dòng trước 26/10/2026 luôn tính) — xem week-plan-entry.ts.
+  const manualMap = new Map<string, number>();
+  for (const c of manualCounts) {
+    if (!entryCounts(c)) continue;
+    const k = `${c.employeeId}:${c.metric}`;
+    manualMap.set(k, (manualMap.get(k) ?? 0) + 1);
+  }
 
   const rows: WeekPlanReportRow[] = employees.map((e) => {
     const metrics = {} as Record<WeekPlanMetric, WeekPlanMetricCell>;
@@ -651,10 +657,18 @@ export async function getWeekPlanMetricDetail(
       title: e.customerName,
       subtitle: e.address,
       note:
-        [e.contactInfo ? `LH: ${e.contactInfo}` : null, e.content, e.productInterest ? `Quan tâm: ${e.productInterest}` : null]
+        [
+          e.contactInfo ? `LH: ${e.contactInfo}` : null,
+          e.need ? `Nhu cầu: ${e.need}` : null,
+          e.workDone ? `Đã làm: ${e.workDone}` : null,
+          e.nextAction ? `Tiếp theo: ${e.nextAction}${e.nextActionAt ? ` (hẹn ${fmtVN(e.nextActionAt)})` : ""}` : null,
+          e.content,
+          e.productInterest ? `Quan tâm: ${e.productInterest}` : null,
+          entryCounts(e) ? null : `Không tính: thiếu ${missingFields(e).join(", ")}`,
+        ]
           .filter(Boolean)
           .join(" · ") || null,
-      counted: true,
+      counted: entryCounts(e),
     }));
   }
 

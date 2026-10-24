@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Plus, Trash2, UploadCloud, Info, Save, X } from "lucide-react";
+import { NATIONALITIES, SCALE_KEYS, SCALE_LABEL } from "@/lib/week-plan-entry";
 import { cn, formatDateVN } from "@/lib/utils";
 
 type Metric = "NEW_CONTACT" | "NEW_MEETING" | "EXISTING_VISIT" | "NEW_CUSTOMER_SALE" | "NEW_QUOTE" | "BUSINESS_TRIP";
@@ -45,6 +46,13 @@ interface EntryLock { locked: boolean; deadlineDay: string }
 interface SummaryResponse { weekStart: string; rows: ReportRow[]; isAdmin: boolean; entryLock?: EntryLock }
 interface ResultEntry {
   id: string;
+  missing?: string[];
+  nationality?: string | null;
+  scale?: string | null;
+  need?: string | null;
+  workDone?: string | null;
+  nextAction?: string | null;
+  nextActionAt?: string | null;
   entryDate: string;
   customerName: string;
   address: string | null;
@@ -573,6 +581,39 @@ function ProgressReport({
 
 // ---------------- Nhập kết quả (2 mục nhập tay) ----------------
 
+const emptyForm = () => ({
+  entryDate: toISODate(new Date()),
+  customerName: "",
+  address: "",
+  nationality: "",
+  scale: "",
+  contactName: "",
+  contactPhone: "",
+  need: "",
+  workDone: "",
+  nextAction: "",
+  nextActionAt: "",
+  content: "",
+  productInterest: "",
+});
+
+/** Các mục bắt buộc còn trống ở form (khớp lib/week-plan-entry.ts phía server). */
+function missingFormFields(f: ReturnType<typeof emptyForm>): string[] {
+  const checks: [string, string][] = [
+    ["tên công ty", f.customerName],
+    ["địa chỉ", f.address],
+    ["quốc tịch", f.nationality],
+    ["quy mô", f.scale],
+    ["người liên hệ", f.contactName],
+    ["số điện thoại", f.contactPhone],
+    ["nhu cầu", f.need],
+    ["việc đã làm", f.workDone],
+    ["hành động tiếp theo", f.nextAction],
+    ["ngày hẹn nhắc", f.nextActionAt],
+  ];
+  return checks.filter(([, v]) => !v.trim()).map(([l]) => l);
+}
+
 function ResultEntrySection({
   weekStart,
   weekStartISO,
@@ -595,7 +636,7 @@ function ResultEntrySection({
   const [metric, setMetric] = useState<Metric>("NEW_CONTACT");
   const [showForm, setShowForm] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
-  const [form, setForm] = useState({ entryDate: toISODate(new Date()), customerName: "", address: "", contactInfo: "", content: "", productInterest: "" });
+  const [form, setForm] = useState(emptyForm());
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -623,8 +664,9 @@ function ResultEntrySection({
 
   async function handleAdd() {
     setError(null);
-    if (!form.customerName.trim()) {
-      setError("Thiếu tên khách hàng");
+    const miss = missingFormFields(form);
+    if (miss.length) {
+      setError(`Chưa đủ thông tin: thiếu ${miss.join(", ")}`);
       return;
     }
     setSaving(true);
@@ -639,7 +681,14 @@ function ResultEntrySection({
         address: form.address || null,
         content: form.content || null,
         productInterest: form.productInterest || null,
-        contactInfo: form.contactInfo || null,
+        nationality: form.nationality || null,
+        scale: form.scale || null,
+        contactName: form.contactName || null,
+        contactPhone: form.contactPhone || null,
+        need: form.need || null,
+        workDone: form.workDone || null,
+        nextAction: form.nextAction || null,
+        nextActionAt: form.nextActionAt || null,
         employeeId: isAdmin ? entryEmployeeId : undefined,
       }),
     });
@@ -647,7 +696,7 @@ function ResultEntrySection({
     if (!res.ok) {
       setError(json.error ?? "Không lưu được");
     } else {
-      setForm({ entryDate: toISODate(new Date()), customerName: "", address: "", contactInfo: "", content: "", productInterest: "" });
+      setForm(emptyForm());
       setShowForm(false);
       invalidate();
     }
@@ -746,23 +795,62 @@ function ResultEntrySection({
             <input type="date" value={form.entryDate} onChange={(e) => setForm((f) => ({ ...f, entryDate: e.target.value }))} className="input" />
           </label>
           <label className="text-xs text-muted-foreground flex flex-col gap-1">
-            Khách hàng
+            Khách hàng (tên công ty) *
             <input value={form.customerName} onChange={(e) => setForm((f) => ({ ...f, customerName: e.target.value }))} className="input" />
           </label>
+          <p className="text-xs text-amber-400 sm:col-span-2">Điền đủ các mục có dấu * thì dòng mới được tính vào kế hoạch tuần.</p>
           <label className="text-xs text-muted-foreground flex flex-col gap-1">
-            Địa chỉ
+            Địa chỉ *
             <input value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} className="input" />
           </label>
           <label className="text-xs text-muted-foreground flex flex-col gap-1">
-            Thông tin liên hệ (tên người liên hệ, số điện thoại)
-            <input value={form.contactInfo} onChange={(e) => setForm((f) => ({ ...f, contactInfo: e.target.value }))} placeholder="VD: Chị Lan - 0912 345 678" className="input" />
+            Quốc tịch *
+            <select value={form.nationality} onChange={(e) => setForm((f) => ({ ...f, nationality: e.target.value }))} className="input">
+              <option value="">— Chọn —</option>
+              {NATIONALITIES.map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs text-muted-foreground flex flex-col gap-1">
+            Quy mô *
+            <select value={form.scale} onChange={(e) => setForm((f) => ({ ...f, scale: e.target.value }))} className="input">
+              <option value="">— Chọn —</option>
+              {SCALE_KEYS.map((k) => (
+                <option key={k} value={k}>{SCALE_LABEL[k]}</option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs text-muted-foreground flex flex-col gap-1">
+            Người liên hệ *
+            <input value={form.contactName} onChange={(e) => setForm((f) => ({ ...f, contactName: e.target.value }))} placeholder="VD: Chị Lan - Phụ trách mua hàng" className="input" />
+          </label>
+          <label className="text-xs text-muted-foreground flex flex-col gap-1">
+            Số điện thoại *
+            <input value={form.contactPhone} onChange={(e) => setForm((f) => ({ ...f, contactPhone: e.target.value }))} placeholder="0912 345 678" inputMode="tel" className="input" />
+          </label>
+          <label className="text-xs text-muted-foreground flex flex-col gap-1 sm:col-span-2">
+            Nhu cầu *
+            <input value={form.need} onChange={(e) => setForm((f) => ({ ...f, need: e.target.value }))} placeholder="Khách cần gì, số lượng, khi nào" className="input" />
+          </label>
+          <label className="text-xs text-muted-foreground flex flex-col gap-1 sm:col-span-2">
+            Việc đã làm *
+            <input value={form.workDone} onChange={(e) => setForm((f) => ({ ...f, workDone: e.target.value }))} placeholder="VD: Gọi điện giới thiệu, gửi catalogue qua Zalo" className="input" />
+          </label>
+          <label className="text-xs text-muted-foreground flex flex-col gap-1">
+            Hành động tiếp theo *
+            <input value={form.nextAction} onChange={(e) => setForm((f) => ({ ...f, nextAction: e.target.value }))} placeholder="VD: Gửi báo giá, hẹn gặp trực tiếp" className="input" />
+          </label>
+          <label className="text-xs text-muted-foreground flex flex-col gap-1">
+            Ngày hẹn nhắc * (app nhắc đúng ngày)
+            <input type="date" value={form.nextActionAt} min={form.entryDate} onChange={(e) => setForm((f) => ({ ...f, nextActionAt: e.target.value }))} className="input" />
           </label>
           <label className="text-xs text-muted-foreground flex flex-col gap-1">
             Sản phẩm quan tâm
             <input value={form.productInterest} onChange={(e) => setForm((f) => ({ ...f, productInterest: e.target.value }))} className="input" />
           </label>
-          <label className="text-xs text-muted-foreground flex flex-col gap-1 sm:col-span-2">
-            Nội dung
+          <label className="text-xs text-muted-foreground flex flex-col gap-1">
+            Ghi chú thêm
             <input value={form.content} onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))} className="input" />
           </label>
           <button
@@ -791,21 +879,22 @@ function ResultEntrySection({
               <th className="font-medium px-2 py-1.5">Ngày</th>
               <th className="font-medium px-2 py-1.5">Khách hàng</th>
               <th className="font-medium px-2 py-1.5">Địa chỉ</th>
-              <th className="font-medium px-2 py-1.5">Thông tin liên hệ</th>
-              <th className="font-medium px-2 py-1.5">Nội dung</th>
-              <th className="font-medium px-2 py-1.5">SP quan tâm</th>
+              <th className="font-medium px-2 py-1.5">Liên hệ</th>
+              <th className="font-medium px-2 py-1.5">Nhu cầu / Đã làm</th>
+              <th className="font-medium px-2 py-1.5">Tiếp theo</th>
+              <th className="font-medium px-2 py-1.5">Tính</th>
               <th className="font-medium px-2 py-1.5"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {isLoading && (
               <tr>
-                <td colSpan={7} className="px-2 py-4 text-center text-muted-foreground">Đang tải...</td>
+                <td colSpan={9} className="px-2 py-4 text-center text-muted-foreground">Đang tải...</td>
               </tr>
             )}
             {!isLoading && (data?.entries.length ?? 0) === 0 && (
               <tr>
-                <td colSpan={7} className="px-2 py-4 text-center text-muted-foreground">Chưa có dòng nào trong tuần này.</td>
+                <td colSpan={9} className="px-2 py-4 text-center text-muted-foreground">Chưa có dòng nào trong tuần này.</td>
               </tr>
             )}
             {data?.entries.map((e) => (
@@ -814,8 +903,19 @@ function ResultEntrySection({
                 <td className="px-2 py-1.5 text-ink font-medium">{e.customerName}</td>
                 <td className="px-2 py-1.5 text-muted-foreground">{e.address ?? "—"}</td>
                 <td className="px-2 py-1.5 text-muted-foreground">{e.contactInfo ?? "—"}</td>
-                <td className="px-2 py-1.5 text-muted-foreground">{e.content ?? "—"}</td>
-                <td className="px-2 py-1.5 text-muted-foreground">{e.productInterest ?? "—"}</td>
+                <td className="px-2 py-1.5 text-muted-foreground">
+                  {[e.need, e.workDone, e.content, e.productInterest ? `Quan tâm: ${e.productInterest}` : null].filter(Boolean).join(" · ") || "—"}
+                </td>
+                <td className="px-2 py-1.5 text-muted-foreground">
+                  {e.nextAction ? `${e.nextAction}${e.nextActionAt ? ` (hẹn ${formatDateVN(e.nextActionAt)})` : ""}` : "—"}
+                </td>
+                <td className="px-2 py-1.5 whitespace-nowrap">
+                  {e.missing && e.missing.length > 0 ? (
+                    <span className="text-alert" title={`Thiếu: ${e.missing.join(", ")}`}>Chưa đủ ({e.missing.length})</span>
+                  ) : (
+                    <span className="text-emerald-300">Đã tính</span>
+                  )}
+                </td>
                 <td className="px-2 py-1.5 text-right">
                   {!lockedForUser && (
                     <button onClick={() => handleDelete(e.id)} className="text-muted2 hover:text-alert">
@@ -846,7 +946,7 @@ function UploadPanel({
   const [employeeId, setEmployeeId] = useState(defaultEmployeeId);
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ createdCount: number; duplicateCount?: number; defaultedMetricCount?: number; swappedDateCount?: number; errorCount: number; errors: { rowNumber: number; message: string }[] } | null>(null);
+  const [result, setResult] = useState<{ createdCount: number; incompleteCount?: number; duplicateCount?: number; defaultedMetricCount?: number; swappedDateCount?: number; errorCount: number; errors: { rowNumber: number; message: string }[] } | null>(null);
 
   useEffect(() => setEmployeeId(defaultEmployeeId), [defaultEmployeeId]);
 
@@ -871,7 +971,7 @@ function UploadPanel({
   return (
     <div className="rounded-md border border-gray-200 bg-gray-50 p-3 mb-4 space-y-3">
       <p className="text-xs text-muted-foreground">
-        File cần đúng cấu trúc sheet &quot;KẾT QUẢ&quot; trong file mẫu (STT, Mục, Ngày tháng, Khách hàng, Địa chỉ, Thông tin liên hệ, Nội dung, Sản phẩm quan tâm) —
+        File cần đúng cấu trúc sheet &quot;KẾT QUẢ&quot; trong file mẫu (STT, Mục, Ngày tháng, Khách hàng, Địa chỉ, Quốc tịch, Quy mô, Người liên hệ, Số điện thoại, Nhu cầu, Việc đã làm, Hành động tiếp theo, Ngày hẹn nhắc, Sản phẩm quan tâm) — từ 26/10/2026 dòng thiếu cột nào vẫn được nhập nhưng chưa tính, bổ sung lại trên app —
         1 file có thể chứa cả 2 mục, mỗi dòng tự xếp đúng tuần theo Ngày tháng. (Mục &quot;Khách hàng cũ liên hệ gặp
         thăm hỏi&quot; giờ tính tự động từ Đăng ký đi công tác và trang Chăm sóc khách, không cần nhập ở đây nữa.)
       </p>
@@ -898,6 +998,9 @@ function UploadPanel({
             Đã thêm <span className="font-mono">{result.createdCount}</span> dòng
             {result.errorCount > 0 && <span className="text-alert"> — {result.errorCount} dòng lỗi</span>}
           </p>
+          {!!result.incompleteCount && (
+            <p className="mt-1 text-amber-400">{result.incompleteCount} dòng chưa đủ thông tin nên chưa được tính vào kế hoạch tuần — xem cột “Tính” để biết còn thiếu gì.</p>
+          )}
           {!!result.duplicateCount && (
             <p className="mt-1 text-muted2">Bỏ qua {result.duplicateCount} dòng đã có sẵn (tải trùng).</p>
           )}

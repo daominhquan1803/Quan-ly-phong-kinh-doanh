@@ -42,6 +42,7 @@ export const ZALO_TYPE_LABEL: Record<string, string> = {
   CARE_DUE_DAILY: "Lịch chăm sóc khách hằng ngày",
   CARE_ESCALATION: "Cảnh báo chăm sóc khách (trưởng phòng)",
   CARE_WEEKLY: "Tổng kết chăm sóc khách hằng tuần (trưởng phòng)",
+  WEEK_PLAN_FOLLOWUP: "Đến hẹn hành động tiếp theo với khách liên hệ mới",
 };
 
 /** Mã liên kết 6 chữ số, hết hạn sau 10 phút. */

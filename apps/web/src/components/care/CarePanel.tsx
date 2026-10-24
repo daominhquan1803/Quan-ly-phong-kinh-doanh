@@ -21,6 +21,7 @@ import {
 } from "@/lib/customer-care";
 import { SEASON_STAGE_LABEL } from "@/lib/customer-season";
 import { DuePlan } from "./DuePlan";
+import { PhotoPicker, PhotoThumbs } from "./CarePhotos";
 import { ProfileBox } from "@/components/customer-report/ProfileForm";
 import type { CareCustomerRow } from "@/lib/customer-care-query";
 
@@ -58,6 +59,7 @@ interface CareLogRow {
   note: string | null;
   createdAt: string;
   employee: { name: string };
+  photos?: { id: string }[];
 }
 
 export function CarePanel() {
@@ -188,6 +190,7 @@ function QuickLog({ customer, onSaved }: { customer: CareCustomerRow; onSaved: (
   const [needValueBand, setNeedValueBand] = useState<string>("");
   const [note, setNote] = useState("");
   const [followUpDays, setFollowUpDays] = useState<number | null>(null);
+  const [photoIds, setPhotoIds] = useState<string[]>([]);
   const [saved, setSaved] = useState(false);
 
   const save = useMutation({
@@ -205,6 +208,7 @@ function QuickLog({ customer, onSaved }: { customer: CareCustomerRow; onSaved: (
           needValueBand: needValueBand || null,
           note: note || null,
           followUpDays,
+          photoIds,
         }),
       });
       const body = await res.json();
@@ -222,6 +226,7 @@ function QuickLog({ customer, onSaved }: { customer: CareCustomerRow; onSaved: (
       setNeedValueBand("");
       setNote("");
       setFollowUpDays(null);
+      setPhotoIds([]);
     },
   });
 
@@ -306,6 +311,9 @@ function QuickLog({ customer, onSaved }: { customer: CareCustomerRow; onSaved: (
         className="w-full rounded-lg border border-gray-200/40 bg-transparent px-3 py-2 text-sm text-ink"
       />
 
+      <Label>Ảnh minh chứng (bắt buộc)</Label>
+      <PhotoPicker ids={photoIds} onChange={setPhotoIds} />
+
       <Label>Hẹn chăm sóc lại</Label>
       <div className="flex flex-wrap gap-2">
         {FOLLOW_UPS.map((f) => (
@@ -325,7 +333,7 @@ function QuickLog({ customer, onSaved }: { customer: CareCustomerRow; onSaved: (
         </p>
       )}
       <button
-        disabled={!outcome || save.isPending || (NOTE_REQUIRED.includes(outcome) && !note.trim())}
+        disabled={!outcome || save.isPending || photoIds.length === 0 || (NOTE_REQUIRED.includes(outcome) && !note.trim())}
         onClick={() => save.mutate()}
         className="mt-4 w-full rounded-lg bg-amber-500 py-2.5 text-sm font-semibold text-black disabled:opacity-40"
       >
@@ -435,6 +443,7 @@ function History({ customerId }: { customerId: string }) {
               {formatDateVN(l.createdAt)} · {l.employee.name}
               {l.note ? ` · ${l.note}` : ""}
             </p>
+            <PhotoThumbs ids={l.photos?.map((p) => p.id)} />
           </div>
         ))}
       </div>

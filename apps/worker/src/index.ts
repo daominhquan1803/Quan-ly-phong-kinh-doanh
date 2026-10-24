@@ -13,6 +13,7 @@ import { runZaloDispatch } from "./notifications/zaloDispatch";
 import { runAdminKpiDigest } from "./notifications/adminKpiDigest";
 import { runCustomerAlerts } from "./notifications/customerAlerts";
 import { runCareDaily, runCareEscalations } from "./notifications/carePlan";
+import { runWeekPlanFollowup } from "./notifications/weekPlanFollowup";
 import { runCustomerReportSnapshot } from "./notifications/customerReportSnapshot";
 import { isZaloConfigured } from "./zalo";
 import { logger } from "./logger";
@@ -92,6 +93,7 @@ async function main() {
       runAdminKpiDigest().catch((err) => logger.error("Lỗi tin KPI Admin hằng ngày:", err));
       runCustomerAlerts().catch((err) => logger.error("Lỗi cảnh báo khách hàng:", err));
       runCareDaily().catch((err) => logger.error("Lỗi lịch chăm sóc 8h:", err));
+      runWeekPlanFollowup().catch((err) => logger.error("Lỗi nhắc hành động tiếp theo kế hoạch tuần:", err));
     },
     { timezone: NOTIFY_CRON_TIMEZONE }
   );

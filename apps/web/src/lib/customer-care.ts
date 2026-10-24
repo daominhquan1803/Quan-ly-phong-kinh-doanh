@@ -37,6 +37,9 @@ export const VALUE_BAND_LABEL: Record<(typeof VALUE_BANDS)[number], string> = {
   GT100: "Trên 100 triệu",
 };
 
+/** Ảnh minh chứng bắt buộc cho mỗi lần ghi (ảnh tin nhắn Zalo / cuộc gọi / gặp khách) — anh Quân chốt 24/10/2026. */
+export const MAX_CARE_PHOTOS = 3;
+
 /** Số ngày tự hẹn gọi lại khi "Không liên lạc được". */
 export const NO_CONTACT_RETRY_DAYS = 3;
 
@@ -52,6 +55,8 @@ export const careLogSchema = z
     needValueBand: z.enum(VALUE_BANDS).optional().nullable(),
     /** Số ngày hẹn chăm sóc lại (3 / 7 / 30...). */
     followUpDays: z.number().int().min(1).max(365).optional().nullable(),
+    /** Id ảnh đã tải lên (/api/customer-care/photos) — ít nhất 1 ảnh. */
+    photoIds: z.array(z.string().min(1)).min(1, "Đính kèm ít nhất 1 ảnh minh chứng (tin nhắn Zalo, cuộc gọi hoặc ảnh gặp khách)").max(MAX_CARE_PHOTOS, `Tối đa ${MAX_CARE_PHOTOS} ảnh`),
   })
   .superRefine((v, ctx) => {
     if (v.outcome === "ISSUE" && !v.issueType) {

@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
       where: { customerId },
       orderBy: { createdAt: "desc" },
       take: 50,
-      include: { employee: { select: { id: true, name: true } } },
+      include: { employee: { select: { id: true, name: true } }, photos: { select: { id: true } } },
     });
     return NextResponse.json({ logs });
   } catch (err) {
@@ -45,8 +45,14 @@ export async function POST(req: NextRequest) {
     if (!customer || (session.user.role !== "ADMIN" && customer.salesEmployeeId !== session.user.id)) {
       return NextResponse.json({ error: "Không tìm thấy khách hàng" }, { status: 404 });
     }
+    // Ảnh phải do chính người ghi tải lên và chưa gắn vào lần ghi nào.
+    const photoIds = Array.from(new Set(parsed.data.photoIds));
+    const own = await prisma.careLogPhoto.count({ where: { id: { in: photoIds }, uploaderId: session.user.id, logId: null } });
+    if (own !== photoIds.length) return NextResponse.json({ error: "Ảnh đính kèm không hợp lệ, hãy tải lại ảnh" }, { status: 400 });
     const data = normalizeCareLog(parsed.data, new Date());
-    const log = await prisma.customerCareLog.create({ data: { ...data, employeeId: session.user.id } });
+    const log = await prisma.customerCareLog.create({
+      data: { ...data, employeeId: session.user.id, photos: { connect: photoIds.map((id) => ({ id })) } },
+    });
     if (log.outcome === "LOST") {
       // Mất khách: báo trưởng phòng NGAY (Zalo bot gửi trong ~1 phút). Lỗi báo không làm hỏng việc ghi.
       try {

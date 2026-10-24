@@ -25,7 +25,8 @@ interface NotificationRow {
     | "SEASON_REMINDER"
     | "CARE_DUE_DAILY"
     | "CARE_ESCALATION"
-    | "CARE_WEEKLY";
+    | "CARE_WEEKLY"
+    | "WEEK_PLAN_FOLLOWUP";
   title: string;
   message: string;
   link: string | null;

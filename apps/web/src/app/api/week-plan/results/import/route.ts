@@ -3,13 +3,16 @@ import * as XLSX from "xlsx";
 import { prisma, fixSwappedDayMonth } from "@hoanggia/db";
 import { parseExcelDate } from "@/lib/excel-parser";
 import { requireSession, UnauthorizedError } from "@/lib/rbac";
+import { contactInfoOf, entryCounts, NATIONALITIES, SCALE_KEYS, SCALE_LABEL } from "@/lib/week-plan-entry";
+import { normalizeVN } from "@/lib/text-normalize";
 import { isWeekEntryLocked, matchMetricFromSectionLabel, snapToWeekStart, weekLockedMessage } from "@/lib/week-plan";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Tải file Excel theo đúng cấu trúc sheet "KẾT QUẢ" trong file mẫu — cột: STT, Mục, Ngày tháng,
- * Khách hàng, Địa chỉ, Thông tin liên hệ (tên + SĐT, không bắt buộc), Nội dung, Sản phẩm quan tâm. Cột "Mục" chỉ có ở dòng đầu mỗi nhóm (các
+ * Khách hàng, Địa chỉ, Quốc tịch, Quy mô, Người liên hệ, Số điện thoại, Nhu cầu, Việc đã làm, Hành động tiếp theo, Ngày hẹn nhắc
+ * (từ 26/10/2026 phải đủ các cột này thì dòng mới được tính — dòng thiếu vẫn nhập nhưng không tính), Nội dung, Sản phẩm quan tâm. Cột "Mục" chỉ có ở dòng đầu mỗi nhóm (các
  * dòng sau cùng nhóm để trống) — tự động lấy Mục của dòng gần nhất phía trên (forward-fill),
  * đúng cách file mẫu trình bày. weekStart của mỗi dòng lấy trực tiếp từ "Ngày tháng" của dòng đó
  * (không ép theo tuần đang xem trên UI) — 1 file có thể chứa nhiều tuần, mỗi dòng tự xếp đúng
@@ -51,13 +54,24 @@ export async function POST(req: NextRequest) {
 
     const colIdx = {
       metric: headers.findIndex((h) => /mục/i.test(h)),
-      date: headers.findIndex((h) => /ngày/i.test(h)),
+      date: headers.findIndex((h) => /ngày/i.test(h) && !/hẹn|nhắc/i.test(h)),
       customer: headers.findIndex((h) => /khách/i.test(h)),
       address: headers.findIndex((h) => /địa chỉ/i.test(h)),
       content: headers.findIndex((h) => /nội dung/i.test(h)),
       productInterest: headers.findIndex((h) => /sản phẩm/i.test(h)),
-      contactInfo: headers.findIndex((h) => /liên hệ/i.test(h)),
+      contactInfo: headers.findIndex((h) => /thông tin liên hệ/i.test(h)),
+      nationality: headers.findIndex((h) => /quốc tịch/i.test(h)),
+      scale: headers.findIndex((h) => /quy mô/i.test(h)),
+      contactName: headers.findIndex((h) => /người liên hệ/i.test(h)),
+      contactPhone: headers.findIndex((h) => /điện thoại|sđt|sdt/i.test(h)),
+      need: headers.findIndex((h) => /nhu cầu/i.test(h)),
+      workDone: headers.findIndex((h) => /việc đã làm/i.test(h)),
+      nextAction: headers.findIndex((h) => /hành động/i.test(h)),
+      nextActionAt: headers.findIndex((h) => /hẹn nhắc|ngày hẹn/i.test(h)),
     };
+    const cell = (row: unknown[], idx: number) => (idx >= 0 ? String(row[idx] ?? "").trim() || null : null);
+    const natOf = (v: string | null) => NATIONALITIES.find((n) => normalizeVN(n) === normalizeVN(v ?? "")) ?? null;
+    const scaleOf = (v: string | null) => SCALE_KEYS.find((k) => normalizeVN(k) === normalizeVN(v ?? "") || normalizeVN(SCALE_LABEL[k]) === normalizeVN(v ?? "")) ?? null;
     if (colIdx.date < 0 || colIdx.customer < 0) {
       return NextResponse.json(
         { error: 'File không đúng cấu trúc sheet "KẾT QUẢ" mẫu — thiếu cột Ngày tháng hoặc Khách hàng' },
@@ -76,6 +90,14 @@ export async function POST(req: NextRequest) {
       content: string | null;
       productInterest: string | null;
       contactInfo: string | null;
+      nationality: string | null;
+      scale: string | null;
+      contactName: string | null;
+      contactPhone: string | null;
+      need: string | null;
+      workDone: string | null;
+      nextAction: string | null;
+      nextActionAt: Date | null;
     }[] = [];
 
     // Dòng nằm trước mọi ô "Mục" (NVKD quên điền) mặc định tính là "KH liên hệ mới" — theo chốt của
@@ -124,6 +146,9 @@ export async function POST(req: NextRequest) {
         return;
       }
 
+      const contactName = cell(row, colIdx.contactName);
+      const contactPhone = cell(row, colIdx.contactPhone);
+      const nextActionAtRaw = colIdx.nextActionAt >= 0 ? row[colIdx.nextActionAt] : null;
       toCreate.push({
         employeeId,
         weekStart: rowWeekStart,
@@ -134,7 +159,15 @@ export async function POST(req: NextRequest) {
         content: colIdx.content >= 0 ? String(row[colIdx.content] ?? "").trim() || null : null,
         productInterest:
           colIdx.productInterest >= 0 ? String(row[colIdx.productInterest] ?? "").trim() || null : null,
-        contactInfo: colIdx.contactInfo >= 0 ? String(row[colIdx.contactInfo] ?? "").trim() || null : null,
+        contactInfo: contactInfoOf(contactName, contactPhone) ?? cell(row, colIdx.contactInfo),
+        nationality: natOf(cell(row, colIdx.nationality)),
+        scale: scaleOf(cell(row, colIdx.scale)),
+        contactName,
+        contactPhone,
+        need: cell(row, colIdx.need),
+        workDone: cell(row, colIdx.workDone),
+        nextAction: cell(row, colIdx.nextAction),
+        nextActionAt: nextActionAtRaw === "" || nextActionAtRaw == null ? null : parseExcelDate(nextActionAtRaw),
       });
     });
 
@@ -180,8 +213,12 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Dòng mới (từ 26/10/2026) thiếu thông tin vẫn được lưu để NVKD bổ sung, nhưng chưa tính vào kế hoạch tuần.
+    const incompleteCount = toCreate.filter((r) => !entryCounts(r)).length;
+
     return NextResponse.json({
       batchId: batch.id,
+      incompleteCount,
       totalRows: dataRows.length,
       createdCount: toCreate.length,
       duplicateCount,

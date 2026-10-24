@@ -231,6 +231,21 @@ model ImportBatch {
 
 // Lịch sử chăm sóc khách do NVKD ghi nhanh trên app (AMIS không có dữ liệu này). Cơ hội bán hàng KHÔNG tách phân hệ riêng:
 // là log có outcome = NEW_NEED kèm needGroup / needValueBand / expectedMonth.
+// Ảnh minh chứng của lần ghi chăm sóc (ảnh tin nhắn Zalo / cuộc gọi / gặp khách). Tải lên trước (logId null) rồi gắn vào lần ghi khi lưu.
+model CareLogPhoto {
+  id         String           @id @default(cuid())
+  logId      String?
+  log        CustomerCareLog? @relation(fields: [logId], references: [id], onDelete: Cascade)
+  uploaderId String
+  mimeType   String
+  sizeBytes  Int
+  data       Bytes
+  createdAt  DateTime         @default(now())
+
+  @@index([logId])
+  @@map("care_log_photos")
+}
+
 model CustomerCareLog {
   id            String         @id @default(cuid())
   customerId    String
@@ -251,6 +266,7 @@ model CustomerCareLog {
   followUpAt    DateTime?
   createdAt     DateTime       @default(now())
   spotCheck     CareSpotCheck?
+  photos        CareLogPhoto[]
 
   @@index([customerId, createdAt])
   @@index([employeeId, createdAt])
@@ -1304,26 +1320,37 @@ model WeekPlanResultImportBatch {
 }
 
 model WeekPlanResultEntry {
-  id              String                     @id @default(cuid())
-  employeeId      String
-  employee        User                       @relation("WeekPlanResultEmployee", fields: [employeeId], references: [id])
-  weekStart       DateTime
+  id                 String                     @id @default(cuid())
+  employeeId         String
+  employee           User                       @relation("WeekPlanResultEmployee", fields: [employeeId], references: [id])
+  weekStart          DateTime
   // Chỉ áp dụng cho 3 mục nhập tay (NEW_CONTACT | NEW_MEETING | EXISTING_VISIT) — không ràng
   // buộc được ở tầng DB, kiểm tra ở tầng ứng dụng lúc ghi.
-  metric          WeekPlanMetric
-  entryDate       DateTime
-  customerName    String
-  address         String?
-  content         String?
-  productInterest String?
+  metric             WeekPlanMetric
+  entryDate          DateTime
+  customerName       String
+  address            String?
+  content            String?
+  productInterest    String?
   // "Thông tin liên hệ" — tên người liên hệ + số điện thoại của khách (NVKD tự ghi).
-  contactInfo     String?
-  importBatchId   String?
-  importBatch     WeekPlanResultImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
-  createdById     String
-  createdBy       User                       @relation("WeekPlanResultCreatedBy", fields: [createdById], references: [id])
-  createdAt       DateTime                   @default(now())
-  updatedAt       DateTime                   @updatedAt
+  contactInfo        String?
+  // Bắt buộc đủ (từ 26/10/2026) thì dòng mới được tính — xem lib/week-plan-entry.ts.
+  nationality        String?
+  scale              String?
+  contactName        String?
+  contactPhone       String?
+  need               String?
+  workDone           String?
+  nextAction         String?
+  nextActionAt       DateTime?
+  // Đã nhắc NVKD về hành động tiếp theo (worker 8h ngày hẹn).
+  followUpNotifiedAt DateTime?
+  importBatchId      String?
+  importBatch        WeekPlanResultImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  createdById        String
+  createdBy          User                       @relation("WeekPlanResultCreatedBy", fields: [createdById], references: [id])
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
 
   @@index([employeeId, weekStart, metric])
   @@map("week_plan_result_entries")
@@ -1332,6 +1359,7 @@ model WeekPlanResultEntry {
 // ---------- Thông báo nhắc việc (Kế hoạch tuần sắp hết hạn, KPI tháng chưa đạt tiến độ...) ----------
 
 enum NotificationType {
+  WEEK_PLAN_FOLLOWUP // tới ngày hẹn hành động tiếp theo của khách liên hệ mới
   WEEK_PLAN_REMINDER
   KPI_REMINDER
   DEBT_DUE_DATE_MISSING

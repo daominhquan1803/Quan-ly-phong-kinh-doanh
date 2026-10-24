@@ -17,6 +17,7 @@ import type { CareDetail, CareDetailsReport, CareTeamReport } from "@/lib/custom
 import { CareEvaluation, SpotChecks } from "./CareEvaluation";
 import { UnassignedPanel } from "./UnassignedPanel";
 import { TransferPanel } from "./TransferPanel";
+import { PhotoThumbs } from "./CarePhotos";
 
 const card = "rounded-2xl border border-gray-200/30 p-4";
 const KIND_LABEL = { ISSUE: "Có vấn đề", LOST: "Đã chuyển NCC khác", NO_CONTACT: "Không liên lạc được nhiều lần" } as const;
@@ -412,6 +413,7 @@ function DetailsSection({ team, onOpenCustomer }: { team: boolean; onOpenCustome
                             <span className={cn("rounded-full border px-2 py-0.5 text-[11px]", OUTCOME_TONE[d.outcome])}>{CARE_OUTCOME_LABEL[d.outcome as CareOutcomeKey] ?? d.outcome}</span>
                             <span className="text-[11px] text-muted-foreground">{CARE_CHANNEL_LABEL[d.channel as CareChannelKey] ?? d.channel}</span>
                           </div>
+                          <PhotoThumbs ids={d.photoIds} />
                           {(d.issueType || d.needGroup || d.expectedMonth || d.note) && (
                             <p className="mt-0.5 text-[11px] text-muted-foreground">
                               {d.issueType && <span className="text-alert">{ISSUE_TYPE_LABEL[d.issueType as keyof typeof ISSUE_TYPE_LABEL] ?? d.issueType}. </span>}

@@ -24,6 +24,7 @@ export async function GET() {
         outcome: true,
         note: true,
         createdAt: true,
+        photos: { select: { id: true } },
         employee: { select: { name: true } },
         customer: { select: { id: true, customerCode: true, customerName: true, contactPerson: true } },
         spotCheck: { select: { result: true, note: true, createdAt: true, checkedBy: { select: { name: true } } } },
