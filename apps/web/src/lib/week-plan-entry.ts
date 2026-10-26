@@ -5,6 +5,7 @@
  */
 import { z } from "zod";
 import { STAFF_SIZES } from "./customer-profile";
+import { normalizeVN } from "./text-normalize";
 
 export const WEEK_ENTRY_COMPLETE_FROM = new Date("2026-10-26T00:00:00+07:00");
 
@@ -135,3 +136,40 @@ export function mapImportColumns(headers: string[]): Record<keyof typeof IMPORT_
 }
 
 export const METRIC_IMPORT_LABEL = { NEW_CONTACT: "Khách hàng mới liên hệ", NEW_MEETING: "Khách hàng mới hẹn gặp được" } as const;
+
+export type EntryStatus = "COUNTED" | "INCOMPLETE" | "DUPLICATE";
+export interface ClassifiableEntry extends EntryFields {
+  id: string;
+  employeeId: string;
+  metric: string;
+  weekStart: Date;
+  createdAt: Date;
+}
+
+/**
+ * Phân loại các dòng nhập tay (anh Quân chốt 26/10/2026): mỗi khách chỉ tính 1 lần cho mỗi NVKD, mỗi mục, trong 1 THÁNG —
+ * ghi nhiều lần trong tuần, hoặc tuần sau ghi lại khách tuần trước đã ghi, đều không tính thêm. Dòng đầu tiên ĐƯỢC TÍNH (đủ
+ * thông tin) giữ chỗ; dòng thiếu thông tin không giữ chỗ nên không chặn dòng đủ thông tin ghi sau. Dòng trước 26/10/2026 luôn
+ * được tính như cũ (không bị coi là trùng) nhưng vẫn giữ chỗ để dòng mới sau đó bị coi là trùng. `entries` phải gồm cả các tuần
+ * trước trong cùng tháng.
+ */
+export function classifyEntries(entries: ClassifiableEntry[]): Map<string, { status: EntryStatus; firstDate?: Date }> {
+  const sorted = [...entries].sort((a, b) => a.entryDate.getTime() - b.entryDate.getTime() || a.createdAt.getTime() - b.createdAt.getTime());
+  const first = new Map<string, Date>();
+  const out = new Map<string, { status: EntryStatus; firstDate?: Date }>();
+  for (const e of sorted) {
+    if (!entryCounts(e)) {
+      out.set(e.id, { status: "INCOMPLETE" });
+      continue;
+    }
+    const key = `${e.employeeId}|${e.metric}|${e.weekStart.getFullYear()}-${e.weekStart.getMonth()}|${normalizeVN(e.customerName)}`;
+    const seen = first.get(key);
+    if (seen && e.entryDate >= WEEK_ENTRY_COMPLETE_FROM) {
+      out.set(e.id, { status: "DUPLICATE", firstDate: seen });
+      continue;
+    }
+    if (!seen) first.set(key, e.entryDate);
+    out.set(e.id, { status: "COUNTED" });
+  }
+  return out;
+}

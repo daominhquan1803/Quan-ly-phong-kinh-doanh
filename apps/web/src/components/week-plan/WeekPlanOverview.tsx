@@ -22,9 +22,9 @@ const METRIC_LABEL: Record<Metric, string> = {
   BUSINESS_TRIP: "Buổi đi công tác",
 };
 const METRIC_NOTE: Record<Metric, string> = {
-  NEW_CONTACT: "Khách chưa từng mua, hoặc khách cũ dừng mua ≥ 1 năm tính từ đơn cuối — tự ghi danh sách bên dưới.",
-  NEW_MEETING: "Khách chưa từng mua, hoặc khách cũ dừng mua ≥ 1 năm tính từ đơn cuối — tự ghi danh sách bên dưới.",
-  EXISTING_VISIT: "Tự động — khách cũ (đang mua, hoặc dừng mua < 1 năm) được gặp qua Đăng ký đi công tác đã duyệt (tính cả người hỗ trợ) hoặc được chăm sóc (gọi, nhắn Zalo, gặp) ở trang Chăm sóc khách; mỗi khách 1 lần/tuần.",
+  NEW_CONTACT: "Khách chưa từng mua, hoặc khách cũ dừng mua ≥ 1 năm tính từ đơn cuối — tự ghi danh sách bên dưới. Mỗi khách chỉ tính 1 lần trong tháng (ghi lại ở tuần sau không tính thêm).",
+  NEW_MEETING: "Khách chưa từng mua, hoặc khách cũ dừng mua ≥ 1 năm tính từ đơn cuối — tự ghi danh sách bên dưới. Mỗi khách chỉ tính 1 lần trong tháng.",
+  EXISTING_VISIT: "Tự động — khách cũ (đang mua, hoặc dừng mua < 1 năm) được gặp qua Đăng ký đi công tác đã duyệt (tính cả người hỗ trợ) hoặc được chăm sóc (gọi, nhắn Zalo, gặp) ở trang Chăm sóc khách. Tính theo số khách khác nhau: 1 khách chăm sóc nhiều lần trong tuần vẫn tính 1.",
   NEW_CUSTOMER_SALE: "Tự động từ Đơn hàng — khách chưa từng mua, hoặc dừng mua ≥ 1 năm (đối chiếu toàn công ty).",
   NEW_QUOTE: "Tự động từ Báo giá — cần gán \"Mã Báo giá\" ở trang Nhân viên.",
   BUSINESS_TRIP: "Tự động từ Đăng ký đi công tác — mỗi ngày tính 1 buổi.",
@@ -47,6 +47,8 @@ interface SummaryResponse { weekStart: string; rows: ReportRow[]; isAdmin: boole
 interface ResultEntry {
   id: string;
   missing?: string[];
+  status?: "COUNTED" | "INCOMPLETE" | "DUPLICATE";
+  firstDate?: string;
   nationality?: string | null;
   scale?: string | null;
   need?: string | null;
@@ -910,7 +912,9 @@ function ResultEntrySection({
                   {e.nextAction ? `${e.nextAction}${e.nextActionAt ? ` (hẹn ${formatDateVN(e.nextActionAt)})` : ""}` : "—"}
                 </td>
                 <td className="px-2 py-1.5 whitespace-nowrap">
-                  {e.missing && e.missing.length > 0 ? (
+                  {e.status === "DUPLICATE" ? (
+                    <span className="text-amber-400" title="Khách này đã ghi trước đó trong tháng — mỗi khách chỉ tính 1 lần/tháng">Trùng khách{e.firstDate ? ` (đã ghi ${formatDateVN(e.firstDate)})` : ""}</span>
+                  ) : e.missing && e.missing.length > 0 ? (
                     <span className="text-alert" title={`Thiếu: ${e.missing.join(", ")}`}>Chưa đủ ({e.missing.length})</span>
                   ) : (
                     <span className="text-emerald-300">Đã tính</span>

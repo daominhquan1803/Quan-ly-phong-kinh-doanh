@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@hoanggia/db";
 import { requireSession, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
-import { contactInfoOf, entryCounts, entryDetailSchema, missingFields, validateNewEntry } from "@/lib/week-plan-entry";
-import { isManualMetric, isWeekEntryLocked, MANUAL_METRICS, snapToWeekStart, weekLockedMessage, weekRange } from "@/lib/week-plan";
+import { contactInfoOf, entryDetailSchema, missingFields, validateNewEntry } from "@/lib/week-plan-entry";
+import { isManualMetric, loadWeekEntries, isWeekEntryLocked, MANUAL_METRICS, snapToWeekStart, weekLockedMessage, weekRange } from "@/lib/week-plan";
 
 export const dynamic = "force-dynamic";
 
@@ -27,18 +27,11 @@ export async function GET(req: NextRequest) {
 
     const employeeId = session.user.role === "ADMIN" ? employeeIdParam ?? session.user.id : session.user.id;
 
-    const entries = await prisma.weekPlanResultEntry.findMany({
-      where: {
-        weekStart,
-        employeeId,
-        ...(metric ? { metric: metric as (typeof MANUAL_METRICS)[number] } : {}),
-      },
-      orderBy: [{ entryDate: "asc" }, { createdAt: "asc" }],
-      take: 500,
-    });
+    const entries = await loadWeekEntries([employeeId], weekStart, (metric as (typeof MANUAL_METRICS)[number] | null) ?? undefined);
 
     // `missing`: các mục còn thiếu của dòng mới (từ 26/10/2026) — dòng thiếu chưa được tính vào kế hoạch tuần.
-    return NextResponse.json({ entries: entries.map((e) => ({ ...e, missing: entryCounts(e) ? [] : missingFields(e) })) });
+    // `status`: COUNTED = được tính; INCOMPLETE = thiếu `missing`; DUPLICATE = khách đã ghi từ `firstDate` trong tháng.
+    return NextResponse.json({ entries: entries.map((e) => ({ ...e, missing: e.status === "INCOMPLETE" ? missingFields(e) : [] })) });
   } catch (err) {
     if (err instanceof UnauthorizedError) return NextResponse.json({ error: err.message }, { status: 401 });
     console.error("week-plan results GET error", err);

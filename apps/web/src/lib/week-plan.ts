@@ -1,7 +1,7 @@
 import { prisma } from "@hoanggia/db";
 import { WeekPlanMetric } from "@prisma/client";
 import { normalizeVN } from "./text-normalize";
-import { entryCounts, missingFields } from "./week-plan-entry";
+import { classifyEntries, missingFields, type EntryStatus } from "./week-plan-entry";
 import { COUNTED_STOP_WHERE, COUNTED_TRIP_WHERE } from "./business-trip-report";
 
 /**
@@ -83,11 +83,11 @@ export const WEEK_PLAN_METRIC_LABEL: Record<WeekPlanMetric, string> = {
 
 export const WEEK_PLAN_METRIC_NOTE: Record<WeekPlanMetric, string> = {
   NEW_CONTACT:
-    "Khách hàng chưa từng mua hàng, hoặc khách cũ đã dừng mua ít nhất 1 năm tính từ đơn hàng cuối cùng — NVKD tự ghi lại danh sách đã liên hệ.",
+    "Khách hàng chưa từng mua hàng, hoặc khách cũ đã dừng mua ít nhất 1 năm tính từ đơn hàng cuối cùng — NVKD tự ghi lại danh sách đã liên hệ. Mỗi khách chỉ tính 1 lần trong tháng: ghi nhiều lần, hoặc tuần sau ghi lại khách tuần trước đã ghi, không tính thêm.",
   NEW_MEETING:
-    "Khách hàng chưa từng mua hàng, hoặc khách cũ đã dừng mua ít nhất 1 năm tính từ đơn hàng cuối cùng — NVKD tự ghi lại danh sách đã hẹn gặp.",
+    "Khách hàng chưa từng mua hàng, hoặc khách cũ đã dừng mua ít nhất 1 năm tính từ đơn hàng cuối cùng — NVKD tự ghi lại danh sách đã hẹn gặp. Mỗi khách chỉ tính 1 lần trong tháng.",
   EXISTING_VISIT:
-    "Tự động — đếm khách hàng cũ (đang mua hàng, hoặc dừng mua dưới 1 năm) được gặp trong Đăng ký đi công tác đã duyệt (cả người đi chính lẫn người hỗ trợ) hoặc được chăm sóc (gọi, nhắn Zalo, gặp — liên lạc được) ở trang Chăm sóc khách; mỗi khách tính 1 lần/tuần.",
+    "Tự động — đếm khách hàng cũ (đang mua hàng, hoặc dừng mua dưới 1 năm) được gặp trong Đăng ký đi công tác đã duyệt (cả người đi chính lẫn người hỗ trợ) hoặc được chăm sóc (gọi, nhắn Zalo, gặp — liên lạc được) ở trang Chăm sóc khách. Chỉ tiêu tính theo số KHÁCH KHÁC NHAU: 1 khách chăm sóc nhiều lần trong tuần vẫn tính 1.",
   NEW_CUSTOMER_SALE:
     "Tự động — đếm khách hàng có đơn trong tuần mà chưa từng mua hàng trước đó, hoặc đã dừng mua ít nhất 1 năm tính từ đơn hàng cuối cùng (đối chiếu toàn công ty).",
   NEW_QUOTE: "Tự động — đếm số báo giá phát sinh trong tuần theo dữ liệu Báo giá.",
@@ -400,11 +400,14 @@ async function computeAutoMetrics(
       select: { employeeId: true, trip: { select: { stops: { where: COUNTED_STOP_WHERE, select: { companyName: true } } } } },
     }),
   ]);
+  // Gộp theo tên đã chuẩn hoá để "Pmj" và "PMJ" là 1 khách (mỗi khách tính 1 lần/tuần dù ghi nhiều lần hay khác kiểu chữ).
   const visitCompaniesByEmployee = new Map<string, Set<string>>();
   const allVisitCompanyNames = new Set<string>();
   const addVisitCompany = (empId: string, company: string) => {
     if (!visitCompaniesByEmployee.has(empId)) visitCompaniesByEmployee.set(empId, new Set());
-    visitCompaniesByEmployee.get(empId)!.add(company);
+    const set = visitCompaniesByEmployee.get(empId)!;
+    if ([...set].some((c) => normalizeVN(c) === normalizeVN(company))) return;
+    set.add(company);
     allVisitCompanyNames.add(company);
   };
   for (const v of primaryVisits) for (const s of v.stops) addVisitCompany(v.employeeId, s.companyName);
@@ -487,6 +490,23 @@ async function computeAutoMetrics(
   return result;
 }
 
+/**
+ * Dòng nhập tay của `weekStart` kèm trạng thái (tính / chưa đủ / trùng khách). Trùng khách xét trong cả THÁNG nên cần nạp luôn các
+ * tuần trước của cùng tháng — xem classifyEntries.
+ */
+export async function loadWeekEntries(employeeIds: string[], weekStart: Date, metric?: WeekPlanMetric) {
+  if (employeeIds.length === 0) return [];
+  const monthStart = new Date(weekStart.getFullYear(), weekStart.getMonth(), 1);
+  const rows = await prisma.weekPlanResultEntry.findMany({
+    where: { employeeId: { in: employeeIds }, weekStart: { gte: monthStart, lte: weekStart }, ...(metric ? { metric } : {}) },
+    orderBy: [{ entryDate: "asc" }, { createdAt: "asc" }],
+  });
+  const status = classifyEntries(rows);
+  return rows
+    .filter((r) => r.weekStart.getTime() === weekStart.getTime())
+    .map((r) => ({ ...r, ...(status.get(r.id) as { status: EntryStatus; firstDate?: Date }) }));
+}
+
 // ---------- Báo cáo tiến độ (target vs actual vs trọng số/điểm) ----------
 
 export interface WeekPlanMetricCell {
@@ -520,21 +540,16 @@ export async function getWeekPlanReport(
     employeeIds.length
       ? prisma.weekPlanTarget.findMany({ where: { weekStart: start, employeeId: { in: employeeIds } } })
       : Promise.resolve([]),
-    employeeIds.length
-      ? prisma.weekPlanResultEntry.findMany({
-          where: { weekStart: start, employeeId: { in: employeeIds } },
-          select: { employeeId: true, metric: true, entryDate: true, customerName: true, address: true, nationality: true, scale: true, contactName: true, contactPhone: true, need: true, workDone: true, nextAction: true, nextActionAt: true },
-        })
-      : Promise.resolve([]),
+    loadWeekEntries(employeeIds, start),
     computeAutoMetrics(start, employees),
   ]);
 
   const targetMap = new Map(targets.map((t) => [`${t.employeeId}:${t.metric}`, t.targetValue]));
   const weightMap = new Map(targets.map((t) => [`${t.employeeId}:${t.metric}`, t.weight]));
-  // Dòng nhập tay chỉ tính khi đủ thông tin (dòng trước 26/10/2026 luôn tính) — xem week-plan-entry.ts.
+  // Dòng nhập tay chỉ tính khi đủ thông tin và không trùng khách đã ghi trong tháng — xem week-plan-entry.ts.
   const manualMap = new Map<string, number>();
   for (const c of manualCounts) {
-    if (!entryCounts(c)) continue;
+    if (c.status !== "COUNTED") continue;
     const k = `${c.employeeId}:${c.metric}`;
     manualMap.set(k, (manualMap.get(k) ?? 0) + 1);
   }
@@ -648,10 +663,7 @@ export async function getWeekPlanMetricDetail(
   oneYearBeforeStart.setFullYear(oneYearBeforeStart.getFullYear() - 1);
 
   if (metric === "NEW_CONTACT" || metric === "NEW_MEETING") {
-    const entries = await prisma.weekPlanResultEntry.findMany({
-      where: { weekStart: start, employeeId, metric },
-      orderBy: [{ entryDate: "asc" }, { createdAt: "asc" }],
-    });
+    const entries = await loadWeekEntries([employeeId], start, metric);
     return entries.map((e) => ({
       date: e.entryDate.toISOString(),
       title: e.customerName,
@@ -664,11 +676,12 @@ export async function getWeekPlanMetricDetail(
           e.nextAction ? `Tiếp theo: ${e.nextAction}${e.nextActionAt ? ` (hẹn ${fmtVN(e.nextActionAt)})` : ""}` : null,
           e.content,
           e.productInterest ? `Quan tâm: ${e.productInterest}` : null,
-          entryCounts(e) ? null : `Không tính: thiếu ${missingFields(e).join(", ")}`,
+          e.status === "INCOMPLETE" ? `Không tính: thiếu ${missingFields(e).join(", ")}` : null,
+          e.status === "DUPLICATE" ? `Không tính: khách này đã ghi ngày ${fmtVN(e.firstDate!)} trong tháng — mỗi khách chỉ tính 1 lần/tháng` : null,
         ]
           .filter(Boolean)
           .join(" · ") || null,
-      counted: entryCounts(e),
+      counted: e.status === "COUNTED",
     }));
   }
 
@@ -750,7 +763,7 @@ export async function getWeekPlanMetricDetail(
     const firstVisit = new Map<string, { date: Date; content: string; role: string }>();
     for (const t of trips) {
       for (const s of t.stops) {
-        if (!firstVisit.has(s.companyName)) firstVisit.set(s.companyName, { date: t.visitDate, content: s.content, role: t.role });
+        if (![...firstVisit.keys()].some((c) => normalizeVN(c) === normalizeVN(s.companyName))) firstVisit.set(s.companyName, { date: t.visitDate, content: s.content, role: t.role });
       }
     }
     const [lastPrior, careByEmployee] = await Promise.all([
