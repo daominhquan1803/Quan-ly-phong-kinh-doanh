@@ -22,6 +22,7 @@ export async function GET(req: NextRequest) {
       statuses: count((r) => r.status),
       summary: report.summary,
       unclassifiedItems: report.unclassifiedItems.length,
+      unclassified: new URL(req.url).searchParams.get("items") === "1" ? report.unclassifiedItems.map((u) => ({ ...u, value12: Math.round(u.value12) })) : undefined,
       sample: report.rows.filter((r) => r.orders12 > 0).sort((a, b) => b.value12 - a.value12).slice(0, 3).map((r) => ({ code: r.customerCode, groups: r.groupsText, stage: r.stageSuggested, status: r.status, province: r.province })),
     });
   } catch (err) {
