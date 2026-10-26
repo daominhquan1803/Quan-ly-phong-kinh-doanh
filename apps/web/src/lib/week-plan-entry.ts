@@ -147,28 +147,35 @@ export interface ClassifiableEntry extends EntryFields {
 }
 
 /**
- * Phân loại các dòng nhập tay (anh Quân chốt 26/10/2026): mỗi khách chỉ tính 1 lần cho mỗi NVKD, mỗi mục, trong 1 THÁNG —
- * ghi nhiều lần trong tuần, hoặc tuần sau ghi lại khách tuần trước đã ghi, đều không tính thêm. Dòng đầu tiên ĐƯỢC TÍNH (đủ
+ * Phân loại các dòng nhập tay (anh Quân chốt 26/10/2026): mỗi khách chỉ tính 1 lần cho mỗi mục trong 1 THÁNG, cho NVKD GHI TRƯỚC
+ * (theo ngày ghi nhận, bằng ngày thì theo giờ nhập) — ghi nhiều lần, tuần sau ghi lại, hoặc NVKD khác ghi lại cùng khách đều không tính thêm. Dòng đầu tiên ĐƯỢC TÍNH (đủ
  * thông tin) giữ chỗ; dòng thiếu thông tin không giữ chỗ nên không chặn dòng đủ thông tin ghi sau. Dòng trước 26/10/2026 luôn
  * được tính như cũ (không bị coi là trùng) nhưng vẫn giữ chỗ để dòng mới sau đó bị coi là trùng. `entries` phải gồm cả các tuần
  * trước trong cùng tháng.
  */
-export function classifyEntries(entries: ClassifiableEntry[]): Map<string, { status: EntryStatus; firstDate?: Date }> {
+export interface EntryClass {
+  status: EntryStatus;
+  /** Với DUPLICATE: ngày và NVKD đã ghi khách này trước (được tính). */
+  firstDate?: Date;
+  firstEmployeeId?: string;
+}
+
+export function classifyEntries(entries: ClassifiableEntry[]): Map<string, EntryClass> {
   const sorted = [...entries].sort((a, b) => a.entryDate.getTime() - b.entryDate.getTime() || a.createdAt.getTime() - b.createdAt.getTime());
-  const first = new Map<string, Date>();
-  const out = new Map<string, { status: EntryStatus; firstDate?: Date }>();
+  const first = new Map<string, { date: Date; employeeId: string }>();
+  const out = new Map<string, EntryClass>();
   for (const e of sorted) {
     if (!entryCounts(e)) {
       out.set(e.id, { status: "INCOMPLETE" });
       continue;
     }
-    const key = `${e.employeeId}|${e.metric}|${e.weekStart.getFullYear()}-${e.weekStart.getMonth()}|${normalizeVN(e.customerName)}`;
+    const key = `${e.metric}|${e.weekStart.getFullYear()}-${e.weekStart.getMonth()}|${normalizeVN(e.customerName)}`;
     const seen = first.get(key);
     if (seen && e.entryDate >= WEEK_ENTRY_COMPLETE_FROM) {
-      out.set(e.id, { status: "DUPLICATE", firstDate: seen });
+      out.set(e.id, { status: "DUPLICATE", firstDate: seen.date, firstEmployeeId: seen.employeeId });
       continue;
     }
-    if (!seen) first.set(key, e.entryDate);
+    if (!seen) first.set(key, { date: e.entryDate, employeeId: e.employeeId });
     out.set(e.id, { status: "COUNTED" });
   }
   return out;

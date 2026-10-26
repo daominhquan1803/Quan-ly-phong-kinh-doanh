@@ -55,7 +55,7 @@ describe("validateNewEntry", () => {
   });
 });
 
-describe("classifyEntries — mỗi khách chỉ tính 1 lần/tháng", () => {
+describe("classifyEntries — mỗi khách chỉ tính 1 lần/tháng, cho người ghi trước", () => {
   const wk = (iso: string) => new Date(`${iso}T00:00:00`);
   let n = 0;
   const mk = (over: Partial<ClassifiableEntry>): ClassifiableEntry => ({
@@ -90,12 +90,18 @@ describe("classifyEntries — mỗi khách chỉ tính 1 lần/tháng", () => {
     const m = classifyEntries([bad, good]);
     expect([st(m, bad), st(m, good)]).toEqual(["INCOMPLETE", "COUNTED"]);
   });
-  it("khác NVKD hoặc khác mục thì tính riêng", () => {
+  it("NVKD khác ghi lại cùng khách thì không tính — khách tính cho người ghi trước", () => {
+    const first = mk({ employeeId: "u1", entryDate: new Date("2026-11-03T00:00:00Z") });
+    const later = mk({ employeeId: "u2", entryDate: new Date("2026-11-04T00:00:00Z") });
+    const m = classifyEntries([later, first]);
+    expect([st(m, first), st(m, later)]).toEqual(["COUNTED", "DUPLICATE"]);
+    expect(m.get(later.id)).toMatchObject({ firstEmployeeId: "u1", firstDate: first.entryDate });
+  });
+  it("khác mục thì tính riêng", () => {
     const a = mk({});
-    const otherEmp = mk({ employeeId: "u2" });
     const otherMetric = mk({ metric: "NEW_MEETING" });
-    const m = classifyEntries([a, otherEmp, otherMetric]);
-    expect([st(m, a), st(m, otherEmp), st(m, otherMetric)]).toEqual(["COUNTED", "COUNTED", "COUNTED"]);
+    const m = classifyEntries([a, otherMetric]);
+    expect([st(m, a), st(m, otherMetric)]).toEqual(["COUNTED", "COUNTED"]);
   });
   it("dòng cũ trước 26/10/2026 giữ nguyên (vẫn tính), nhưng dòng mới sau đó trùng khách thì không tính", () => {
     const old1 = mk({ weekStart: wk("2026-10-19"), entryDate: new Date("2026-10-20T00:00:00Z"), need: null });

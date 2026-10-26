@@ -1,7 +1,7 @@
 import { prisma } from "@hoanggia/db";
 import { WeekPlanMetric } from "@prisma/client";
 import { normalizeVN } from "./text-normalize";
-import { classifyEntries, missingFields, type EntryStatus } from "./week-plan-entry";
+import { classifyEntries, missingFields, type EntryClass } from "./week-plan-entry";
 import { COUNTED_STOP_WHERE, COUNTED_TRIP_WHERE } from "./business-trip-report";
 
 /**
@@ -83,9 +83,9 @@ export const WEEK_PLAN_METRIC_LABEL: Record<WeekPlanMetric, string> = {
 
 export const WEEK_PLAN_METRIC_NOTE: Record<WeekPlanMetric, string> = {
   NEW_CONTACT:
-    "Khách hàng chưa từng mua hàng, hoặc khách cũ đã dừng mua ít nhất 1 năm tính từ đơn hàng cuối cùng — NVKD tự ghi lại danh sách đã liên hệ. Mỗi khách chỉ tính 1 lần trong tháng: ghi nhiều lần, hoặc tuần sau ghi lại khách tuần trước đã ghi, không tính thêm.",
+    "Khách hàng chưa từng mua hàng, hoặc khách cũ đã dừng mua ít nhất 1 năm tính từ đơn hàng cuối cùng — NVKD tự ghi lại danh sách đã liên hệ. Mỗi khách chỉ tính 1 lần trong tháng: ghi nhiều lần, hoặc tuần sau ghi lại, hoặc NVKD khác ghi lại cùng khách, không tính thêm — khách tính cho người ghi trước.",
   NEW_MEETING:
-    "Khách hàng chưa từng mua hàng, hoặc khách cũ đã dừng mua ít nhất 1 năm tính từ đơn hàng cuối cùng — NVKD tự ghi lại danh sách đã hẹn gặp. Mỗi khách chỉ tính 1 lần trong tháng.",
+    "Khách hàng chưa từng mua hàng, hoặc khách cũ đã dừng mua ít nhất 1 năm tính từ đơn hàng cuối cùng — NVKD tự ghi lại danh sách đã hẹn gặp. Mỗi khách chỉ tính 1 lần trong tháng, cho người ghi trước.",
   EXISTING_VISIT:
     "Tự động — đếm khách hàng cũ (đang mua hàng, hoặc dừng mua dưới 1 năm) được gặp trong Đăng ký đi công tác đã duyệt (cả người đi chính lẫn người hỗ trợ) hoặc được chăm sóc (gọi, nhắn Zalo, gặp — liên lạc được) ở trang Chăm sóc khách. Chỉ tiêu tính theo số KHÁCH KHÁC NHAU: 1 khách chăm sóc nhiều lần trong tuần vẫn tính 1.",
   NEW_CUSTOMER_SALE:
@@ -491,20 +491,28 @@ async function computeAutoMetrics(
 }
 
 /**
- * Dòng nhập tay của `weekStart` kèm trạng thái (tính / chưa đủ / trùng khách). Trùng khách xét trong cả THÁNG nên cần nạp luôn các
- * tuần trước của cùng tháng — xem classifyEntries.
+ * Dòng nhập tay của `weekStart` kèm trạng thái (tính / chưa đủ / trùng khách). Trùng khách xét trong cả THÁNG và giữa các NVKD
+ * (người ghi trước được tính) nên nạp mọi NVKD, mọi tuần của tháng tới tuần này — xem classifyEntries.
  */
 export async function loadWeekEntries(employeeIds: string[], weekStart: Date, metric?: WeekPlanMetric) {
   if (employeeIds.length === 0) return [];
+  const wanted = new Set(employeeIds);
   const monthStart = new Date(weekStart.getFullYear(), weekStart.getMonth(), 1);
   const rows = await prisma.weekPlanResultEntry.findMany({
-    where: { employeeId: { in: employeeIds }, weekStart: { gte: monthStart, lte: weekStart }, ...(metric ? { metric } : {}) },
+    where: { weekStart: { gte: monthStart, lte: weekStart }, ...(metric ? { metric } : {}) },
     orderBy: [{ entryDate: "asc" }, { createdAt: "asc" }],
   });
   const status = classifyEntries(rows);
+  const firstIds = Array.from(new Set([...status.values()].map((s) => s.firstEmployeeId).filter((x): x is string => !!x)));
+  const names = new Map(
+    (firstIds.length ? await prisma.user.findMany({ where: { id: { in: firstIds } }, select: { id: true, name: true } }) : []).map((u) => [u.id, u.name])
+  );
   return rows
-    .filter((r) => r.weekStart.getTime() === weekStart.getTime())
-    .map((r) => ({ ...r, ...(status.get(r.id) as { status: EntryStatus; firstDate?: Date }) }));
+    .filter((r) => r.weekStart.getTime() === weekStart.getTime() && wanted.has(r.employeeId))
+    .map((r) => {
+      const c = status.get(r.id) as EntryClass;
+      return { ...r, ...c, firstEmployeeName: c.firstEmployeeId && c.firstEmployeeId !== r.employeeId ? names.get(c.firstEmployeeId) ?? null : null };
+    });
 }
 
 // ---------- Báo cáo tiến độ (target vs actual vs trọng số/điểm) ----------
@@ -677,7 +685,7 @@ export async function getWeekPlanMetricDetail(
           e.content,
           e.productInterest ? `Quan tâm: ${e.productInterest}` : null,
           e.status === "INCOMPLETE" ? `Không tính: thiếu ${missingFields(e).join(", ")}` : null,
-          e.status === "DUPLICATE" ? `Không tính: khách này đã ghi ngày ${fmtVN(e.firstDate!)} trong tháng — mỗi khách chỉ tính 1 lần/tháng` : null,
+          e.status === "DUPLICATE" ? `Không tính: khách này đã được ${e.firstEmployeeName ?? "bạn"} ghi ngày ${fmtVN(e.firstDate!)} — mỗi khách chỉ tính 1 lần/tháng, cho người ghi trước` : null,
         ]
           .filter(Boolean)
           .join(" · ") || null,
