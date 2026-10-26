@@ -13,6 +13,9 @@ export const PRODUCT_GROUPS = {
   THUNG_HOP: "Thùng hộp giấy",
   HDSD: "HDSD / thẻ / tờ in",
   DAY_DAI: "Dây đai / cuộn",
+  PALLET: "Pallet nhựa",
+  MUC_IN: "Mực in / ribbon",
+  CHONG_AM: "Hạt chống ẩm",
   GIA_CONG: "Gia công",
   KHAC: "Khác",
 } as const;
@@ -41,13 +44,18 @@ const strip = (s: string) =>
     .replace(/đ/gi, "d")
     .toLowerCase();
 
-// Thứ tự quan trọng: HDSD trước tem nhãn ("Tờ HDSD ... nhãn"), màng trước dây/cuộn ("cuộn ống PE", "cuộn màng").
+// Thứ tự quan trọng: mực in / chống ẩm trước túi, HDSD trước tem nhãn ("Tờ HDSD ... nhãn"), màng trước dây/cuộn ("cuộn ống PE", "cuộn màng").
 const KEYWORDS: [GroupKey, RegExp][] = [
   ["GIA_CONG", /\bgia cong\b/],
+  // Mực in mã vạch (wax/resin) và ruy băng: chỉ khi có từ đặc trưng, để "tem mực / loại mực" vẫn là tem nhãn.
+  ["MUC_IN", /\bribbon\b|\bruy bang\b|\bwax\b|\bresin\b|\bmuc (in|wax)\b/],
+  ["CHONG_AM", /chong am|hut am|silica/],
   ["HDSD", /\bhdsd\b|huong dan su dung|\bto (hd|huong|gap|roi|in)\b|\bquyen\b|\bthe (giay|treo|bao hanh|nhua|pvc)?\b|catalog|\bto roi\b/],
   ["BANG_DINH", /\bbang dinh\b|\bbang keo\b|\btape\b/],
   ["TUI_NHUA", /\btui\b|\bbao (pe|pp|opp|nilon|nylon|zip)\b/],
   ["MANG_PE", /\btam (pe|apet|pet|pp|xop)\b|\bmang\b|\bmanh\b|\bfilm\b|\bong pe\b|\bxop\b|\bfoam\b|bong khi|\bmang chit\b/],
+  // Sau MANG_PE để "Màng PE cuốn pallet" vẫn là màng.
+  ["PALLET", /\bpallet\b|\bpalet\b/],
   ["THUNG_HOP", /\bthung\b|\bhop\b|carton|\bgiay kraft\b|\bvach ngan\b/],
   ["DAY_DAI", /\bday dai\b|\bdai\b|\bday\b|\bcuon\b/],
   ["TEM_NHAN", /\btem\b|\bnhan\b|decal|sticker|label/],

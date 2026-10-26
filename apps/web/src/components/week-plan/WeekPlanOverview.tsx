@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Plus, Trash2, UploadCloud, Info, Save, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pencil, Plus, Trash2, UploadCloud, Info, Save, X } from "lucide-react";
 import { NATIONALITIES, SCALE_KEYS, SCALE_LABEL } from "@/lib/week-plan-entry";
 import { cn, formatDateVN } from "@/lib/utils";
 
@@ -47,6 +47,8 @@ interface SummaryResponse { weekStart: string; rows: ReportRow[]; isAdmin: boole
 interface ResultEntry {
   id: string;
   missing?: string[];
+  contactName?: string | null;
+  contactPhone?: string | null;
   status?: "COUNTED" | "INCOMPLETE" | "DUPLICATE";
   firstDate?: string;
   firstEmployeeName?: string | null;
@@ -640,6 +642,8 @@ function ResultEntrySection({
   const [showForm, setShowForm] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [form, setForm] = useState(emptyForm());
+  // Đang sửa dòng nào (null = thêm dòng mới).
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -673,8 +677,8 @@ function ResultEntrySection({
       return;
     }
     setSaving(true);
-    const res = await fetch("/api/week-plan/results", {
-      method: "POST",
+    const res = await fetch(editingId ? `/api/week-plan/results/${editingId}` : "/api/week-plan/results", {
+      method: editingId ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         weekStart: weekStartISO,
@@ -700,10 +704,40 @@ function ResultEntrySection({
       setError(json.error ?? "Không lưu được");
     } else {
       setForm(emptyForm());
+      setEditingId(null);
       setShowForm(false);
       invalidate();
     }
     setSaving(false);
+  }
+
+  function startEdit(e: ResultEntry) {
+    setError(null);
+    setShowUpload(false);
+    setEditingId(e.id);
+    setForm({
+      entryDate: e.entryDate.slice(0, 10),
+      customerName: e.customerName,
+      address: e.address ?? "",
+      nationality: e.nationality ?? "",
+      scale: e.scale ?? "",
+      contactName: e.contactName ?? "",
+      contactPhone: e.contactPhone ?? "",
+      need: e.need ?? "",
+      workDone: e.workDone ?? "",
+      nextAction: e.nextAction ?? "",
+      nextActionAt: e.nextActionAt ? e.nextActionAt.slice(0, 10) : "",
+      content: e.content ?? "",
+      productInterest: e.productInterest ?? "",
+    });
+    setShowForm(true);
+  }
+
+  function cancelForm() {
+    setForm(emptyForm());
+    setEditingId(null);
+    setShowForm(false);
+    setError(null);
   }
 
   async function handleDelete(id: string) {
@@ -774,7 +808,7 @@ function ResultEntrySection({
 
       <div className="flex items-center gap-2 mb-3">
         <button
-          onClick={() => { setShowForm((v) => !v); setShowUpload(false); }}
+          onClick={() => { if (showForm && !editingId) { cancelForm(); } else { setForm(emptyForm()); setEditingId(null); setShowForm(true); } setShowUpload(false); }}
           disabled={lockedForUser}
           className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2 text-xs font-semibold text-ink hover:bg-white/[0.08] transition-all disabled:cursor-not-allowed disabled:opacity-40"
         >
@@ -792,6 +826,7 @@ function ResultEntrySection({
 
       {showForm && (
         <div className="rounded-md border border-gray-200 bg-gray-50 p-3 mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {editingId && <p className="text-xs font-semibold text-amber-400 sm:col-span-2">Đang sửa dòng đã lưu — chỉnh xong bấm “Lưu thay đổi”.</p>}
           {error && <p className="text-xs text-alert sm:col-span-2">{error}</p>}
           <label className="text-xs text-muted-foreground flex flex-col gap-1">
             Ngày
@@ -861,8 +896,13 @@ function ResultEntrySection({
             disabled={saving}
             className="rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-amber-foreground hover:bg-amber-400 disabled:opacity-50 sm:col-span-2 w-fit"
           >
-            Lưu dòng này
+            {editingId ? "Lưu thay đổi" : "Lưu dòng này"}
           </button>
+          {editingId && (
+            <button type="button" onClick={cancelForm} className="rounded-md border border-white/10 px-3 py-1.5 text-xs font-semibold text-ink2 hover:bg-white/5 sm:col-span-2 w-fit">
+              Huỷ
+            </button>
+          )}
         </div>
       )}
 
@@ -923,9 +963,14 @@ function ResultEntrySection({
                 </td>
                 <td className="px-2 py-1.5 text-right">
                   {!lockedForUser && (
-                    <button onClick={() => handleDelete(e.id)} className="text-muted2 hover:text-alert">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    <div className="flex items-center justify-end gap-2.5">
+                      <button onClick={() => startEdit(e)} title="Sửa / bổ sung thông tin" className="text-muted2 hover:text-amber-400">
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button onClick={() => handleDelete(e.id)} title="Xoá" className="text-muted2 hover:text-alert">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   )}
                 </td>
               </tr>

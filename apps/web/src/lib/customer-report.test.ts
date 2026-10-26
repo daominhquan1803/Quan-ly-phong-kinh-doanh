@@ -25,7 +25,14 @@ describe("nhóm sản phẩm", () => {
     expect(groupByKeywords("Băng dính 48mmx100m")).toBe("BANG_DINH");
     expect(groupByKeywords("Thùng carton 5 lớp")).toBe("THUNG_HOP");
     expect(groupByKeywords("Dây đai PP 15mm")).toBe("DAY_DAI");
-    expect(classifyItem({ itemCode: "X", itemName: "Pallet nhựa đen 1200x1000" }, {})).toBe("KHAC");
+    expect(classifyItem({ itemCode: "X", itemName: "Pallet nhựa đen 1200x1000" }, {})).toBe("PALLET");
+    expect(classifyItem({ itemCode: "X", itemName: "Màng PE cuốn pallet 50cm*400m" }, {})).toBe("MANG_PE");
+    expect(classifyItem({ itemCode: "X", itemName: "Mực in Wax Resin 110mmx300m" }, {})).toBe("MUC_IN");
+    expect(classifyItem({ itemCode: "X", itemName: "Ruy băng mã vạch Ribbon in Wax110mmx300m" }, {})).toBe("MUC_IN");
+    expect(classifyItem({ itemCode: "X", itemName: "Hạt chống ẩm Silicagel 20gram" }, {})).toBe("CHONG_AM");
+    expect(classifyItem({ itemCode: "X", itemName: "Túi bột chống ẩm 1kg" }, {})).toBe("CHONG_AM");
+    expect(classifyItem({ itemCode: "X", itemName: "Tem giấy in(tem mực, loại mực) 88x140mm" }, {})).toBe("TEM_NHAN");
+    expect(classifyItem({ itemCode: "X", itemName: "Nhãn decal giấy Sticker A Ốc sên và Mực 90mmx45mm" }, {})).toBe("TEM_NHAN");
   });
   it("mô tả % theo nhóm, bỏ nhóm dưới 5%", () => {
     expect(groupsText({ TEM_NHAN: 620, TUI_NHUA: 350, BANG_DINH: 30 })).toBe("Tem nhãn 62% · Túi nhựa 35%");

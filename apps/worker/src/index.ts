@@ -14,6 +14,7 @@ import { runAdminKpiDigest } from "./notifications/adminKpiDigest";
 import { runCustomerAlerts } from "./notifications/customerAlerts";
 import { runCareDaily, runCareEscalations } from "./notifications/carePlan";
 import { runWeekPlanFollowup } from "./notifications/weekPlanFollowup";
+import { runCarePhotoCleanup } from "./notifications/carePhotoCleanup";
 import { runCustomerReportSnapshot } from "./notifications/customerReportSnapshot";
 import { isZaloConfigured } from "./zalo";
 import { logger } from "./logger";
@@ -103,6 +104,15 @@ async function main() {
     "30 5 1 * *",
     () => {
       runCustomerReportSnapshot().catch((err) => logger.error("Lỗi chụp báo cáo danh sách khách:", err));
+    },
+    { timezone: NOTIFY_CRON_TIMEZONE }
+  );
+
+  // 03:20 mỗi ngày: xoá ảnh chăm sóc tải lên mà không gắn vào lần ghi nào (quá 24 giờ).
+  cron.schedule(
+    "20 3 * * *",
+    () => {
+      runCarePhotoCleanup().catch((err) => logger.error("Lỗi dọn ảnh chăm sóc:", err));
     },
     { timezone: NOTIFY_CRON_TIMEZONE }
   );
