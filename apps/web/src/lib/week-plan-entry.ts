@@ -9,6 +9,12 @@ import { normalizeVN } from "./text-normalize";
 
 export const WEEK_ENTRY_COMPLETE_FROM = new Date("2026-10-26T00:00:00+07:00");
 
+/**
+ * Tuần 19–25/10/2026: anh Quân thấy anh Tùng nhập toàn khách cũ nên cho tính lại RIÊNG dòng của anh Tùng theo luật "chỉ tính khách mới".
+ * ponytail: nhận diện theo tên (chỉ 1 người, 1 tuần); đổi sang cờ trong DB nếu cần áp cho nhiều người.
+ */
+export const RETRO_EXISTING_CHECK = { from: new Date("2026-10-19T00:00:00+07:00"), employeeName: "ngo thanh tung" };
+
 export const NATIONALITIES = ["Việt Nam", "Hàn Quốc", "Nhật Bản", "Đài Loan", "Trung Quốc", "Khác"] as const;
 export const SCALE_KEYS = Object.keys(STAFF_SIZES) as [string, ...string[]];
 export const SCALE_LABEL: Record<string, string> = STAFF_SIZES;
@@ -147,6 +153,8 @@ export interface ClassifiableEntry extends EntryFields {
   /** Đơn/hoá đơn gần nhất của khách (khớp theo tên) TRƯỚC tuần của dòng — để loại khách cũ. */
   lastOrderDate?: Date | null;
   lastOrderCustomer?: string | null;
+  /** Áp luật "chỉ tính khách mới" cho cả dòng trước 26/10/2026 (tính lại riêng tuần 19–25/10 của anh Tùng theo lệnh anh Quân 26/10). */
+  checkExisting?: boolean;
 }
 
 /**
@@ -177,7 +185,7 @@ export function classifyEntries(entries: ClassifiableEntry[]): Map<string, Entry
     }
     // "Khách mới" = chưa từng mua hàng của công ty, hoặc không mua từ 1 năm trở lên (tính từ đầu tuần). Khách đang mua thì không tính
     // và không giữ chỗ — dòng cũ trước mốc 26/10/2026 vẫn không bị xét (đã loại ở entryCounts).
-    if (e.entryDate >= WEEK_ENTRY_COMPLETE_FROM && e.lastOrderDate) {
+    if ((e.entryDate >= WEEK_ENTRY_COMPLETE_FROM || e.checkExisting) && e.lastOrderDate) {
       const yearAgo = new Date(e.weekStart);
       yearAgo.setFullYear(yearAgo.getFullYear() - 1);
       if (e.lastOrderDate > yearAgo) {

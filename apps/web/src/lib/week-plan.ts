@@ -1,7 +1,7 @@
 import { prisma } from "@hoanggia/db";
 import { WeekPlanMetric } from "@prisma/client";
 import { normalizeVN } from "./text-normalize";
-import { classifyEntries, missingFields, WEEK_ENTRY_COMPLETE_FROM, type EntryClass } from "./week-plan-entry";
+import { classifyEntries, missingFields, RETRO_EXISTING_CHECK, WEEK_ENTRY_COMPLETE_FROM, type EntryClass } from "./week-plan-entry";
 import { COUNTED_STOP_WHERE, COUNTED_TRIP_WHERE } from "./business-trip-report";
 
 /**
@@ -541,9 +541,17 @@ export async function loadWeekEntries(employeeIds: string[], weekStart: Date, me
     orderBy: [{ entryDate: "asc" }, { createdAt: "asc" }],
   });
   // Khách đang mua của công ty (đơn gần nhất trong vòng 1 năm trước tuần của dòng) không phải "khách mới" — tra theo từng tuần.
+  const retroRows = rows.some((r) => r.entryDate >= RETRO_EXISTING_CHECK.from && r.entryDate < WEEK_ENTRY_COMPLETE_FROM);
+  const retroIds = new Set(
+    retroRows
+      ? (await prisma.user.findMany({ select: { id: true, name: true } })).filter((u) => normalizeVN(u.name) === RETRO_EXISTING_CHECK.employeeName).map((u) => u.id)
+      : []
+  );
+  const checkExisting = (r: { employeeId: string; entryDate: Date }) =>
+    r.entryDate >= WEEK_ENTRY_COMPLETE_FROM || (retroIds.has(r.employeeId) && r.entryDate >= RETRO_EXISTING_CHECK.from);
   const byWeek = new Map<number, typeof rows>();
   for (const r of rows) {
-    if (r.entryDate < WEEK_ENTRY_COMPLETE_FROM) continue;
+    if (!checkExisting(r)) continue;
     (byWeek.get(r.weekStart.getTime()) ?? byWeek.set(r.weekStart.getTime(), []).get(r.weekStart.getTime())!).push(r);
   }
   const lastOf = new Map<string, { date: Date; customerName: string }>();
@@ -554,7 +562,7 @@ export async function loadWeekEntries(employeeIds: string[], weekStart: Date, me
       if (hit) lastOf.set(r.id, hit);
     }
   }
-  const status = classifyEntries(rows.map((r) => ({ ...r, lastOrderDate: lastOf.get(r.id)?.date ?? null, lastOrderCustomer: lastOf.get(r.id)?.customerName ?? null })));
+  const status = classifyEntries(rows.map((r) => ({ ...r, checkExisting: checkExisting(r), lastOrderDate: lastOf.get(r.id)?.date ?? null, lastOrderCustomer: lastOf.get(r.id)?.customerName ?? null })));
   const firstIds = Array.from(new Set([...status.values()].map((s) => s.firstEmployeeId).filter((x): x is string => !!x)));
   const names = new Map(
     (firstIds.length ? await prisma.user.findMany({ where: { id: { in: firstIds } }, select: { id: true, name: true } }) : []).map((u) => [u.id, u.name])

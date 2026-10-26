@@ -136,6 +136,10 @@ describe("classifyEntries — chỉ tính khách mới (chưa từng mua hoặc 
     const m = classifyEntries([stopped, never]);
     expect([m.get(stopped.id)?.status, m.get(never.id)?.status]).toEqual(["COUNTED", "COUNTED"]);
   });
+  it("dòng cũ được tính lại khi cờ checkExisting bật (tuần 19–25/10 của anh Tùng)", () => {
+    const old = mk({ entryDate: new Date("2026-10-20T00:00:00Z"), weekStart: new Date(2026, 9, 19), lastOrderDate: new Date("2026-09-01T00:00:00Z"), checkExisting: true });
+    expect(classifyEntries([old]).get(old.id)?.status).toBe("EXISTING");
+  });
   it("dòng cũ trước 26/10/2026 không bị loại dù là khách cũ", () => {
     const old = mk({ entryDate: new Date("2026-10-20T00:00:00Z"), weekStart: new Date(2026, 9, 19), lastOrderDate: new Date("2026-09-01T00:00:00Z") });
     expect(classifyEntries([old]).get(old.id)?.status).toBe("COUNTED");

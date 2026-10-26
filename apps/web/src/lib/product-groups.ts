@@ -17,7 +17,7 @@ export const PRODUCT_GROUPS = {
   MUC_IN: "Mực in / ribbon",
   CHONG_AM: "Hạt chống ẩm",
   GIA_CONG: "Gia công",
-  KHAC: "Khác",
+  KHAC: "Mặt hàng khác",
 } as const;
 export type GroupKey = keyof typeof PRODUCT_GROUPS;
 export const GROUP_KEYS = Object.keys(PRODUCT_GROUPS) as GroupKey[];

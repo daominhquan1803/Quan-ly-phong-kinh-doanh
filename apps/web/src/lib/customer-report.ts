@@ -196,7 +196,8 @@ export async function buildCustomerReport(options: { employeeId?: string; custom
     const id = idOf(it.order.customerCode, it.order.customerName);
     const v = Number(it.quantity) * Number(it.unitPrice);
     const g = classifyItem(it, { override: it.itemCode ? ovOf.get(it.itemCode) : null, category: it.itemCode ? catOf.get(it.itemCode) : null });
-    if (g === "KHAC") {
+    // Mã anh đã xếp tay vào "Mặt hàng khác" thì không bắt xếp lại.
+    if (g === "KHAC" && !(it.itemCode && ovOf.has(it.itemCode))) {
       const k = it.itemCode ?? it.itemName;
       const u = unclassified.get(k) ?? { itemCode: it.itemCode, itemName: it.itemName, value12: 0 };
       u.value12 += v;
