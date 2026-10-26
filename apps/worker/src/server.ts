@@ -1,5 +1,5 @@
 import Fastify, { FastifyReply, FastifyRequest } from "fastify";
-import { runAmisOrderSync } from "./sync/amis";
+import { runAmisOrderSync, runPurchaseHistoryBackfill } from "./sync/amis";
 import { runQuoteSync } from "./sync/quotes";
 import { runWeekPlanReminder } from "./notifications/weekPlanReminder";
 import { runKpiReminder } from "./notifications/kpiReminder";
@@ -28,6 +28,16 @@ export function buildServer() {
     const triggeredBy = (req.body as { triggeredBy?: string } | undefined)?.triggeredBy ?? "MANUAL";
     logger.info(`Nhận yêu cầu đồng bộ đơn hàng AMIS thủ công từ: ${triggeredBy}`);
     const outcome = await runAmisOrderSync(triggeredBy);
+    if (outcome.status === "FAILED") reply.code(502);
+    return outcome;
+  });
+
+  // Nạp lại toàn bộ lịch sử mua từ AMIS (chỉ đọc) — dùng để kiểm tra khách mới/cũ của Kế hoạch tuần.
+  app.post("/sync-purchase-history", async (req, reply) => {
+    if (!checkInternalToken(req, reply)) return;
+    const triggeredBy = (req.body as { triggeredBy?: string } | undefined)?.triggeredBy ?? "MANUAL";
+    logger.info(`Nhận yêu cầu nạp lịch sử mua từ AMIS thủ công từ: ${triggeredBy}`);
+    const outcome = await runPurchaseHistoryBackfill(triggeredBy);
     if (outcome.status === "FAILED") reply.code(502);
     return outcome;
   });

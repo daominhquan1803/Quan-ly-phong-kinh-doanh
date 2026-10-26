@@ -506,13 +506,16 @@ export const coreName = (s: string) =>
 export async function lastPurchaseByName(names: string[], before: Date): Promise<Map<string, { date: Date; customerName: string }>> {
   const out = new Map<string, { date: Date; customerName: string }>();
   if (names.length === 0) return out;
-  const [orders, invoices] = await Promise.all([
+  const [orders, invoices, amisHistory] = await Promise.all([
     prisma.order.groupBy({ by: ["customerName"], where: { orderDate: { lt: before } }, _max: { orderDate: true } }),
     prisma.debtInvoice.groupBy({ by: ["customerName"], where: { invoiceDate: { lt: before } }, _max: { invoiceDate: true } }),
+    // Lịch sử mua trên AMIS CRM (cả trước 01/04/2026) — chỉ có ngày gần nhất, nên chỉ dùng được khi nó trước `before`.
+    prisma.customerPurchaseHistory.findMany({ where: { lastOrderAt: { lt: before } }, select: { accountName: true, lastOrderAt: true } }),
   ]);
   const history: { core: string; name: string; date: Date }[] = [];
   for (const o of orders) if (o._max.orderDate) history.push({ core: coreName(o.customerName), name: o.customerName, date: o._max.orderDate });
   for (const i of invoices) if (i._max.invoiceDate) history.push({ core: coreName(i.customerName), name: i.customerName, date: i._max.invoiceDate });
+  for (const h of amisHistory) history.push({ core: coreName(h.accountName), name: h.accountName, date: h.lastOrderAt });
   for (const name of names) {
     const c = coreName(name);
     if (c.length < 3) continue;

@@ -313,6 +313,17 @@ model ItemGroupOverride {
   @@map("item_group_overrides")
 }
 
+// Lần mua gần nhất của từng khách (theo tên trên AMIS CRM, MỌI đơn của công ty kể cả trước 01/04/2026) — CHỈ để kiểm tra "khách mới hay khách cũ"
+// của Kế hoạch tuần; không phải đơn hàng, không tính vào doanh số/KPI. Nạp bằng runPurchaseHistoryBackfill + cập nhật theo đồng bộ AMIS.
+model CustomerPurchaseHistory {
+  accountName String   @id
+  accountCode String?
+  lastOrderAt DateTime
+  updatedAt   DateTime @updatedAt
+
+  @@map("customer_purchase_history")
+}
+
 // Bản chụp cuối tháng của báo cáo Danh sách khách hàng — so tháng này với tháng trước.
 model CustomerReportSnapshot {
   id        String   @id @default(cuid())

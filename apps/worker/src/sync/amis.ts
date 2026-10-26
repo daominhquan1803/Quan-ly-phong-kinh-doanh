@@ -83,7 +83,7 @@ interface AmisProductLedgerPageResponse {
 }
 
 /** Đăng nhập bằng AppID + mã bảo mật, trả về Bearer token — xem crmconnect.misa.vn/docs-v2. */
-async function getAmisToken(appId: string, clientSecret: string): Promise<string> {
+export async function getAmisToken(appId: string, clientSecret: string): Promise<string> {
   const res = await fetch(`${AMIS_BASE_URL}/api/v2/Account`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -96,7 +96,7 @@ async function getAmisToken(appId: string, clientSecret: string): Promise<string
   return json.data;
 }
 
-async function fetchSaleOrdersPage(
+export async function fetchSaleOrdersPage(
   token: string,
   appId: string,
   page: number,
@@ -358,6 +358,68 @@ async function recordDeliveryDelta(params: {
 }
 
 /**
+ * Lần mua gần nhất của từng khách (theo tên AMIS) — dùng cho Kế hoạch tuần để loại "khách cũ" khỏi mục khách mới liên hệ.
+ * Tính MỌI đơn của công ty (không giới hạn nhân viên, kể cả trước 01/04/2026): bỏ đơn nháp/huỷ/từ chối, đơn đã xoá và đơn hàng mẫu.
+ */
+export function collectPurchases(orders: AmisSaleOrder[], into: Map<string, { code: string | null; at: Date }> = new Map()) {
+  for (const o of orders) {
+    if (!o.account_name || !o.sale_order_date || o.is_deleted || isExcludedRevenueStatus(o.revenue_status) || isSampleOrder(o)) continue;
+    const at = new Date(o.sale_order_date);
+    if (Number.isNaN(at.getTime())) continue;
+    const cur = into.get(o.account_name);
+    if (!cur || at > cur.at) into.set(o.account_name, { code: o.account_code ?? cur?.code ?? null, at });
+  }
+  return into;
+}
+
+async function savePurchases(map: Map<string, { code: string | null; at: Date }>) {
+  for (const [name, v] of map) {
+    await prisma.$executeRaw`INSERT INTO customer_purchase_history ("accountName","accountCode","lastOrderAt","updatedAt")
+      VALUES (${name}, ${v.code}, ${v.at}, now())
+      ON CONFLICT ("accountName") DO UPDATE SET "lastOrderAt" = GREATEST(customer_purchase_history."lastOrderAt", EXCLUDED."lastOrderAt"),
+        "accountCode" = COALESCE(EXCLUDED."accountCode", customer_purchase_history."accountCode"), "updatedAt" = now()`;
+  }
+}
+
+/** Nạp toàn bộ lịch sử đơn trên AMIS (chỉ đọc) vào customer_purchase_history. Chạy 1 lần; sau đó đồng bộ hằng ngày tự cập nhật. */
+export async function runPurchaseHistoryBackfill(triggeredBy: string): Promise<SyncOutcome> {
+  const log = await prisma.syncLog.create({ data: { jobType: "AMIS_PURCHASE_HISTORY", status: "RUNNING", triggeredBy } });
+  try {
+    const appId = process.env.AMIS_APP_ID;
+    const clientSecret = process.env.AMIS_CLIENT_SECRET;
+    if (!appId || !clientSecret) throw new Error("Thiếu AMIS_APP_ID/AMIS_CLIENT_SECRET trong biến môi trường của worker");
+    const token = await getAmisToken(appId, clientSecret);
+    const pageSize = 100;
+    const all = new Map<string, { code: string | null; at: Date }>();
+    let scanned = 0;
+    for (let page = 0; page < 1000; page++) {
+      const orders = await fetchSaleOrdersPage(token, appId, page, pageSize);
+      if (orders.length === 0) break;
+      scanned += orders.length;
+      collectPurchases(orders, all);
+      if (orders.length < pageSize) break;
+      await new Promise((r) => setTimeout(r, 300)); // nhẹ tay với AMIS
+    }
+    await savePurchases(all);
+    const message = `Lịch sử mua: rà ${scanned} đơn trên AMIS, ghi nhận ${all.size} khách.`;
+    await prisma.syncLog.update({ where: { id: log.id }, data: { status: "SUCCESS", finishedAt: new Date(), recordsSynced: all.size, message } });
+    logger.info(message);
+    return { status: "SUCCESS", recordsSynced: all.size, message };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Lỗi không xác định";
+    logger.error("Nạp lịch sử mua từ AMIS thất bại:", message);
+    await prisma.syncLog.update({ where: { id: log.id }, data: { status: "FAILED", finishedAt: new Date(), message } });
+    return { status: "FAILED", recordsSynced: 0, message };
+  }
+}
+
+/** Chạy nạp lịch sử nếu chưa từng thành công (lịch 02:30 hằng ngày gọi hàm này — ngoài giờ làm việc). */
+export async function runPurchaseHistoryBackfillIfNeeded(): Promise<void> {
+  const done = await prisma.syncLog.findFirst({ where: { jobType: "AMIS_PURCHASE_HISTORY", status: "SUCCESS" }, select: { id: true } });
+  if (!done) await runPurchaseHistoryBackfill("CRON");
+}
+
+/**
  * Đồng bộ đơn hàng từ MISA AMIS CRM Open API — CHỈ lấy đơn của nhân viên đang được quản
  * lý trong hệ thống (active, đã gán mã AMIS tại trang Nhân viên), bỏ qua đơn của phòng
  * ban/nhân viên khác trong cùng công ty, và bỏ qua đơn đặt trước 01/04/2026 (xem
@@ -399,6 +461,7 @@ export async function runAmisOrderSync(triggeredBy: string): Promise<SyncOutcome
     let processed = 0;
     let scanned = 0;
     let newestModified: Date | null = null;
+    const purchases = new Map<string, { code: string | null; at: Date }>();
 
     while (page < 200) {
       // giới hạn an toàn 200 trang (~20.000 đơn) đề phòng lỗi logic cursor gây lặp vô hạn
@@ -414,12 +477,16 @@ export async function runAmisOrderSync(triggeredBy: string): Promise<SyncOutcome
         }
         if (!newestModified || modifiedDate > newestModified) newestModified = modifiedDate;
         scanned++;
+        collectPurchases([o], purchases);
         const synced = await upsertOrderFromAmis(o, managedCodes);
         if (synced) processed++;
       }
       if (reachedCutoff || orders.length < pageSize) break;
       page++;
     }
+
+    // Lịch sử mua (khách mới/cũ của Kế hoạch tuần): lỗi ở đây không làm hỏng đồng bộ đơn.
+    await savePurchases(purchases).catch((e) => logger.error("Cập nhật lịch sử mua lỗi:", e));
 
     logger.info(`Đồng bộ đơn hàng AMIS thành công: ${processed}/${scanned} đơn thuộc phạm vi quản lý`);
 

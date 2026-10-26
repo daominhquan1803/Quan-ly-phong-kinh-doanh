@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { buildServer } from "./server";
-import { runAmisOrderSync } from "./sync/amis";
+import { runAmisOrderSync, runPurchaseHistoryBackfillIfNeeded } from "./sync/amis";
 import { runQuoteSync } from "./sync/quotes";
 import { runBaoGiaAppSync, isBaoGiaAppConfigured } from "./sync/baoGiaApp";
 import { runWeekPlanReminder } from "./notifications/weekPlanReminder";
@@ -104,6 +104,15 @@ async function main() {
     "30 5 1 * *",
     () => {
       runCustomerReportSnapshot().catch((err) => logger.error("Lỗi chụp báo cáo danh sách khách:", err));
+    },
+    { timezone: NOTIFY_CRON_TIMEZONE }
+  );
+
+  // 02:30 mỗi ngày: nạp lịch sử mua từ AMIS NẾU chưa từng nạp thành công (chạy 1 lần ngoài giờ làm việc, các ngày sau tự bỏ qua).
+  cron.schedule(
+    "30 2 * * *",
+    () => {
+      runPurchaseHistoryBackfillIfNeeded().catch((err) => logger.error("Lỗi nạp lịch sử mua từ AMIS:", err));
     },
     { timezone: NOTIFY_CRON_TIMEZONE }
   );
