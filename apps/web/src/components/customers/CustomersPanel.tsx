@@ -798,7 +798,7 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
                 <th className="px-5 py-3.5 text-left min-w-[280px]">Tên khách hàng & Người liên hệ</th>
                 <th className="px-5 py-3.5 text-left min-w-[240px]">Email nhận thư nhắc</th>
                 <th className="px-5 py-3.5 text-left w-32">Đã nhắc tay</th>
-                <th className="px-5 py-3.5 text-left w-64">NVKD phụ trách</th>
+                <th className="px-5 py-3.5 text-left min-w-[200px]">NVKD phụ trách</th>
                 <th className="px-5 py-3.5 text-left min-w-[240px]">Thời hạn công nợ</th>
                 <th className="px-5 py-3.5 text-right w-44">Thao tác</th>
               </tr>
@@ -881,13 +881,13 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
                     {/* Cột NVKD phụ trách */}
                     <td className="px-5 py-3.5 align-middle">
                       {!isAdmin ? (
-                        <span className="text-sm text-ink">{c.salesEmployee?.name ?? "—"}</span>
+                        <span className="whitespace-nowrap text-sm text-ink">{c.salesEmployee?.name ?? "—"}</span>
                       ) : (
                       <div className="relative">
                         <select
                           value={edit.salesEmployeeId}
                           onChange={(e) => setEdit({ salesEmployeeId: e.target.value })}
-                          className={`w-full text-xs font-medium rounded-xl border px-3 py-2 transition-all focus:outline-none ${
+                          className={`w-full min-w-[190px] text-xs font-medium rounded-xl border px-3 py-2 transition-all focus:outline-none ${
                             edit.salesEmployeeId
                               ? "bg-navy-50/80 border-gray-200/90 text-ink focus:border-amber-500"
                               : "bg-brandRed-50/90 border-brandRed-600/40 text-alert font-semibold focus:border-brandRed-600 shadow-[0_0_10px_rgba(200,16,46,0.1)]"

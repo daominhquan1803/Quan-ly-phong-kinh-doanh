@@ -49,7 +49,9 @@ interface ResultEntry {
   missing?: string[];
   contactName?: string | null;
   contactPhone?: string | null;
-  status?: "COUNTED" | "INCOMPLETE" | "DUPLICATE";
+  status?: "COUNTED" | "INCOMPLETE" | "DUPLICATE" | "EXISTING";
+  lastOrderDate?: string;
+  lastOrderCustomer?: string | null;
   firstDate?: string;
   firstEmployeeName?: string | null;
   nationality?: string | null;
@@ -953,7 +955,11 @@ function ResultEntrySection({
                   {e.nextAction ? `${e.nextAction}${e.nextActionAt ? ` (hẹn ${formatDateVN(e.nextActionAt)})` : ""}` : "—"}
                 </td>
                 <td className="px-2 py-1.5 whitespace-nowrap">
-                  {e.status === "DUPLICATE" ? (
+                  {e.status === "EXISTING" ? (
+                    <span className="text-alert" title={`Khách đã mua hàng của công ty${e.lastOrderCustomer ? ` (${e.lastOrderCustomer})` : ""}${e.lastOrderDate ? `, đơn gần nhất ${formatDateVN(e.lastOrderDate)}` : ""}. Chỉ tính khách chưa từng mua hoặc ngừng mua từ 1 năm.`}>
+                      Khách cũ — không tính{e.lastOrderDate ? ` (mua ${formatDateVN(e.lastOrderDate)})` : ""}
+                    </span>
+                  ) : e.status === "DUPLICATE" ? (
                     <span className="text-amber-400" title="Mỗi khách chỉ tính 1 lần/tháng, cho người ghi trước">Trùng khách{e.firstDate ? ` (${e.firstEmployeeName ? `${e.firstEmployeeName} ` : ""}đã ghi ${formatDateVN(e.firstDate)})` : ""}</span>
                   ) : e.missing && e.missing.length > 0 ? (
                     <span className="text-alert" title={`Thiếu: ${e.missing.join(", ")}`}>Chưa đủ ({e.missing.length})</span>

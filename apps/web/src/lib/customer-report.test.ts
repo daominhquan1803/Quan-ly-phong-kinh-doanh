@@ -26,6 +26,12 @@ describe("nhóm sản phẩm", () => {
     expect(groupByKeywords("Thùng carton 5 lớp")).toBe("THUNG_HOP");
     expect(groupByKeywords("Dây đai PP 15mm")).toBe("DAY_DAI");
     expect(classifyItem({ itemCode: "X", itemName: "Pallet nhựa đen 1200x1000" }, {})).toBe("PALLET");
+    expect(classifyItem({ itemCode: "X", itemName: "Mực WaxPremium 110mmx300m" }, {})).toBe("MUC_IN");
+    expect(classifyItem({ itemCode: "X", itemName: "PP Bag 360mm" }, {})).toBe("TUI_NHUA");
+    expect(classifyItem({ itemCode: "X", itemName: "Phong bì 250x340mm" }, {})).toBe("HDSD");
+    expect(classifyItem({ itemCode: "X", itemName: "Standee Agribank 94.56mmx 147.5mm" }, {})).toBe("HDSD");
+    expect(classifyItem({ itemCode: "X", itemName: "Sổ F-011A 297x210mm" }, {})).toBe("HDSD");
+    expect(classifyItem({ itemCode: "X", itemName: "Tờ F-025A 297x210mm" }, {})).toBe("HDSD");
     expect(classifyItem({ itemCode: "X", itemName: "Màng PE cuốn pallet 50cm*400m" }, {})).toBe("MANG_PE");
     expect(classifyItem({ itemCode: "X", itemName: "Mực in Wax Resin 110mmx300m" }, {})).toBe("MUC_IN");
     expect(classifyItem({ itemCode: "X", itemName: "Ruy băng mã vạch Ribbon in Wax110mmx300m" }, {})).toBe("MUC_IN");

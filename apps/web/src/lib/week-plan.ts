@@ -1,7 +1,7 @@
 import { prisma } from "@hoanggia/db";
 import { WeekPlanMetric } from "@prisma/client";
 import { normalizeVN } from "./text-normalize";
-import { classifyEntries, missingFields, type EntryClass } from "./week-plan-entry";
+import { classifyEntries, missingFields, WEEK_ENTRY_COMPLETE_FROM, type EntryClass } from "./week-plan-entry";
 import { COUNTED_STOP_WHERE, COUNTED_TRIP_WHERE } from "./business-trip-report";
 
 /**
@@ -490,6 +490,44 @@ async function computeAutoMetrics(
   return result;
 }
 
+const COMPANY_NOISE = /\b(cong ty|cty|tnhh|co phan|cp|mtv|mot thanh vien|trach nhiem huu han|san xuat|thuong mai|dich vu|sx|tm|dv)\b/g;
+/** Tên công ty rút gọn để so khớp tên NVKD gõ ("Cty ABC") với tên pháp nhân trong đơn ("CÔNG TY TNHH ABC"). */
+export const coreName = (s: string) =>
+  normalizeVN(s)
+    .replace(/[^a-z0-9 ]/g, " ")
+    .replace(COMPANY_NOISE, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+/**
+ * Với mỗi tên khách NVKD ghi, tìm lần mua gần nhất TRƯỚC `before` của khách khớp tên (đơn hàng trong app — chỉ có từ 01/04/2026 — và
+ * hoá đơn công nợ, có từ trước đó). Khớp khi tên rút gọn trùng nhau hoặc cái này nằm trong cái kia (tối thiểu 4 ký tự).
+ */
+export async function lastPurchaseByName(names: string[], before: Date): Promise<Map<string, { date: Date; customerName: string }>> {
+  const out = new Map<string, { date: Date; customerName: string }>();
+  if (names.length === 0) return out;
+  const [orders, invoices] = await Promise.all([
+    prisma.order.groupBy({ by: ["customerName"], where: { orderDate: { lt: before } }, _max: { orderDate: true } }),
+    prisma.debtInvoice.groupBy({ by: ["customerName"], where: { invoiceDate: { lt: before } }, _max: { invoiceDate: true } }),
+  ]);
+  const history: { core: string; name: string; date: Date }[] = [];
+  for (const o of orders) if (o._max.orderDate) history.push({ core: coreName(o.customerName), name: o.customerName, date: o._max.orderDate });
+  for (const i of invoices) if (i._max.invoiceDate) history.push({ core: coreName(i.customerName), name: i.customerName, date: i._max.invoiceDate });
+  for (const name of names) {
+    const c = coreName(name);
+    if (c.length < 3) continue;
+    let best: { date: Date; customerName: string } | null = null;
+    for (const h of history) {
+      if (h.core.length < 3) continue;
+      const same = h.core === c;
+      const contains = c.length >= 4 && h.core.length >= 4 && (h.core.includes(c) || c.includes(h.core));
+      if ((same || contains) && (!best || h.date > best.date)) best = { date: h.date, customerName: h.name };
+    }
+    if (best) out.set(name, best);
+  }
+  return out;
+}
+
 /**
  * Dòng nhập tay của `weekStart` kèm trạng thái (tính / chưa đủ / trùng khách). Trùng khách xét trong cả THÁNG và giữa các NVKD
  * (người ghi trước được tính) nên nạp mọi NVKD, mọi tuần của tháng tới tuần này — xem classifyEntries.
@@ -502,7 +540,21 @@ export async function loadWeekEntries(employeeIds: string[], weekStart: Date, me
     where: { weekStart: { gte: monthStart, lte: weekStart }, ...(metric ? { metric } : {}) },
     orderBy: [{ entryDate: "asc" }, { createdAt: "asc" }],
   });
-  const status = classifyEntries(rows);
+  // Khách đang mua của công ty (đơn gần nhất trong vòng 1 năm trước tuần của dòng) không phải "khách mới" — tra theo từng tuần.
+  const byWeek = new Map<number, typeof rows>();
+  for (const r of rows) {
+    if (r.entryDate < WEEK_ENTRY_COMPLETE_FROM) continue;
+    (byWeek.get(r.weekStart.getTime()) ?? byWeek.set(r.weekStart.getTime(), []).get(r.weekStart.getTime())!).push(r);
+  }
+  const lastOf = new Map<string, { date: Date; customerName: string }>();
+  for (const [ws, list] of byWeek) {
+    const found = await lastPurchaseByName(Array.from(new Set(list.map((r) => r.customerName))), new Date(ws));
+    for (const r of list) {
+      const hit = found.get(r.customerName);
+      if (hit) lastOf.set(r.id, hit);
+    }
+  }
+  const status = classifyEntries(rows.map((r) => ({ ...r, lastOrderDate: lastOf.get(r.id)?.date ?? null, lastOrderCustomer: lastOf.get(r.id)?.customerName ?? null })));
   const firstIds = Array.from(new Set([...status.values()].map((s) => s.firstEmployeeId).filter((x): x is string => !!x)));
   const names = new Map(
     (firstIds.length ? await prisma.user.findMany({ where: { id: { in: firstIds } }, select: { id: true, name: true } }) : []).map((u) => [u.id, u.name])
@@ -685,6 +737,9 @@ export async function getWeekPlanMetricDetail(
           e.content,
           e.productInterest ? `Quan tâm: ${e.productInterest}` : null,
           e.status === "INCOMPLETE" ? `Không tính: thiếu ${missingFields(e).join(", ")}` : null,
+          e.status === "EXISTING"
+            ? `Không tính: khách đã mua hàng của công ty (đơn gần nhất ${fmtVN(e.lastOrderDate!)}${e.lastOrderCustomer ? ` — ${e.lastOrderCustomer}` : ""}). Chỉ tính khách chưa từng mua hoặc ngừng mua từ 1 năm`
+            : null,
           e.status === "DUPLICATE" ? `Không tính: khách này đã được ${e.firstEmployeeName ?? "bạn"} ghi ngày ${fmtVN(e.firstDate!)} — mỗi khách chỉ tính 1 lần/tháng, cho người ghi trước` : null,
         ]
           .filter(Boolean)

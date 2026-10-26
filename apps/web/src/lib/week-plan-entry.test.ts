@@ -111,3 +111,33 @@ describe("classifyEntries — mỗi khách chỉ tính 1 lần/tháng, cho ngư�
     expect([st(m, old1), st(m, old2), st(m, fresh)]).toEqual(["COUNTED", "COUNTED", "DUPLICATE"]);
   });
 });
+
+describe("classifyEntries — chỉ tính khách mới (chưa từng mua hoặc ngừng mua ≥ 1 năm)", () => {
+  const weekStart = new Date(2026, 10, 2);
+  let k = 0;
+  const mk = (over: Partial<ClassifiableEntry>): ClassifiableEntry => ({
+    ...full,
+    id: `x${++k}`,
+    employeeId: "u1",
+    metric: "NEW_CONTACT",
+    weekStart,
+    entryDate: new Date("2026-11-03T00:00:00Z"),
+    createdAt: new Date(`2026-11-03T0${k % 10}:00:00Z`),
+    ...over,
+  });
+  it("khách đang mua (đơn gần nhất trong vòng 1 năm) không tính và không giữ chỗ", () => {
+    const existing = mk({ lastOrderDate: new Date("2026-08-15T00:00:00Z"), lastOrderCustomer: "CÔNG TY TNHH ABC" });
+    const m = classifyEntries([existing]);
+    expect(m.get(existing.id)).toMatchObject({ status: "EXISTING", lastOrderCustomer: "CÔNG TY TNHH ABC" });
+  });
+  it("khách ngừng mua từ 1 năm trở lên hoặc chưa từng mua thì tính", () => {
+    const stopped = mk({ customerName: "Cty Cũ", lastOrderDate: new Date("2025-10-01T00:00:00Z") });
+    const never = mk({ customerName: "Cty Mới", lastOrderDate: null });
+    const m = classifyEntries([stopped, never]);
+    expect([m.get(stopped.id)?.status, m.get(never.id)?.status]).toEqual(["COUNTED", "COUNTED"]);
+  });
+  it("dòng cũ trước 26/10/2026 không bị loại dù là khách cũ", () => {
+    const old = mk({ entryDate: new Date("2026-10-20T00:00:00Z"), weekStart: new Date(2026, 9, 19), lastOrderDate: new Date("2026-09-01T00:00:00Z") });
+    expect(classifyEntries([old]).get(old.id)?.status).toBe("COUNTED");
+  });
+});

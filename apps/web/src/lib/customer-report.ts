@@ -345,7 +345,9 @@ export async function buildCustomerReport(options: { employeeId?: string; custom
     rows,
     employees,
     summary,
-    unclassifiedItems: [...unclassified.values()].sort((a, b) => b.value12 - a.value12).slice(0, 200),
+    unclassifiedItems: [...unclassified.values()].filter((u) => u.value12 > 0) // dòng 0 đồng (ghi chú, mẫu) không ảnh hưởng báo cáo — khỏi bắt xếp nhóm
+      .sort((a, b) => b.value12 - a.value12)
+      .slice(0, 200),
     prevSnapshot: snap ? { year: snap.year, month: snap.month } : null,
   };
 }

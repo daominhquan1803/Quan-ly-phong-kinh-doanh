@@ -137,13 +137,16 @@ export function mapImportColumns(headers: string[]): Record<keyof typeof IMPORT_
 
 export const METRIC_IMPORT_LABEL = { NEW_CONTACT: "Khách hàng mới liên hệ", NEW_MEETING: "Khách hàng mới hẹn gặp được" } as const;
 
-export type EntryStatus = "COUNTED" | "INCOMPLETE" | "DUPLICATE";
+export type EntryStatus = "COUNTED" | "INCOMPLETE" | "DUPLICATE" | "EXISTING";
 export interface ClassifiableEntry extends EntryFields {
   id: string;
   employeeId: string;
   metric: string;
   weekStart: Date;
   createdAt: Date;
+  /** Đơn/hoá đơn gần nhất của khách (khớp theo tên) TRƯỚC tuần của dòng — để loại khách cũ. */
+  lastOrderDate?: Date | null;
+  lastOrderCustomer?: string | null;
 }
 
 /**
@@ -158,6 +161,9 @@ export interface EntryClass {
   /** Với DUPLICATE: ngày và NVKD đã ghi khách này trước (được tính). */
   firstDate?: Date;
   firstEmployeeId?: string;
+  /** Với EXISTING: đơn gần nhất của khách cũ này. */
+  lastOrderDate?: Date;
+  lastOrderCustomer?: string | null;
 }
 
 export function classifyEntries(entries: ClassifiableEntry[]): Map<string, EntryClass> {
@@ -168,6 +174,16 @@ export function classifyEntries(entries: ClassifiableEntry[]): Map<string, Entry
     if (!entryCounts(e)) {
       out.set(e.id, { status: "INCOMPLETE" });
       continue;
+    }
+    // "Khách mới" = chưa từng mua hàng của công ty, hoặc không mua từ 1 năm trở lên (tính từ đầu tuần). Khách đang mua thì không tính
+    // và không giữ chỗ — dòng cũ trước mốc 26/10/2026 vẫn không bị xét (đã loại ở entryCounts).
+    if (e.entryDate >= WEEK_ENTRY_COMPLETE_FROM && e.lastOrderDate) {
+      const yearAgo = new Date(e.weekStart);
+      yearAgo.setFullYear(yearAgo.getFullYear() - 1);
+      if (e.lastOrderDate > yearAgo) {
+        out.set(e.id, { status: "EXISTING", lastOrderDate: e.lastOrderDate, lastOrderCustomer: e.lastOrderCustomer ?? null });
+        continue;
+      }
     }
     const key = `${e.metric}|${e.weekStart.getFullYear()}-${e.weekStart.getMonth()}|${normalizeVN(e.customerName)}`;
     const seen = first.get(key);

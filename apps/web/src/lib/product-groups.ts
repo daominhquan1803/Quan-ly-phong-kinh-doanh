@@ -48,11 +48,11 @@ const strip = (s: string) =>
 const KEYWORDS: [GroupKey, RegExp][] = [
   ["GIA_CONG", /\bgia cong\b/],
   // Mực in mã vạch (wax/resin) và ruy băng: chỉ khi có từ đặc trưng, để "tem mực / loại mực" vẫn là tem nhãn.
-  ["MUC_IN", /\bribbon\b|\bruy bang\b|\bwax\b|\bresin\b|\bmuc (in|wax)\b/],
+  ["MUC_IN", /\bribbon\b|\bruy bang\b|wax|\bresin\b|\bmuc (in|wax)\b/],
   ["CHONG_AM", /chong am|hut am|silica/],
-  ["HDSD", /\bhdsd\b|huong dan su dung|\bto (hd|huong|gap|roi|in)\b|\bquyen\b|\bthe (giay|treo|bao hanh|nhua|pvc)?\b|catalog|\bto roi\b/],
+  ["HDSD", /\bhdsd\b|huong dan su dung|\bto (hd|huong|gap|roi|in)\b|\bquyen\b|\bthe (giay|treo|bao hanh|nhua|pvc)?\b|catalog|\bto roi\b|\bphong bi\b|\bstandee\b|\b(so|to) f-?\d/],
   ["BANG_DINH", /\bbang dinh\b|\bbang keo\b|\btape\b/],
-  ["TUI_NHUA", /\btui\b|\bbao (pe|pp|opp|nilon|nylon|zip)\b/],
+  ["TUI_NHUA", /\btui\b|\bbag\b|\bbao (pe|pp|opp|nilon|nylon|zip)\b/],
   ["MANG_PE", /\btam (pe|apet|pet|pp|xop)\b|\bmang\b|\bmanh\b|\bfilm\b|\bong pe\b|\bxop\b|\bfoam\b|bong khi|\bmang chit\b/],
   // Sau MANG_PE để "Màng PE cuốn pallet" vẫn là màng.
   ["PALLET", /\bpallet\b|\bpalet\b/],
