@@ -60,6 +60,11 @@ interface CareLogRow {
   createdAt: string;
   employee: { name: string };
   photos?: { id: string }[];
+  issueType?: string | null;
+  expectedMonth?: number | null;
+  needGroup?: string | null;
+  needValueBand?: string | null;
+  followUpAt?: string | null;
 }
 
 export function CarePanel() {
@@ -151,6 +156,7 @@ export function CarePanel() {
       <div className="space-y-4">
         {selected ? (
           <>
+            <History key={`h-${selected.id}`} customerId={selected.id} />
             <QuickLog
               key={selected.id}
               customer={selected}
@@ -168,7 +174,6 @@ export function CarePanel() {
               }}
             />
             <ProfileBox key={`pf-${selected.id}`} customerId={selected.id} />
-            <History customerId={selected.id} />
           </>
         ) : (
           <div className="rounded-2xl border border-dashed border-gray-200/40 p-8 text-center text-sm text-muted-foreground">
@@ -420,7 +425,9 @@ function PatternBox({ customer, onSaved }: { customer: CareCustomerRow; onSaved:
   );
 }
 
+/** Trao đổi gần đây với khách: hiện trên đầu form ghi để NVKD đọc lại nội dung/ảnh lần trước trước khi chăm sóc tiếp (mặc định 3 lần gần nhất). */
 function History({ customerId }: { customerId: string }) {
+  const [all, setAll] = useState(false);
   const { data } = useQuery({
     queryKey: ["care-history", customerId],
     queryFn: async () => {
@@ -429,24 +436,43 @@ function History({ customerId }: { customerId: string }) {
       return (await res.json()).logs as CareLogRow[];
     },
   });
-  if (!data || data.length === 0) return null;
+  if (!data || data.length === 0) {
+    return data ? <div className="rounded-2xl border border-dashed border-gray-200/40 p-3 text-xs text-muted-foreground">Chưa có trao đổi nào được ghi với khách này.</div> : null;
+  }
+  const shown = all ? data : data.slice(0, 3);
+  const nextFollowUp = data.find((l) => l.followUpAt)?.followUpAt;
   return (
-    <div className="rounded-2xl border border-gray-200/30 p-4">
-      <p className="mb-2 text-sm font-semibold text-ink">Lịch sử chăm sóc</p>
+    <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4">
+      <p className="mb-2 flex flex-wrap items-center justify-between gap-2 text-sm font-semibold text-ink">
+        <span>Trao đổi gần đây</span>
+        {nextFollowUp && <span className="text-xs font-normal text-amber-400">Hẹn chăm sóc lại: {formatDateVN(nextFollowUp)}</span>}
+      </p>
       <div className="divide-y divide-gray-200/20">
-        {data.map((l) => (
+        {shown.map((l) => (
           <div key={l.id} className="py-2 text-sm">
             <p className="text-ink">
               {CARE_OUTCOME_LABEL[l.outcome]} <span className="text-muted-foreground">· {CARE_CHANNEL_LABEL[l.channel]}</span>
             </p>
             <p className="text-xs text-muted-foreground">
               {formatDateVN(l.createdAt)} · {l.employee.name}
-              {l.note ? ` · ${l.note}` : ""}
             </p>
+            {(l.issueType || l.needGroup || l.expectedMonth) && (
+              <p className="mt-0.5 text-xs text-ink2">
+                {l.issueType && <span className="text-alert">{ISSUE_TYPE_LABEL[l.issueType as keyof typeof ISSUE_TYPE_LABEL] ?? l.issueType}. </span>}
+                {l.needGroup && <span>{l.needGroup}{l.needValueBand ? ` · ${VALUE_BAND_LABEL[l.needValueBand as keyof typeof VALUE_BAND_LABEL] ?? l.needValueBand}` : ""}. </span>}
+                {l.expectedMonth && <span>Dự kiến có đơn T{l.expectedMonth}.</span>}
+              </p>
+            )}
+            {l.note && <p className="mt-0.5 whitespace-pre-wrap text-sm text-ink">{l.note}</p>}
             <PhotoThumbs ids={l.photos?.map((p) => p.id)} />
           </div>
         ))}
       </div>
+      {data.length > 3 && (
+        <button onClick={() => setAll((v) => !v)} className="mt-2 text-xs font-semibold text-amber-400 hover:underline">
+          {all ? "Thu gọn" : `Xem tất cả ${data.length} lần`}
+        </button>
+      )}
     </div>
   );
 }
