@@ -30,7 +30,7 @@ export interface SyncPoTrackingFromOrdersResult {
   // — vẫn tạo dòng mới từ AMIS để không mất dữ liệu, nhưng liệt kê ra để rà soát tay tránh
   // trùng giá trị PO.
   ambiguousGroups: string[];
-  // Dòng tiến độ mà đơn AMIS không còn mã hàng đó (mã đã đổi/bỏ trên AMIS) và CHƯA có phiếu giao nào — đã tự đóng để không báo "chưa giao" sai.
+  // Dòng tiến độ mà đơn AMIS không còn mã hàng đó (mã đã đổi/bỏ trên AMIS) và CHƯA có phiếu giao nào — đã tự xoá (hoặc đóng nếu còn đợt giao) để không báo "chưa giao" sai và không cộng trùng G.Trị PO.
   staleLinesClosed: number;
 }
 
@@ -285,6 +285,14 @@ export async function syncPoTrackingFromOrders(orderCodes?: string[]): Promise<S
         slipAgg
       );
       if (!stale) continue;
+      // Không còn mã này trong đơn AMIS: dòng thừa vẫn cộng vào tổng G.Trị PO (Tổng quan/Báo cáo/KPI Admin) nên XOÁ hẳn nếu chưa có đợt giao nào;
+      // nếu còn đợt giao (kể cả đợt cũ không tính) thì chỉ đóng để người rà soát.
+      const events = await prisma.poDeliveryEvent.count({ where: { lineId: l.id } });
+      if (events === 0) {
+        await prisma.poTrackingLine.delete({ where: { id: l.id } });
+        staleLinesClosed++;
+        continue;
+      }
       await prisma.poTrackingLine.update({
         where: { id: l.id },
         data: {
