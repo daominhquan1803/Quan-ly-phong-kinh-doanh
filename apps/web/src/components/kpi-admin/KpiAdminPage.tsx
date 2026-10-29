@@ -215,7 +215,7 @@ function AdminKpiView({ month, adminId, canEdit, isSystem }: { month: string; ad
                 <WeekCell m={w.payments} detail={`${w.payments.onTime}/${w.payments.total}`} />
                 <WeekCell m={w.slips} detail={`${w.slips.onTime}/${w.slips.total}`} />
                 <td className="py-2 text-right font-mono">
-                  {w.adminDefects.points} <span className="text-muted2">({w.adminDefects.count} BB)</span>
+                  {w.adminDefects.points} <span className="text-muted2">({w.adminDefects.count} lỗi)</span>
                 </td>
                 <WeekCell m={w.deliveries} detail={`${w.deliveries.lateCount} trễ`} />
                 <WeekCell m={w.complaints} detail={`${w.complaints.ok}/${w.complaints.total}`} />

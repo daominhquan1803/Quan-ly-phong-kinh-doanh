@@ -1,5 +1,6 @@
 import { prisma } from "@hoanggia/db";
 import { getMonthWeekRanges } from "./week-plan";
+import { CONFIRM_FROM, confirmInfo, isConfirmError } from "./order-confirmation";
 
 /**
  * KPI Admin kinh doanh (anh Quân chốt 17/10/2026).
@@ -147,8 +148,25 @@ export function evalDeliveries(lines: LineIn[], now: Date) {
 }
 
 // ---------- Tải dữ liệu ----------
-async function loadPeriodData(start: Date, endExcl: Date, adminId: string) {
-  const [payments, slips, lines, complaints, adminDefects] = await Promise.all([
+/** Số đơn có hạn xác nhận PKH/SX rơi vào kỳ mà quá hạn chưa xác nhận hoặc xác nhận trễ — tính là lỗi đơn hàng do Admin (xem lib/order-confirmation.ts). */
+async function countOrderConfirmErrors(start: Date, endExcl: Date, now: Date): Promise<number> {
+  const orders = await prisma.order.findMany({
+    where: {
+      source: "AMIS_API",
+      status: { not: "CANCELLED" },
+      totalValue: { gt: 0 },
+      amisCreatedAt: { gte: new Date(Math.max(CONFIRM_FROM.getTime(), start.getTime() - 6 * DAY)), lt: endExcl },
+    },
+    select: { source: true, status: true, totalValue: true, amisCreatedAt: true, confirmation: { select: { confirmedAt: true } } },
+  });
+  return orders.filter((o) => {
+    const i = confirmInfo({ ...o, totalValue: Number(o.totalValue), confirmedAt: o.confirmation?.confirmedAt ?? null }, now);
+    return !!i.deadline && i.deadline >= start && i.deadline < endExcl && isConfirmError(i);
+  }).length;
+}
+
+async function loadPeriodData(start: Date, endExcl: Date, adminId: string, now: Date = new Date()) {
+  const [payments, slips, lines, complaints, defectCount, confirmErrors] = await Promise.all([
     prisma.debtPayment.findMany({
       where: { paymentDate: { gte: start, lt: endExcl }, importBatchId: { not: null }, matchStatus: { not: "IGNORED" } },
       select: { paymentDate: true, createdAt: true },
@@ -174,6 +192,7 @@ async function loadPeriodData(start: Date, endExcl: Date, adminId: string) {
       select: { receivedAt: true, createdAt: true, respondedAt: true, closedAt: true },
     }),
     prisma.defectReport.count({ where: { reportDate: { gte: start, lt: endExcl }, responsibles: { some: { userId: adminId } } } }),
+    countOrderConfirmErrors(start, endExcl, now),
   ]);
   const lineRows: LineIn[] = lines.map((l) => ({
     id: l.id,
@@ -187,7 +206,7 @@ async function loadPeriodData(start: Date, endExcl: Date, adminId: string) {
     events: l.deliveryEvents.map((e) => ({ eventDate: e.eventDate, quantity: Number(e.quantity) })),
     reason: l.delayReason,
   }));
-  return { payments, slips, lines: lineRows, complaints, adminDefects };
+  return { payments, slips, lines: lineRows, complaints, adminDefects: defectCount + confirmErrors, defectCount, confirmErrors };
 }
 
 export interface AdminWeek {
@@ -212,7 +231,7 @@ const ddmm = (d: Date) => {
 export async function getAdminWeek(range: { weekIndex: number; start: Date; end: Date }, adminId: string, now: Date): Promise<AdminWeek> {
   const start = vnDayStart(range.start);
   const endExcl = new Date(vnDayStart(range.end).getTime() + DAY);
-  const d = await loadPeriodData(start, endExcl, adminId);
+  const d = await loadPeriodData(start, endExcl, adminId, now);
   const payments = evalPayments(d.payments);
   const slips = evalSlips(d.slips);
   const deliveries = evalDeliveries(d.lines, now);
@@ -261,7 +280,7 @@ export async function getAdminKpi(year: number, month: number, adminId: string, 
   const empIds = statsEmployees.map((e) => e.id);
 
   const [d, weeks, deliveredAgg, targetAgg, corrections, manual, ratings, salesCount] = await Promise.all([
-    loadPeriodData(start, endExcl, adminId),
+    loadPeriodData(start, endExcl, adminId, now),
     Promise.all(ranges.map((r) => getAdminWeek(r, adminId, now))),
     prisma.poDeliveryEvent.aggregate({ where: { eventDate: { gte: start, lt: endExcl }, salesEmployeeId: { in: empIds } }, _sum: { value: true } }),
     prisma.salesTarget.aggregate({ where: { year, month, employeeId: { in: empIds } }, _sum: { targetRevenue: true } }),
@@ -290,7 +309,7 @@ export async function getAdminKpi(year: number, month: number, adminId: string, 
 
   const items: AdminMonthItem[] = [
     { key: "sales", label: "Doanh số đi hàng cả phòng so với KPI", detail: `${money(delivered)} / ${money(target)}${dsPct !== null ? ` = ${(dsPct * 100).toFixed(1)}%` : ""}`, score: dsPct === null ? 0 : Math.round(Math.min(1, dsPct) * 15 * 10) / 10, max: 15 },
-    { key: "adminDefects", label: "Lỗi đơn hàng do Admin (biên bản hàng lỗi)", detail: `${d.adminDefects} biên bản`, score: countScore(d.adminDefects, [15, 10, 5]), max: 15 },
+    { key: "adminDefects", label: "Lỗi đơn hàng do Admin (biên bản hàng lỗi + đơn chưa xác nhận PKH/SX trong 2 giờ)", detail: `${d.defectCount} biên bản + ${d.confirmErrors} đơn chưa xác nhận PKH/SX đúng hạn`, score: countScore(d.adminDefects, [15, 10, 5]), max: 15 },
     { key: "slips", label: "Phiếu đi hàng nhập trong 2 ngày làm việc", detail: `${slips.onTime}/${slips.total} phiếu${slips.pct !== null ? ` = ${slips.pct}%` : ""}`, score: bandScore(slips.pct, 10), max: 10 },
     { key: "deliveries", label: "Giao đúng hạn (đã loại trễ có lý do được duyệt)", detail: `${deliveries.pct ?? "—"}% theo giá trị · ${deliveries.lateCount} dòng trễ`, score: bandScore(deliveries.pct, 10), max: 10 },
     { key: "corrections", label: "Hoá đơn thay thế/điều chỉnh do lỗi Admin", detail: `${adminCorrections} hoá đơn (gồm hoá đơn chưa gán nguyên nhân) / ${corrections.length}`, score: countScore(adminCorrections, [10, 7, 4]), max: 10 },

@@ -136,23 +136,23 @@ describe("buildDebtReminderHtml - ý khởi kiện CHỈ xuất hiện từ tu�
     expect(html).not.toContain("khởi kiện");
   });
 
-  it("occurrence: 29 nhưng displayOccurrence: 4 -> VẪN có ý khởi kiện (ngưỡng theo occurrence THEO LỊCH, không theo số in trong thư)", () => {
-    const html = buildDebtReminderHtml(data({ milestone: "OVERDUE", daysFromDue: 200, occurrence: 29, displayOccurrence: 4 }));
+  it("occurrence: 47 nhưng displayOccurrence: 4 -> VẪN có ý khởi kiện (ngưỡng theo occurrence THEO LỊCH, không theo số in trong thư)", () => {
+    const html = buildDebtReminderHtml(data({ milestone: "OVERDUE", daysFromDue: 200, occurrence: 47, displayOccurrence: 4 }));
     expect(html).toContain("khởi kiện");
     expect(html).toContain("lần nhắc thanh toán thứ 4");
   });
 
-  it("occurrence 29 / displayOccurrence 4: TIÊU ĐỀ (subject) và dòng V/v dùng displayOccurrence — 'lần 4', KHÔNG BAO GIỜ lộ '29' ở bất cứ đâu khách nhìn thấy", () => {
-    const d = data({ milestone: "OVERDUE", daysFromDue: 200, occurrence: 29, displayOccurrence: 4 });
+  it("occurrence 47 / displayOccurrence 4: TIÊU ĐỀ (subject) và dòng V/v dùng displayOccurrence — 'lần 4', KHÔNG BAO GIỜ lộ '47' ở bất cứ đâu khách nhìn thấy", () => {
+    const d = data({ milestone: "OVERDUE", daysFromDue: 200, occurrence: 47, displayOccurrence: 4 });
     const subject = buildDebtReminderSubject(d);
     expect(subject).toBe("V/v: Nhắc thanh toán công nợ quá hạn (lần 4)");
-    expect(subject).not.toContain("29");
+    expect(subject).not.toContain("47");
     const html = buildDebtReminderHtml(d);
     expect(html).toContain("<strong>V/v: Nhắc thanh toán công nợ quá hạn (lần 4)</strong>");
-    expect(html).not.toContain("(lần 29)");
-    // "29" xuất hiện HỢP LỆ duy nhất ở "quá hạn thanh toán <strong>200</strong> ngày" (daysFromDue) —
-    // không có chuỗi con "29" nào khác (vd không lẫn trong "lần 29" hay tên file dùng chung dữ liệu này).
-    expect(html.replace(/quá hạn thanh toán <strong>\d+<\/strong> ngày\./, "")).not.toContain("29");
+    expect(html).not.toContain("(lần 47)");
+    // "47" xuất hiện HỢP LỆ duy nhất ở "quá hạn thanh toán <strong>200</strong> ngày" (daysFromDue) —
+    // không có chuỗi con "47" nào khác (vd không lẫn trong "lần 47" hay tên file dùng chung dữ liệu này).
+    expect(html.replace(/quá hạn thanh toán <strong>\d+<\/strong> ngày\./, "")).not.toContain("47");
   });
 
   it("không override (occurrence === displayOccurrence): subject vẫn dùng đúng số đó, không lệch đi 1", () => {

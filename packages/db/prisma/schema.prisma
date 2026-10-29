@@ -96,27 +96,28 @@ enum QuoteStatus {
 // ---------- Core ----------
 
 model User {
-  id                    String             @id @default(cuid())
-  email                 String             @unique
+  orderConfirmations    OrderConfirmation[] @relation("OrderConfirmedBy")
+  id                    String              @id @default(cuid())
+  email                 String              @unique
   passwordHash          String
   name                  String
-  role                  Role               @default(SALES)
-  accessLevel           AccessLevel        @default(FULL)
-  active                Boolean            @default(true)
+  role                  Role                @default(SALES)
+  accessLevel           AccessLevel         @default(FULL)
+  active                Boolean             @default(true)
   // Mã nhân viên trên AMIS (vd "DANGTAN") — dùng để khớp đơn hàng đồng bộ tự động từ AMIS
   // API chính xác hơn khớp theo tên. Điền tại trang Nhân viên.
-  amisEmployeeCode      String?            @unique
+  amisEmployeeCode      String?             @unique
   // Mã "Phụ trách" trong Google Sheet Báo giá (vd "TUNG.NT") — dùng để đếm tự động "Số báo giá
   // mới" trong Kế hoạch làm việc tuần (QuoteRequest.assigneeRaw không có FK tới User vì không
   // khớp tin cậy được, xem ghi chú ở model QuoteRequest). Điền tại trang Nhân viên, độc lập với
   // amisEmployeeCode vì 2 hệ thống nguồn dùng 2 kiểu mã khác nhau.
-  quoteAssigneeCode     String?            @unique
+  quoteAssigneeCode     String?             @unique
   // Có tính vào phần thống kê doanh số theo nhân viên (Kế hoạch kinh doanh, Tổng quan) hay
   // không — mặc định true cho mọi nhân viên có amisEmployeeCode. Dùng để ẩn các tài khoản có
   // gán mã AMIS nhưng không phải nhân viên kinh doanh thật (vd tài khoản quản trị hệ thống
   // được gán mã để nhận đồng bộ đơn của 1 mã AMIS không thuộc nhân viên nào) khỏi thống kê,
   // mà vẫn giữ nguyên việc đồng bộ đơn hàng của mã đó.
-  includeInSalesStats   Boolean            @default(true)
+  includeInSalesStats   Boolean             @default(true)
   // Email THẬT để nhận thông báo nhắc việc (khác với "email" ở trên — email đó chỉ dùng để đăng
   // nhập, thường là địa chỉ nội bộ @hoanggia.local không nhận được thư thật). Để trống thì nhân
   // viên chỉ nhận thông báo trong app, không nhận email. Điền tại trang Nhân viên.
@@ -127,13 +128,13 @@ model User {
   // Liên kết Zalo Bot để nhận thông báo (xem apps/web/src/lib/zalo-api.ts, worker/notifications/
   // zaloDispatch.ts). zaloChatId = chat.id bot Zalo trả về khi nhân viên nhắn mã liên kết; mã chỉ
   // sống ngắn (zaloLinkCodeExpiresAt). zaloOffTypes = các loại thông báo nhân viên tự tắt.
-  zaloChatId            String?            @unique
+  zaloChatId            String?             @unique
   zaloLinkedAt          DateTime?
-  zaloLinkCode          String?            @unique
+  zaloLinkCode          String?             @unique
   zaloLinkCodeExpiresAt DateTime?
-  zaloOffTypes          NotificationType[] @default([])
-  createdAt             DateTime           @default(now())
-  updatedAt             DateTime           @updatedAt
+  zaloOffTypes          NotificationType[]  @default([])
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
 
   orders                 Order[]                     @relation("OrderSalesEmployee")
   shipmentSlips          ShipmentSlip[]              @relation("SlipCreatedBy")
@@ -305,6 +306,32 @@ model CustomerStageHistory {
 }
 
 // Nhóm sản phẩm gán tay cho mã hàng không tự gom được (xem lib/product-groups.ts).
+// Admin xác nhận đơn đã được PKH/SX nhận, kèm ảnh chụp xác nhận (tin nhắn/mail trả lời). Quá 2 giờ làm việc kể từ khi lên đơn mà chưa có = lỗi đơn hàng do Admin (xem lib/order-confirmation.ts).
+model OrderConfirmation {
+  id            String                   @id @default(cuid())
+  orderId       String                   @unique
+  order         Order                    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  confirmedById String
+  confirmedBy   User                     @relation("OrderConfirmedBy", fields: [confirmedById], references: [id])
+  confirmedAt   DateTime                 @default(now())
+  photos        OrderConfirmationPhoto[]
+
+  @@map("order_confirmations")
+}
+
+model OrderConfirmationPhoto {
+  id             String            @id @default(cuid())
+  confirmationId String
+  confirmation   OrderConfirmation @relation(fields: [confirmationId], references: [id], onDelete: Cascade)
+  mimeType       String
+  sizeBytes      Int
+  data           Bytes
+  createdAt      DateTime          @default(now())
+
+  @@index([confirmationId])
+  @@map("order_confirmation_photos")
+}
+
 model ItemGroupOverride {
   itemCode  String   @id
   groupKey  String
@@ -372,11 +399,14 @@ model Order {
   deliveryVerifiedNote     String?
   poCode                   String?
   rawData                  Json?
+  // Giờ tạo đơn trên AMIS (created_date) — mốc "lên đơn" để tính hạn 2 giờ Admin phải có xác nhận PKH/SX.
+  amisCreatedAt            DateTime?
   importBatchId            String?
   importBatch              ImportBatch? @relation(fields: [importBatchId], references: [id])
   createdAt                DateTime     @default(now())
   updatedAt                DateTime     @updatedAt
 
+  confirmation   OrderConfirmation?
   shipmentSlips  ShipmentSlip[]
   items          OrderItem[]
   deliveryEvents OrderDeliveryEvent[]

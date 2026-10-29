@@ -31,7 +31,10 @@ export async function GET(req: NextRequest) {
 
     const orders = await prisma.order.findMany({
       where,
-      include: { salesEmployee: { select: { id: true, name: true } } },
+      include: {
+        salesEmployee: { select: { id: true, name: true } },
+        confirmation: { select: { confirmedAt: true, photos: { select: { id: true } } } },
+      },
       orderBy: { orderDate: "desc" },
       // Bảng đơn hàng lọc/sắp xếp theo từng cột ở client (mã đơn, khách hàng, NVKD, ngày,
       // giá trị) nên cần thấy toàn bộ danh sách khớp bộ lọc server (trạng thái/nhân

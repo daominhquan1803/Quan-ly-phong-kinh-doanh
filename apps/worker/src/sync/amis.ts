@@ -43,6 +43,7 @@ interface AmisSaleOrder {
   account_name: string | null;
   account_code: string | null;
   sale_order_date: string | null;
+  created_date?: string | null;
   deadline_date: string | null;
   // Ngày giao hàng thực tế AMIS ghi nhận — khác với deadline_date (hạn giao dự kiến).
   delivery_date: string | null;
@@ -301,6 +302,7 @@ async function upsertOrderFromAmis(o: AmisSaleOrder, managedCodes: Set<string>):
     salesEmployeeNameRaw,
     salesEmployeeId,
     orderDate: o.sale_order_date ? new Date(o.sale_order_date) : null,
+    amisCreatedAt: o.created_date ? new Date(o.created_date) : null,
     expectedDeliveryDate: o.deadline_date ? new Date(o.deadline_date) : null,
     actualDeliveryDate: o.delivery_date ? new Date(o.delivery_date) : null,
     status: o.is_deleted ? OrderStatus.CANCELLED : mapAmisStatus(o.delivery_status, o.status),
@@ -426,7 +428,7 @@ export async function runPurchaseHistoryBackfillIfNeeded(): Promise<void> {
  * ORDER_DATE_CUTOFF). Chỉ lấy đơn có modified_date mới hơn lần đồng bộ thành công gần
  * nhất (incremental) — lần đầu chạy giới hạn 180 ngày gần nhất.
  */
-export async function runAmisOrderSync(triggeredBy: string): Promise<SyncOutcome> {
+export async function runAmisOrderSync(triggeredBy: string, opts: { light?: boolean } = {}): Promise<SyncOutcome> {
   const syncLog = await prisma.syncLog.create({
     data: { jobType: "AMIS_ORDER_SYNC", status: "RUNNING", triggeredBy },
   });
@@ -496,6 +498,16 @@ export async function runAmisOrderSync(triggeredBy: string): Promise<SyncOutcome
     // lỗi ở bước này không làm hỏng kết quả đồng bộ Đơn hàng đã thành công ở trên, chỉ gộp vào
     // message chung để anh thấy ngay trên trang Đơn hàng, đồng thời ghi 1 SyncLog riêng
     // (jobType AMIS_PO_TRACKING_SYNC) để có audit trail chi tiết hơn khi cần tra cứu.
+    if (opts.light) {
+      if (processed > 0) await syncPoTrackingFromOrders().catch((e) => logger.error("Đồng bộ tiến độ (chạy nhẹ) lỗi:", e));
+      const message = `Quét nhanh: ${scanned} đơn mới sửa trên AMIS, đồng bộ ${processed} đơn thuộc phạm vi quản lý.`;
+      await prisma.syncLog.update({
+        where: { id: syncLog.id },
+        data: { status: "SUCCESS", finishedAt: new Date(), recordsSynced: processed, cursor: (newestModified ?? cursorDate ?? new Date(0)).toISOString(), message },
+      });
+      return { status: "SUCCESS", recordsSynced: processed, message };
+    }
+
     const poTrackingLog = await prisma.syncLog.create({
       data: { jobType: "AMIS_PO_TRACKING_SYNC", status: "RUNNING", triggeredBy },
     });

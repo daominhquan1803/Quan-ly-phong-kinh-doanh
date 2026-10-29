@@ -108,6 +108,17 @@ async function main() {
     { timezone: NOTIFY_CRON_TIMEZONE }
   );
 
+  // Quét nhanh đơn AMIS mỗi 15 phút trong giờ làm việc (Thứ Hai–Thứ Bảy, 7h–18h) để trang Đơn hàng thấy đơn mới kịp tính hạn xác nhận 2 giờ.
+  if (process.env.AMIS_APP_ID && process.env.AMIS_CLIENT_SECRET) {
+    cron.schedule(
+      "*/15 7-18 * * 1-6",
+      () => {
+        runAmisOrderSync("CRON-NHANH", { light: true }).catch((err) => logger.error("Lỗi quét nhanh đơn hàng AMIS:", err));
+      },
+      { timezone: AMIS_CRON_TIMEZONE }
+    );
+  }
+
   // 02:30 mỗi ngày: nạp lịch sử mua từ AMIS NẾU chưa từng nạp thành công (chạy 1 lần ngoài giờ làm việc, các ngày sau tự bỏ qua).
   cron.schedule(
     "30 2 * * *",

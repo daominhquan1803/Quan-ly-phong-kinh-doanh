@@ -10,6 +10,7 @@ import { ORDER_STATUS_LABEL } from "@/lib/order-status";
 import { EmployeeFilterSelect } from "@/components/shared/EmployeeFilterSelect";
 import { FilterInput, SortableTh, toggleSort, type SortState } from "@/components/shared/SortableFilterableTable";
 import { CustomerRiskPanel } from "@/components/orders/CustomerRiskPanel";
+import { ConfirmCell } from "@/components/orders/OrderConfirm";
 import { Upload, RefreshCw, CheckCircle2, XCircle, X, FilePlus2, ChevronLeft, ChevronRight, ShoppingCart, Filter } from "lucide-react";
 
 interface SyncLog {
@@ -30,6 +31,9 @@ interface OrderRow {
   status: string;
   totalValue: string;
   poCode: string | null;
+  source: string;
+  amisCreatedAt: string | null;
+  confirmation: { confirmedAt: string; photos: { id: string }[] } | null;
 }
 
 function isOverdue(o: OrderRow) {
@@ -266,6 +270,7 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
                 <SortableTh field="totalValue" sort={sort} onSort={handleSort} align="right">
                   Giá trị đơn
                 </SortableTh>
+                <th className="px-5 py-3.5 text-left min-w-[190px]">Xác nhận PKH/SX</th>
               </tr>
               {/* Hàng Tìm Kiếm Nhanh */}
               <tr className="bg-navy-900/80 border-b border-gray-200/60">
@@ -278,7 +283,7 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
                 <th className="px-5 py-2 font-normal">
                   <FilterInput value={filterEmployeeName} onChange={setFilterEmployeeName} placeholder="Lọc NVKD..." />
                 </th>
-                <th colSpan={4} className="px-5 py-2 text-right">
+                <th colSpan={5} className="px-5 py-2 text-right">
                   {hasActiveFilter && (
                     <button
                       onClick={clearFilters}
@@ -293,14 +298,14 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
             <tbody className="divide-y divide-gray-200/40 text-sm">
               {isLoading && (
                 <tr>
-                  <td colSpan={7} className="px-5 py-12 text-center text-muted-foreground">
+                  <td colSpan={8} className="px-5 py-12 text-center text-muted-foreground">
                     Đang tải dữ liệu đơn hàng...
                   </td>
                 </tr>
               )}
               {!isLoading && visibleOrders.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-5 py-12 text-center text-muted-foreground">
+                  <td colSpan={8} className="px-5 py-12 text-center text-muted-foreground">
                     <ShoppingCart className="h-8 w-8 text-muted2 mx-auto mb-2 opacity-50" />
                     <p className="text-sm font-medium text-ink">
                       {hasActiveFilter ? "Không tìm thấy đơn hàng phù hợp bộ lọc" : "Chưa có đơn hàng nào trong hệ thống."}
@@ -337,6 +342,9 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
                   </td>
                   <td className="px-5 py-3.5 align-middle text-right font-mono font-bold text-ink">
                     {formatCurrencyVND(o.totalValue)}
+                  </td>
+                  <td className="px-5 py-3.5 align-middle">
+                    <ConfirmCell order={o} canConfirm={isAdmin} />
                   </td>
                 </tr>
               ))}
