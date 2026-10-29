@@ -552,6 +552,8 @@ model ShipmentSlipItem {
   note               String?
   // "Giá tiền" (đơn giá) trên dòng phiếu — chỉ để ghi nhận/xuất Excel, KHÔNG dùng để tính giá trị giao (giá trị giao lấy theo giá HĐ của dòng PO).
   unitPrice          Decimal?     @db.Decimal(18, 2)
+  // Admin bấm "Không cần PO" (hàng bù hao/tặng/đổi lỗi...) → không còn báo ở bảng "Dòng phiếu cần sửa" trang Phiếu đi hàng.
+  issueIgnored       Boolean      @default(false)
 
   @@map("shipment_slip_items")
 }

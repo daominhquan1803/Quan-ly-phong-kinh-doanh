@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDateVN, toDateInputValueVN } from "@/lib/utils";
+import { SlipIssuesPanel } from "@/components/shipment-slips/SlipIssuesPanel";
 import { Search, Plus, Upload, Download, RefreshCw, CheckCircle2, AlertTriangle, FileText, Camera, Sparkles, X } from "lucide-react";
 
 interface SlipRow {
@@ -81,6 +82,7 @@ export function SlipTable({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <div className="space-y-5">
+      {isAdmin && <SlipIssuesPanel />}
       {/* Thanh Điều Khiển Toolbar Glassmorphism */}
       <div className="flex items-center justify-between gap-4 flex-wrap rounded-2xl border border-gray-200/80 bg-navy-900/60 p-4 shadow-card backdrop-blur-xl">
         <div className="relative min-w-[260px] sm:w-80">
