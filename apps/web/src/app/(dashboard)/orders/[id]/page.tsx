@@ -26,8 +26,6 @@ export default async function OrderDetailPage({ params }: { params: { id: string
     redirect("/orders");
   }
 
-  const overdue = isOrderOverdue(order);
-
   // Phiếu đi hàng liên kết theo ĐẦU phiếu (orderId) chỉ nhận 1 đơn, nhưng 1 phiếu có thể giao hàng của nhiều PO —
   // nên lấy thêm các phiếu có dòng hàng mang Số PO = mã đơn này (vd phiếu BH04381 đầu phiếu D10.26NT08A nhưng có dòng của D10.26NT24A).
   const slipsByPo = await prisma.shipmentSlip.findMany({
@@ -53,7 +51,17 @@ export default async function OrderDetailPage({ params }: { params: { id: string
     if (qty > 0 && s.slipDate && (!lastSlipDate || s.slipDate > lastSlipDate)) lastSlipDate = s.slipDate;
   }
   const slipList = [...slips.values()].sort((a, b) => (a.slipDate?.getTime() ?? 0) - (b.slipDate?.getTime() ?? 0));
-  const actualDate = order.actualDeliveryDate ?? lastSlipDate;
+
+  // Giao hàng tách riêng khỏi AMIS: ngày giao thực tế + tình trạng giao/quá hạn chỉ tính từ phiếu đi hàng Admin up (qua dòng PO tracking cùng Số PO),
+  // không dùng ngày giao/trạng thái giao do AMIS báo.
+  const poLines = await prisma.poTrackingLine.findMany({
+    where: { poCode: order.orderCode },
+    select: { remainingQty: true, totalDeliveredQty: true, statusRaw: true, manuallyClosed: true },
+  });
+  const anyDelivered = poLines.some((l) => Number(l.totalDeliveredQty ?? 0) > 0);
+  const allDone = poLines.length > 0 && poLines.every((l) => l.manuallyClosed || l.statusRaw === "Kết thúc" || Number(l.remainingQty ?? 1) <= 0);
+  const badgeStatus = order.status === "CANCELLED" ? order.status : allDone ? "DELIVERED" : anyDelivered ? "PARTIAL_DELIVERED" : order.status;
+  const overdue = isOrderOverdue({ status: badgeStatus, expectedDeliveryDate: order.expectedDeliveryDate });
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -72,7 +80,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
           <p className="text-sm text-gray-300 mt-0.5 font-medium">{order.customerName}</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <OrderStatusBadge status={order.status} overdue={overdue} />
+          <OrderStatusBadge status={badgeStatus} overdue={overdue} />
           {session.user.role === "ADMIN" && order.source === "MANUAL" && (
             <EditOrderDialog
               order={{
@@ -119,8 +127,8 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         <div>
           <p className="text-xs uppercase font-semibold tracking-wider text-gray-400 mb-1">Ngày giao thực tế</p>
           <p className="font-medium text-white">
-            {actualDate ? formatDateVN(actualDate) : "Chưa giao"}
-            {!order.actualDeliveryDate && lastSlipDate && <span className="ml-1 text-xs font-normal text-gray-400">(đợt giao gần nhất theo phiếu)</span>}
+            {lastSlipDate ? formatDateVN(lastSlipDate) : "Chưa giao"}
+            {lastSlipDate && <span className="ml-1 text-xs font-normal text-gray-400">(đợt giao gần nhất theo phiếu đi hàng)</span>}
           </p>
         </div>
         <div>
