@@ -52,16 +52,8 @@ export default async function OrderDetailPage({ params }: { params: { id: string
   }
   const slipList = [...slips.values()].sort((a, b) => (a.slipDate?.getTime() ?? 0) - (b.slipDate?.getTime() ?? 0));
 
-  // Giao hàng tách riêng khỏi AMIS: ngày giao thực tế + tình trạng giao/quá hạn chỉ tính từ phiếu đi hàng Admin up (qua dòng PO tracking cùng Số PO),
-  // không dùng ngày giao/trạng thái giao do AMIS báo.
-  const poLines = await prisma.poTrackingLine.findMany({
-    where: { poCode: order.orderCode },
-    select: { remainingQty: true, totalDeliveredQty: true, statusRaw: true, manuallyClosed: true },
-  });
-  const anyDelivered = poLines.some((l) => Number(l.totalDeliveredQty ?? 0) > 0);
-  const allDone = poLines.length > 0 && poLines.every((l) => l.manuallyClosed || l.statusRaw === "Kết thúc" || Number(l.remainingQty ?? 1) <= 0);
-  const badgeStatus = order.status === "CANCELLED" ? order.status : allDone ? "DELIVERED" : anyDelivered ? "PARTIAL_DELIVERED" : order.status;
-  const overdue = isOrderOverdue({ status: badgeStatus, expectedDeliveryDate: order.expectedDeliveryDate });
+  // Trạng thái đơn + "Quá hạn giao" giữ theo AMIS (như danh sách Đơn hàng); chỉ "Ngày giao thực tế" và phiếu đi hàng lấy từ phiếu Admin up.
+  const overdue = isOrderOverdue(order);
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -80,7 +72,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
           <p className="text-sm text-gray-300 mt-0.5 font-medium">{order.customerName}</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <OrderStatusBadge status={badgeStatus} overdue={overdue} />
+          <OrderStatusBadge status={order.status} overdue={overdue} />
           {session.user.role === "ADMIN" && order.source === "MANUAL" && (
             <EditOrderDialog
               order={{
