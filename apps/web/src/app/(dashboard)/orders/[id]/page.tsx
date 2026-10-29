@@ -28,6 +28,33 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
   const overdue = isOrderOverdue(order);
 
+  // Phiếu đi hàng liên kết theo ĐẦU phiếu (orderId) chỉ nhận 1 đơn, nhưng 1 phiếu có thể giao hàng của nhiều PO —
+  // nên lấy thêm các phiếu có dòng hàng mang Số PO = mã đơn này (vd phiếu BH04381 đầu phiếu D10.26NT08A nhưng có dòng của D10.26NT24A).
+  const slipsByPo = await prisma.shipmentSlip.findMany({
+    where: { items: { some: { poSaleNumber: order.orderCode } } },
+    select: {
+      id: true,
+      slipNumber: true,
+      slipDate: true,
+      items: { where: { poSaleNumber: order.orderCode }, select: { itemCode: true, qtyActual: true } },
+    },
+  });
+  const slips = new Map(order.shipmentSlips.map((s) => [s.id, { id: s.id, slipNumber: s.slipNumber, slipDate: s.slipDate }]));
+  const deliveredByCode = new Map<string, number>();
+  let lastSlipDate: Date | null = null;
+  for (const s of slipsByPo) {
+    slips.set(s.id, { id: s.id, slipNumber: s.slipNumber, slipDate: s.slipDate });
+    let qty = 0;
+    for (const it of s.items) {
+      const q = Number(it.qtyActual ?? 0);
+      qty += q;
+      if (it.itemCode) deliveredByCode.set(it.itemCode, (deliveredByCode.get(it.itemCode) ?? 0) + q);
+    }
+    if (qty > 0 && s.slipDate && (!lastSlipDate || s.slipDate > lastSlipDate)) lastSlipDate = s.slipDate;
+  }
+  const slipList = [...slips.values()].sort((a, b) => (a.slipDate?.getTime() ?? 0) - (b.slipDate?.getTime() ?? 0));
+  const actualDate = order.actualDeliveryDate ?? lastSlipDate;
+
   return (
     <div className="space-y-6 max-w-4xl">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-5">
@@ -92,7 +119,8 @@ export default async function OrderDetailPage({ params }: { params: { id: string
         <div>
           <p className="text-xs uppercase font-semibold tracking-wider text-gray-400 mb-1">Ngày giao thực tế</p>
           <p className="font-medium text-white">
-            {order.actualDeliveryDate ? formatDateVN(order.actualDeliveryDate) : "Chưa giao"}
+            {actualDate ? formatDateVN(actualDate) : "Chưa giao"}
+            {!order.actualDeliveryDate && lastSlipDate && <span className="ml-1 text-xs font-normal text-gray-400">(đợt giao gần nhất theo phiếu)</span>}
           </p>
         </div>
         <div>
@@ -121,6 +149,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                   <th className="text-left py-3 px-3">Tên hàng</th>
                   <th className="text-left py-3 px-3">ĐVT</th>
                   <th className="text-right py-3 px-3">Số lượng</th>
+                  <th className="text-right py-3 px-3">Đã giao (theo phiếu)</th>
                   <th className="text-right py-3 px-3">Đơn giá</th>
                   <th className="text-right py-3 px-3">Thành tiền</th>
                 </tr>
@@ -132,6 +161,9 @@ export default async function OrderDetailPage({ params }: { params: { id: string
                     <td className="py-2.5 px-3 text-white font-medium">{it.itemName}</td>
                     <td className="py-2.5 px-3 text-gray-400">{it.unit ?? "—"}</td>
                     <td className="py-2.5 px-3 text-right font-mono text-white">{it.quantity.toString()}</td>
+                    <td className="py-2.5 px-3 text-right font-mono text-sky-300">
+                      {(it.itemCode && deliveredByCode.get(it.itemCode)) || "—"}
+                    </td>
                     <td className="py-2.5 px-3 text-right font-mono text-gray-300">{formatCurrencyVND(it.unitPrice.toString())}</td>
                     <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-400">{formatCurrencyVND(it.totalPrice.toString())}</td>
                   </tr>
@@ -144,11 +176,11 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
       <div className="glass-card border border-white/10 rounded-2xl p-6 shadow-[0_8px_30px_rgb(0,0,0,0.3)]">
         <h2 className="text-base font-semibold text-white tracking-wide mb-3">Phiếu Đi Hàng Liên Quan</h2>
-        {order.shipmentSlips.length === 0 ? (
+        {slipList.length === 0 ? (
           <p className="text-xs text-gray-500 italic">Chưa có phiếu đi hàng nào liên kết với đơn này.</p>
         ) : (
           <ul className="divide-y divide-white/5 text-xs">
-            {order.shipmentSlips.map((s) => (
+            {slipList.map((s) => (
               <li key={s.id} className="py-2.5 flex items-center justify-between hover:bg-white/[0.02] px-2 rounded-lg transition-colors">
                 <Link href={`/shipment-slips/${s.id}`} className="font-mono font-medium text-amber-400 hover:text-amber-300 flex items-center gap-2">
                   <span>📄 {s.slipNumber}</span>
