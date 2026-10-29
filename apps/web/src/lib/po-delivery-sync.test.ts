@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeLineDeliveryFields, contentIndicatesNoLongerNeeded, allocateQtyAcrossLines, excessBeyondBaseline, isSampleNote, isSampleMapping, isSampleOrder } from "@hoanggia/db";
+import { computeLineDeliveryFields, contentIndicatesNoLongerNeeded, allocateQtyAcrossLines, excessBeyondBaseline, isSampleNote, isSampleMapping, isSampleOrder, isStaleLineToClose } from "@hoanggia/db";
 
 describe("computeLineDeliveryFields", () => {
   it("cộng phần giao qua Phiếu đi hàng lên trên nền từ file PO tracking", () => {
@@ -190,5 +190,20 @@ describe("hàng mẫu không tính doanh số", () => {
     expect(computeLineDeliveryFields({ ...line, isSample: true }, { qty: 0, value: 0 }).statusRaw).toBe("Đang thực hiện");
     expect(computeLineDeliveryFields({ ...line, isSample: true }, { qty: 10, value: 0 }).statusRaw).toBe("Kết thúc");
     expect(computeLineDeliveryFields(line, { qty: 0, value: 0 }).statusRaw).toBe("Kết thúc"); // dòng thường giá 0 như cũ
+  });
+});
+describe("isStaleLineToClose — dòng mã cũ sót lại, chưa giao gì thì đóng", () => {
+  const base = { manuallyClosed: false, baselineClosed: false, baselineDeliveredQty: 0, baselineDeliveredValue: 0 };
+  it("chưa giao gì → đóng", () => {
+    expect(isStaleLineToClose(base, { qty: 0, value: 0 })).toBe(true);
+    expect(isStaleLineToClose({ ...base, baselineDeliveredQty: null }, { qty: 0, value: 0 })).toBe(true);
+  });
+  it("đã có giao hàng (baseline hoặc phiếu) → KHÔNG tự đóng, để người rà soát", () => {
+    expect(isStaleLineToClose({ ...base, baselineDeliveredQty: 10, baselineDeliveredValue: 1000 }, { qty: 0, value: 0 })).toBe(false);
+    expect(isStaleLineToClose(base, { qty: 5, value: 500 })).toBe(false);
+  });
+  it("đã đóng rồi thì bỏ qua", () => {
+    expect(isStaleLineToClose({ ...base, manuallyClosed: true }, { qty: 0, value: 0 })).toBe(false);
+    expect(isStaleLineToClose({ ...base, baselineClosed: true }, { qty: 0, value: 0 })).toBe(false);
   });
 });

@@ -502,7 +502,7 @@ export async function runAmisOrderSync(triggeredBy: string): Promise<SyncOutcome
     let poTrackingMessage: string;
     try {
       const r = await syncPoTrackingFromOrders();
-      poTrackingMessage = `Tiến độ giao hàng: rà soát ${r.ordersScanned} đơn, tạo mới ${r.linesCreated}, cập nhật ${r.linesUpdated}, gộp lại ${r.linesMigrated} dòng từ dữ liệu Excel cũ${
+      poTrackingMessage = `Tiến độ giao hàng: rà soát ${r.ordersScanned} đơn, tạo mới ${r.linesCreated}, cập nhật ${r.linesUpdated}, gộp lại ${r.linesMigrated} dòng từ dữ liệu Excel cũ${r.staleLinesClosed > 0 ? `, tự đóng ${r.staleLinesClosed} dòng mã cũ đã đổi trên AMIS` : ""}${
         r.ambiguousGroups.length > 0 ? `, ${r.ambiguousGroups.length} nhóm cần rà soát tay (mã hàng trùng số dòng không khớp)` : ""
       }.`;
       await prisma.syncLog.update({

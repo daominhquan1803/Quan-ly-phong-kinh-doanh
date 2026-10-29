@@ -30,6 +30,27 @@ export interface SyncPoTrackingFromOrdersResult {
   // — vẫn tạo dòng mới từ AMIS để không mất dữ liệu, nhưng liệt kê ra để rà soát tay tránh
   // trùng giá trị PO.
   ambiguousGroups: string[];
+  // Dòng tiến độ mà đơn AMIS không còn mã hàng đó (mã đã đổi/bỏ trên AMIS) và CHƯA có phiếu giao nào — đã tự đóng để không báo "chưa giao" sai.
+  staleLinesClosed: number;
+}
+
+/**
+ * Dòng tiến độ "mồ côi": đơn AMIS hiện không còn mã hàng này (mã bị đổi/bỏ trên AMIS, dòng cũ còn sót từ file Excel PO tracking)
+ * và CHƯA giao gì (không baseline, không phiếu) → đóng. Dòng đã có giao hàng thì KHÔNG tự đóng (cần người rà soát, vì lịch sử giao
+ * đang nằm trên dòng đó). Đã xác nhận bằng đơn D10.26DT02A (mã cũ AA071320.2 đã đổi thành ST10028, dòng cũ báo sai 34,4 triệu chưa giao).
+ */
+export function isStaleLineToClose(
+  line: { manuallyClosed: boolean; baselineClosed: boolean; baselineDeliveredQty: number | null; baselineDeliveredValue: number },
+  slipAgg: { qty: number; value: number }
+): boolean {
+  return (
+    !line.manuallyClosed &&
+    !line.baselineClosed &&
+    (line.baselineDeliveredQty ?? 0) === 0 &&
+    line.baselineDeliveredValue === 0 &&
+    slipAgg.qty === 0 &&
+    slipAgg.value === 0
+  );
 }
 
 
@@ -65,6 +86,7 @@ export async function syncPoTrackingFromOrders(orderCodes?: string[]): Promise<S
   let linesCreated = 0;
   let linesUpdated = 0;
   let linesMigrated = 0;
+  let staleLinesClosed = 0;
   const ambiguousGroups: string[] = [];
 
   for (const order of orders) {
@@ -95,6 +117,7 @@ export async function syncPoTrackingFromOrders(orderCodes?: string[]): Promise<S
         poQuantity: true,
         contractPrice: true,
         requestedDeliveryDate: true,
+        note: true,
       },
       orderBy: { naturalKey: "asc" },
     });
@@ -247,8 +270,34 @@ export async function syncPoTrackingFromOrders(orderCodes?: string[]): Promise<S
         }
       }
     }
+
+    // Dòng cũ không khớp với mã hàng nào của đơn AMIS hiện tại (không bị "chiếm" ở trên) và chưa giao gì → đóng.
+    for (const l of existingLines) {
+      if (claimedExistingIds.has(l.id)) continue;
+      const slipAgg = slipAggByLine.get(l.id) ?? { qty: 0, value: 0 };
+      const stale = isStaleLineToClose(
+        {
+          manuallyClosed: l.manuallyClosed,
+          baselineClosed: l.baselineClosed,
+          baselineDeliveredQty: l.baselineDeliveredQty != null ? Number(l.baselineDeliveredQty) : null,
+          baselineDeliveredValue: Number(l.baselineDeliveredValue),
+        },
+        slipAgg
+      );
+      if (!stale) continue;
+      await prisma.poTrackingLine.update({
+        where: { id: l.id },
+        data: {
+          manuallyClosed: true,
+          manuallyClosedAt: new Date(),
+          statusRaw: "Kết thúc",
+          note: [l.note, "Mã hàng không còn trong đơn AMIS, chưa giao — tự đóng"].filter(Boolean).join(" | "),
+        },
+      });
+      staleLinesClosed++;
+    }
   }
 
   await zeroSampleLineValues(); // chắc chắn hàng mẫu không mang giá trị (kể cả đợt giao từ file Excel / phiếu cũ)
-  return { ordersScanned: orders.length, linesCreated, linesUpdated, linesMigrated, ambiguousGroups };
+  return { ordersScanned: orders.length, linesCreated, linesUpdated, linesMigrated, ambiguousGroups, staleLinesClosed };
 }
