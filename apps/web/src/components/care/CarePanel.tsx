@@ -72,6 +72,12 @@ export function CarePanel() {
   const params = useSearchParams();
   const [selectedId, setSelectedId] = useState<string>(params.get("customer") ?? "");
   const [search, setSearch] = useState("");
+  // Khung Hồ sơ khách có nút lưu riêng: đang sửa chưa lưu mà chuyển khách thì phần vừa nhập mất — hỏi lại trước khi chuyển.
+  const [profileDirty, setProfileDirty] = useState(false);
+  const selectCustomer = (id: string) => {
+    if (id !== selectedId && profileDirty && !confirm("Hồ sơ khách đang sửa nhưng CHƯA LƯU. Chuyển sang khách khác sẽ mất phần vừa nhập. Vẫn chuyển?")) return;
+    setSelectedId(id);
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ["care-overview"],
@@ -100,7 +106,7 @@ export function CarePanel() {
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
       <div className="space-y-4">
-        <DuePlan onSelect={setSelectedId} />
+        <DuePlan onSelect={selectCustomer} />
         {needAttention.length > 0 && (
           <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4">
             <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-400">
@@ -110,7 +116,7 @@ export function CarePanel() {
               {needAttention.map((c) => (
                 <button
                   key={c.id}
-                  onClick={() => setSelectedId(c.id)}
+                  onClick={() => selectCustomer(c.id)}
                   className="flex w-full items-center justify-between gap-2 py-2 text-left hover:bg-white/5"
                 >
                   <span className="min-w-0 truncate text-sm text-ink">{c.customerName}</span>
@@ -139,7 +145,7 @@ export function CarePanel() {
             {matches.map((c) => (
               <button
                 key={c.id}
-                onClick={() => setSelectedId(c.id)}
+                onClick={() => selectCustomer(c.id)}
                 className={cn("flex w-full items-center justify-between gap-2 px-1 py-2 text-left hover:bg-white/5", c.id === selectedId && "bg-white/5")}
               >
                 <span className="min-w-0 truncate text-sm text-ink">{c.customerName}</span>
@@ -173,7 +179,7 @@ export function CarePanel() {
                 queryClient.invalidateQueries({ queryKey: ["care-plan"] });
               }}
             />
-            <ProfileBox key={`pf-${selected.id}`} customerId={selected.id} />
+            <ProfileBox key={`pf-${selected.id}`} customerId={selected.id} onDirtyChange={setProfileDirty} />
           </>
         ) : (
           <div className="rounded-2xl border border-dashed border-gray-200/40 p-8 text-center text-sm text-muted-foreground">

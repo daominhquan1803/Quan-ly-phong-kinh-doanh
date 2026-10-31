@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, ClipboardList } from "lucide-react";
 import { cn, formatDateVN } from "@/lib/utils";
@@ -25,7 +25,7 @@ const L = ({ children }: { children: React.ReactNode }) => <p className="mb-1 mt
 const input = "w-full rounded-lg border border-gray-200/40 bg-transparent px-3 py-1.5 text-sm text-ink";
 
 /** Khung "Hồ sơ khách": tải dữ liệu 1 khách rồi cho sửa. Dùng ở trang Chăm sóc và trang Báo cáo. */
-export function ProfileBox({ customerId, onSaved }: { customerId: string; onSaved?: () => void }) {
+export function ProfileBox({ customerId, onSaved, onDirtyChange }: { customerId: string; onSaved?: () => void; onDirtyChange?: (dirty: boolean) => void }) {
   const { data, isLoading, error } = useQuery({
     queryKey: ["customer-profile", customerId],
     queryFn: async () => {
@@ -38,10 +38,13 @@ export function ProfileBox({ customerId, onSaved }: { customerId: string; onSave
   if (isLoading) return <div className="rounded-2xl border border-gray-200/30 p-4 text-sm text-muted-foreground">Đang tải hồ sơ khách...</div>;
   if (error) return <div className="rounded-2xl border border-gray-200/30 p-4 text-sm text-alert">{(error as Error).message}</div>;
   if (!data) return null;
-  return <ProfileForm key={`${data.id}-${data.completeness}-${data.stage}`} row={data} onSaved={onSaved} />;
+  return <ProfileForm key={`${data.id}-${data.completeness}-${data.stage}`} row={data} onSaved={onSaved} onDirtyChange={onDirtyChange} />;
 }
 
-export function ProfileForm({ row, onSaved }: { row: CustomerReportRow; onSaved?: () => void }) {
+const fmtSavedAt = (iso: string) =>
+  new Date(iso).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+
+export function ProfileForm({ row, onSaved, onDirtyChange }: { row: CustomerReportRow; onSaved?: () => void; onDirtyChange?: (dirty: boolean) => void }) {
   const qc = useQueryClient();
   const [f, setF] = useState({
     address: row.addressAuto ? "" : row.address ?? "",
@@ -56,6 +59,22 @@ export function ProfileForm({ row, onSaved }: { row: CustomerReportRow; onSaved?
     stage: row.stage ?? "",
     painPoint: row.painPoint ?? "",
   });
+  // Giá trị đã lưu (hoặc lúc mở) — khác `f` nghĩa là có thay đổi CHƯA LƯU (form này có nút lưu riêng, tách khỏi "Ghi chăm sóc").
+  const [base, setBase] = useState(f);
+  const dirty = JSON.stringify(f) !== JSON.stringify(base);
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+    return () => onDirtyChange?.(false);
+  }, [dirty, onDirtyChange]);
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
   const [saved, setSaved] = useState(false);
   const set = (k: keyof typeof f, v: string) => setF((cur) => ({ ...cur, [k]: v }));
   const toggle = (k: keyof typeof f, v: string) => setF((cur) => ({ ...cur, [k]: cur[k] === v ? "" : v }));
@@ -79,8 +98,10 @@ export function ProfileForm({ row, onSaved }: { row: CustomerReportRow; onSaved?
       const res = await fetch(`/api/customers/${row.id}/profile`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error ?? "Không lưu được");
+      return v;
     },
-    onSuccess: () => {
+    onSuccess: (v) => {
+      setBase(v);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
       qc.invalidateQueries({ queryKey: ["customer-profile", row.id] });
@@ -103,6 +124,12 @@ export function ProfileForm({ row, onSaved }: { row: CustomerReportRow; onSaved?
         <div className={cn("h-full", row.completeness >= 90 ? "bg-emerald-400" : row.completeness >= 70 ? "bg-amber-400" : "bg-red-500")} style={{ width: `${row.completeness}%` }} />
       </div>
       {row.missing.length > 0 && <p className="mt-1 text-[11px] text-muted-foreground">Còn thiếu: {row.missing.join(", ")}</p>}
+      <p className="mt-1 text-[11px] text-muted-foreground">{row.profileUpdatedAt ? `Lưu lần cuối: ${fmtSavedAt(row.profileUpdatedAt)}` : "Chưa lưu hồ sơ lần nào"}</p>
+      {dirty && (
+        <p className="mt-2 rounded-lg border border-amber-500/50 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-400">
+          Có thay đổi chưa lưu — bấm “Lưu hồ sơ khách” ở cuối khung này. Chuyển khách hoặc đóng trang sẽ mất phần vừa nhập.
+        </p>
+      )}
 
       <div className="mt-3 rounded-lg bg-white/[0.03] p-2.5 text-xs text-ink2">
         <p>

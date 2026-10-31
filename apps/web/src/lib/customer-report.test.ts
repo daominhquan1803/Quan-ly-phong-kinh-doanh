@@ -107,7 +107,7 @@ describe("tiến trình gợi ý & tình trạng", () => {
 const row = (over: Partial<CustomerReportRow>): CustomerReportRow => ({
   id: "c1", customerCode: "KH1", customerName: "Khách 1", employeeId: "u1", employeeName: "An", address: "KCN Quế Võ, Tỉnh Bắc Ninh", addressAuto: true,
   province: "Bắc Ninh", industry: null, staffSize: null, ownership: null, contactPerson: null, contactPhone: null, competitors: null, potentialYear: null,
-  painPoint: null, tier: "A", pattern: "REGULAR", orders12: 5, value12: 500e6, gap: null, firstOrderAt: null, lastOrderAt: "2026-10-01T00:00:00Z",
+  painPoint: null, profileUpdatedAt: null, tier: "A", pattern: "REGULAR", orders12: 5, value12: 500e6, gap: null, firstOrderAt: null, lastOrderAt: "2026-10-01T00:00:00Z",
   groups: { TEM_NHAN: 500e6 }, groupsText: "Tem nhãn 100%", topGroup: "TEM_NHAN", stage: null, stageSuggested: "REGULAR", stageEffective: "REGULAR",
   stagePrev: null, status: "ACTIVE", riskLevel: null, lastTouchAt: null, issue: null, unpaidDebt: 0, overdueDebt: 0, completeness: 14, missing: [],
   ...over,

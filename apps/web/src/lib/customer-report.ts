@@ -29,6 +29,7 @@ export interface CustomerReportRow {
   competitors: string | null;
   potentialYear: number | null;
   painPoint: string | null;
+  profileUpdatedAt: string | null; // lần lưu hồ sơ gần nhất (app hoặc nhập Excel)
   tier: Tier | null;
   pattern: "REGULAR" | "SEASONAL" | "PROJECT";
   orders12: number;
@@ -127,6 +128,7 @@ export async function buildCustomerReport(options: { employeeId?: string; custom
       competitors: true,
       potentialYear: true,
       painPoint: true,
+      profileUpdatedAt: true,
       stage: true,
     },
     orderBy: { customerName: "asc" },
@@ -297,6 +299,7 @@ export async function buildCustomerReport(options: { employeeId?: string; custom
       competitors: c.competitors,
       potentialYear: potential,
       painPoint: c.painPoint,
+      profileUpdatedAt: c.profileUpdatedAt ? c.profileUpdatedAt.toISOString() : null,
       tier: tierOf.get(c.id) ?? null,
       pattern: c.buyingPattern,
       orders12: o?.n12 ?? 0,
