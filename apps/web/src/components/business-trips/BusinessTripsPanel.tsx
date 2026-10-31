@@ -13,7 +13,7 @@ import { TripReportView } from "./TripReportView";
 import { TripNextSteps } from "./TripNextSteps";
 import { TripPendingBanner } from "./TripPendingBanner";
 import { TripBanner } from "./TripBanner";
-import { PROVINCES } from "@/lib/vn-provinces";
+import { ProvincePicker } from "./ProvincePicker";
 import { todayVN, visitDay, type PrefillStop, type TripRow } from "./types";
 
 const STATUS_STYLE: Record<TripRow["status"], string> = {
@@ -564,24 +564,7 @@ function TripForm({
         <p className="mb-1.5 text-xs text-muted-foreground">
           Tỉnh/TP đi công tác * <span className="text-muted2">(chọn một hoặc nhiều tỉnh — cả phòng sẽ thấy chuyến đi và các khách trong tỉnh cần gặp)</span>
         </p>
-        <div className="flex flex-wrap gap-1.5">
-          {PROVINCES.map((p) => {
-            const on = provinces.includes(p);
-            return (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setProvinces((cur) => (on ? cur.filter((x) => x !== p) : [...cur, p]))}
-                className={cn(
-                  "rounded-full border px-2.5 py-1 text-xs transition-colors",
-                  on ? "border-amber-400 bg-amber-500/15 font-semibold text-amber-400" : "border-white/15 text-ink2 hover:bg-white/5"
-                )}
-              >
-                {p}
-              </button>
-            );
-          })}
-        </div>
+        <ProvincePicker value={provinces} onChange={setProvinces} />
       </div>
 
       <div className="space-y-3">
