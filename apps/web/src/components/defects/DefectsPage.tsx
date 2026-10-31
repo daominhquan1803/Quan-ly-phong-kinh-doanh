@@ -5,6 +5,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, ChevronDown, ChevronUp, Search, Lock, LockOpen, Pencil, Trash2 } from "lucide-react";
 import { cn, formatDateVN } from "@/lib/utils";
 import { DefectForm } from "./DefectForm";
+import { DefectSlipLinker } from "./DefectSlipLinker";
+import { summarizeOpenDefects } from "@/lib/defect-open-summary";
 import type { DefectRow } from "./types";
 
 const fmtQty = (s: string | null) => (s == null ? "—" : Number(s).toLocaleString("vi-VN"));
@@ -35,12 +37,38 @@ export function DefectsPage({ canEdit, canManage }: { canEdit: boolean; canManag
       return res.json() as Promise<{ defects: DefectRow[] }>;
     },
   });
+  // Banner: mọi biên bản đang mở (mọi tháng, không phụ thuộc bộ lọc) — theo phạm vi quyền của người xem.
+  const { data: openData } = useQuery({
+    queryKey: ["defects", "open-summary"],
+    queryFn: async () => {
+      const res = await fetch("/api/defects?status=OPEN");
+      if (!res.ok) throw new Error("Không tải được biên bản đang mở");
+      return res.json() as Promise<{ defects: DefectRow[] }>;
+    },
+  });
+  const openSummary = summarizeOpenDefects(openData?.defects ?? []);
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["defects"] });
   const defects = data?.defects ?? [];
   const openCount = defects.filter((d) => d.status === "OPEN").length;
 
   return (
     <div className="space-y-5">
+      {openSummary.total > 0 && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-warning-500/40 bg-warning-500/10 px-4 py-3 text-sm">
+          <span className="font-semibold text-warning-500">Còn {openSummary.total} biên bản hàng lỗi đang mở cần xử lý</span>
+          {openSummary.unresponded > 0 && <span className="text-ink2">· {openSummary.unresponded} chưa phản hồi khách</span>}
+          {openSummary.partlyReplaced > 0 && <span className="text-ink2">· {openSummary.partlyReplaced} đã đổi một phần</span>}
+          <button
+            onClick={() => {
+              setStatus("OPEN");
+              setMonth("");
+            }}
+            className="ml-auto text-xs font-semibold text-amber-400 hover:text-amber-300"
+          >
+            Xem các biên bản đang mở
+          </button>
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex gap-1 rounded-xl border border-white/10 p-1">
           {(["ALL", "OPEN", "CLOSED"] as const).map((s) => (
@@ -189,6 +217,7 @@ const RESOLUTION_LABEL = { REPLACED: "Đổi hàng theo biên bản", DESTROYED_
 
 function DefectDetail({ d, canEdit, canManage, onEdit, onChanged }: { d: DefectRow; canEdit: boolean; canManage: boolean; onEdit: () => void; onChanged: () => void }) {
   const [closing, setClosing] = useState(false);
+  const [linking, setLinking] = useState(false);
   const [resolutionType, setResolutionType] = useState<"OTHER" | "REPLACED" | "DESTROYED_DEDUCT_DEBT">("OTHER");
   const [deductAmount, setDeductAmount] = useState("");
   const [resolution, setResolution] = useState("");
@@ -402,10 +431,18 @@ function DefectDetail({ d, canEdit, canManage, onEdit, onChanged }: { d: DefectR
         </div>
       )}
 
+      {linking && d.status === "OPEN" && <DefectSlipLinker defectId={d.id} onLinked={onChanged} />}
+
       {error && <p className="text-sm text-alert">{error}</p>}
       <div className="flex flex-wrap gap-2">
         {canEdit && d.status === "OPEN" && !closing && (
           <>
+            <button
+              onClick={() => setLinking(!linking)}
+              className="rounded-xl border border-emerald-500/40 px-3 py-1.5 text-xs text-emerald-300 hover:bg-emerald-500/10"
+            >
+              Nối phiếu đổi lỗi
+            </button>
             <button onClick={onEdit} className="flex items-center gap-1.5 rounded-xl border border-white/10 px-3 py-1.5 text-xs hover:bg-white/5">
               <Pencil className="h-3.5 w-3.5" /> Sửa / thêm ảnh
             </button>
