@@ -6,6 +6,7 @@ import { Camera, Crosshair, Trash2, CheckCircle2 } from "lucide-react";
 import { cn, formatDateVN, toDateInputValueVN } from "@/lib/utils";
 import { compressImage, getCurrentFix, type GeoFix } from "@/lib/client-image";
 import { MAX_PHOTOS_PER_STOP, MIN_MET_CONTENT, OUTCOME_LABEL } from "@/lib/business-trip-report";
+import { reportScope } from "@/lib/trip-report-scope";
 import type { StopOutcome, TripRow } from "./types";
 
 interface StopDraft {
@@ -36,16 +37,25 @@ const OUTCOMES: StopOutcome[] = ["MET", "RESCHEDULED", "NOT_MET"];
 export function TripReportForm({
   trip,
   isAdmin,
+  currentUserId,
   onDone,
   onCancel,
 }: {
   trip: TripRow;
   isAdmin: boolean;
+  currentUserId?: string;
   onDone: () => void;
   onCancel: () => void;
 }) {
+  // Chỉ hiện các khách người này phải báo cáo: người đi gặp = khách của mình; chủ đăng ký/admin = khách chưa có báo cáo của người đi gặp khác.
+  const required = reportScope(
+    { employeeId: trip.employee.id, stops: trip.stops.map((s) => ({ id: s.id, attendeeId: s.attendee?.id ?? null, outcome: s.outcome })) },
+    currentUserId ?? "",
+    isAdmin
+  ).required;
+  const onlyMine = !isAdmin && trip.employee.id !== currentUserId;
   const [stops, setStops] = useState<StopDraft[]>(
-    trip.stops.map((s) => ({
+    trip.stops.filter((s) => required.has(s.id)).map((s) => ({
       stopId: s.id,
       companyName: s.companyName,
       plannedContent: s.content,
@@ -56,7 +66,7 @@ export function TripReportForm({
       productInterest: s.productInterest ?? "",
       nextAction: s.nextAction ?? "",
       nextActionDue: s.nextActionDue ? toDateInputValueVN(s.nextActionDue) : "",
-      nextActionOwnerId: s.nextActionOwner?.id ?? trip.employee.id,
+      nextActionOwnerId: s.nextActionOwner?.id ?? s.attendee?.id ?? trip.employee.id,
       checkin: null,
       savedCheckin: s.checkinLat != null,
       photoIds: s.photos.map((p) => p.id),
@@ -171,6 +181,11 @@ export function TripReportForm({
           &quot;Đã gặp&quot;.
           {isAdmin ? " Quản trị viên nộp hộ thì được duyệt luôn và không bắt buộc ảnh/định vị." : ""}
         </p>
+        {onlyMine && (
+          <p className="mt-2 rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs text-sky-300">
+            Bạn báo cáo các khách bạn đi gặp trong chuyến của {trip.employee.name}. Chuyến chỉ chuyển sang chờ duyệt khi mọi khách đã có báo cáo.
+          </p>
+        )}
         {trip.status === "NEEDS_REVISION" && trip.rejectReason && (
           <p className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
             Yêu cầu bổ sung: {trip.rejectReason}

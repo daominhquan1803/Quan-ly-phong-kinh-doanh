@@ -7,6 +7,7 @@ import { reportSchema, validateReportStops } from "@/lib/business-trip-report";
 import { notifyAdmins, notifyUser } from "@/lib/business-trip-notify";
 import { isWeekEntryLocked, snapToWeekStart, weekLockedMessage } from "@/lib/week-plan";
 import { PROVINCES } from "@/lib/vn-provinces";
+import { reportComplete, reportScope } from "@/lib/trip-report-scope";
 import { notifyAssigned, resolveStops, stopsCreateData } from "@/lib/business-trip-stops";
 
 export const dynamic = "force-dynamic";
@@ -123,8 +124,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
 
     if (action === "report") {
-      if (trip.employeeId !== session.user.id && !isAdmin) {
-        return NextResponse.json({ error: "Chỉ chủ đăng ký mới được nộp báo cáo" }, { status: 403 });
+      // Chủ đăng ký / admin nộp mọi điểm dừng; người đi gặp chỉ nộp điểm dừng của mình (lib/trip-report-scope.ts).
+      const scope = reportScope(trip, session.user.id, isAdmin);
+      if (scope.allowed.size === 0) {
+        return NextResponse.json({ error: "Chỉ chủ đăng ký, người đi gặp hoặc admin mới nộp báo cáo" }, { status: 403 });
       }
       if (trip.status !== "PENDING" && trip.status !== "NEEDS_REVISION") {
         return NextResponse.json({ error: "Đăng ký này không ở trạng thái nộp báo cáo" }, { status: 400 });
@@ -138,8 +141,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       }
       const stopIds = new Set(trip.stops.map((s) => s.id));
       const reported = new Set(rep.data.stops.map((s) => s.stopId));
-      if (reported.size !== rep.data.stops.length || [...reported].some((id) => !stopIds.has(id)) || reported.size !== stopIds.size) {
-        return NextResponse.json({ error: "Báo cáo phải có đủ từng khách của buổi đi (mỗi khách 1 lần)" }, { status: 400 });
+      // Mỗi điểm dừng 1 lần, chỉ điểm dừng mình được nộp, và đủ các điểm dừng bắt buộc của mình.
+      if (reported.size !== rep.data.stops.length || [...reported].some((id) => !scope.allowed.has(id)) || [...scope.required].some((id) => !reported.has(id))) {
+        return NextResponse.json({ error: "Báo cáo phải có đủ từng khách của mình trong buổi đi (mỗi khách 1 lần)" }, { status: 400 });
       }
 
       const photoRows = await prisma.businessTripPhoto.groupBy({
@@ -162,8 +166,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
           : []
       );
       validOwners.add(trip.employeeId);
+      // Điểm dừng có người đi gặp riêng: bước tiếp theo mặc định giao cho chính người đi gặp.
+      const attendeeOf = new Map(trip.stops.map((s) => [s.id, s.attendeeId ?? trip.employeeId]));
+      for (const id of attendeeOf.values()) validOwners.add(id);
 
       const now = new Date();
+      // Chỉ khi mọi điểm dừng đã có báo cáo thì chuyến mới chuyển sang chờ duyệt (người đi gặp nộp từng phần).
+      const complete = reportComplete(trip.stops, reported);
       const updated = await prisma.$transaction(async (tx) => {
         for (const s of rep.data.stops) {
           const hasNext = s.outcome === "MET" || s.outcome === "RESCHEDULED";
@@ -177,7 +186,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
               productInterest: s.productInterest?.trim() || null,
               nextAction: hasNext ? s.nextAction?.trim() || null : null,
               nextActionDue: hasNext && s.nextActionDue ? new Date(`${s.nextActionDue}T00:00:00+07:00`) : null,
-              nextActionOwnerId: hasNext ? (s.nextActionOwnerId && validOwners.has(s.nextActionOwnerId) ? s.nextActionOwnerId : trip.employeeId) : null,
+              nextActionOwnerId: hasNext ? (s.nextActionOwnerId && validOwners.has(s.nextActionOwnerId) ? s.nextActionOwnerId : attendeeOf.get(s.stopId) ?? trip.employeeId) : null,
               nextActionDoneAt: null,
               ...(s.checkin
                 ? { checkinLat: s.checkin.lat, checkinLng: s.checkin.lng, checkinAccuracyM: Math.round(s.checkin.accuracyM), checkinAt: now }
@@ -185,6 +194,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
             },
           });
         }
+        if (!complete) return null; // còn điểm dừng của người khác chưa báo cáo: giữ nguyên trạng thái chuyến
         return tx.businessTripRequest.update({
           where: { id: params.id },
           // Quản trị viên nộp hộ = chính người duyệt -> duyệt luôn.
@@ -197,7 +207,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         });
       });
 
-      if (!canApprove) {
+      if (complete && !canApprove) {
         await notifyAdmins({
           type: "TRIP_REVIEW_PENDING",
           title: "Báo cáo công tác chờ duyệt",
@@ -205,7 +215,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
           link: "/business-trips",
         });
       }
-      return NextResponse.json({ trip: updated });
+      return NextResponse.json({ trip: updated, complete });
     }
 
     // approve/reject/revise — chỉ ADMIN.

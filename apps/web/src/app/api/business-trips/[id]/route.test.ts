@@ -194,3 +194,39 @@ describe("sửa đăng ký: Tỉnh/TP bắt buộc", () => {
     expect(h.tripUpdate).not.toHaveBeenCalled();
   });
 });
+describe("người đi gặp tự nộp báo cáo điểm dừng của mình", () => {
+  const stop = (id: string, attendeeId: string | null, outcome: string | null = null) => ({ id, orderIndex: 1, attendeeId, outcome, checkinLat: null });
+  const two = (o: { s1?: string | null; s2?: string | null } = {}) =>
+    tripRow({ employeeId: "u1", stops: [stop("s1", "u1", o.s1 ?? null), stop("s2", "u2", o.s2 ?? null)] });
+  const rep = (stopId: string) => ({ action: "report", stops: [{ ...goodReport.stops[0], stopId }] });
+
+  it("người đi gặp nộp điểm dừng của mình: ghi điểm dừng đó, chuyến chưa chuyển chờ duyệt vì chủ đăng ký chưa báo cáo điểm dừng của họ", async () => {
+    h.auth.mockResolvedValue({ user: { id: "u2", role: "SALES" } });
+    h.tripFind.mockResolvedValue(two());
+    const res = await patch(rep("s2"));
+    expect(res.status).toBe(200);
+    expect(h.stopUpdate).toHaveBeenCalledTimes(1);
+    expect(h.stopUpdate.mock.calls[0][0].where).toEqual({ id: "s2" });
+    expect(h.stopUpdate.mock.calls[0][0].data.nextActionOwnerId).toBe("u2"); // bước tiếp theo giao cho chính người đi gặp
+    expect(h.tripUpdate).not.toHaveBeenCalled();
+    expect(h.notifMany).not.toHaveBeenCalled();
+    expect((await res.json()).complete).toBe(false);
+  });
+  it("điểm dừng cuối cùng được báo cáo (người kia đã nộp) thì chuyến chuyển chờ duyệt và báo admin", async () => {
+    h.auth.mockResolvedValue({ user: { id: "u1", role: "SALES" } });
+    h.tripFind.mockResolvedValue(two({ s2: "MET" })); // Dung đã tự nộp s2
+    const res = await patch(rep("s1")); // chủ đăng ký chỉ cần nộp s1
+    expect(res.status).toBe(200);
+    expect(h.stopUpdate).toHaveBeenCalledTimes(1);
+    expect(h.tripUpdate.mock.calls[0][0].data).toMatchObject({ status: "REPORTED" });
+    expect(h.notifMany).toHaveBeenCalledTimes(1);
+  });
+  it("THẤT BẠI: người đi gặp nộp điểm dừng của người khác hoặc thiếu điểm dừng của mình; người không có điểm dừng nào", async () => {
+    h.tripFind.mockResolvedValue(two());
+    h.auth.mockResolvedValue({ user: { id: "u2", role: "SALES" } });
+    expect((await patch(rep("s1"))).status).toBe(400);
+    h.auth.mockResolvedValue({ user: { id: "u3", role: "SALES" } });
+    expect((await patch(rep("s2"))).status).toBe(403);
+    expect(h.stopUpdate).not.toHaveBeenCalled();
+  });
+});

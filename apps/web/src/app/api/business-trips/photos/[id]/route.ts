@@ -13,6 +13,8 @@ async function loadPhoto(id: string) {
       data: true,
       stop: {
         select: {
+          attendeeId: true,
+          supporters: { select: { employeeId: true } },
           trip: { select: { employeeId: true, status: true, supporters: { select: { employeeId: true } } } },
         },
       },
@@ -20,7 +22,7 @@ async function loadPhoto(id: string) {
   });
 }
 
-/** Xem ảnh — chủ đăng ký, người đi hỗ trợ và Quản trị viên. */
+/** Xem ảnh — chủ đăng ký, người đi hỗ trợ (cả chuyến hoặc của điểm dừng), người đi gặp điểm dừng và Quản trị viên. */
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const session = await requireSession();
@@ -30,6 +32,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     const allowed =
       session.user.role === "ADMIN" ||
       t.employeeId === session.user.id ||
+      photo.stop.attendeeId === session.user.id ||
+      photo.stop.supporters.some((s) => s.employeeId === session.user.id) ||
       t.supporters.some((s) => s.employeeId === session.user.id);
     if (!allowed) return NextResponse.json({ error: "Không có quyền xem ảnh này" }, { status: 403 });
     return new NextResponse(new Uint8Array(photo.data), {
@@ -53,8 +57,8 @@ export async function DELETE(_req: NextRequest, { params }: { params: { id: stri
     const photo = await loadPhoto(params.id);
     if (!photo) return NextResponse.json({ error: "Không tìm thấy ảnh" }, { status: 404 });
     const t = photo.stop.trip;
-    if (t.employeeId !== session.user.id && session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Chỉ chủ đăng ký mới được xoá ảnh" }, { status: 403 });
+    if (t.employeeId !== session.user.id && photo.stop.attendeeId !== session.user.id && session.user.role !== "ADMIN") {
+      return NextResponse.json({ error: "Chỉ chủ đăng ký hoặc người đi gặp mới được xoá ảnh" }, { status: 403 });
     }
     if (t.status !== "PENDING" && t.status !== "NEEDS_REVISION") {
       return NextResponse.json({ error: "Báo cáo đã nộp/duyệt, không xoá ảnh được" }, { status: 400 });

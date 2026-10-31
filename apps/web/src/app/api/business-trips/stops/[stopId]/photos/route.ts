@@ -5,18 +5,18 @@ import { MAX_PHOTOS_PER_STOP, MAX_PHOTO_BYTES, sniffImageMime } from "@/lib/busi
 
 export const dynamic = "force-dynamic";
 
-/** Tải 1 ảnh chứng minh buổi gặp lên cho 1 khách (multipart, field "file") — chỉ chủ đăng ký/Quản trị viên, khi chưa nộp báo cáo hoặc đang được yêu cầu bổ sung. */
+/** Tải 1 ảnh chứng minh buổi gặp lên cho 1 khách (multipart, field "file") — chủ đăng ký, người đi gặp điểm dừng đó hoặc Quản trị viên, khi chưa nộp báo cáo hoặc đang được yêu cầu bổ sung. */
 export async function POST(req: NextRequest, { params }: { params: { stopId: string } }) {
   try {
     const session = await requireSession();
     const stop = await prisma.businessTripStop.findUnique({
       where: { id: params.stopId },
-      select: { id: true, trip: { select: { employeeId: true, status: true } }, _count: { select: { photos: true } } },
+      select: { id: true, attendeeId: true, trip: { select: { employeeId: true, status: true } }, _count: { select: { photos: true } } },
     });
     if (!stop) return NextResponse.json({ error: "Không tìm thấy khách hàng này" }, { status: 404 });
     const isAdmin = session.user.role === "ADMIN";
-    if (stop.trip.employeeId !== session.user.id && !isAdmin) {
-      return NextResponse.json({ error: "Chỉ chủ đăng ký mới được tải ảnh" }, { status: 403 });
+    if (stop.trip.employeeId !== session.user.id && stop.attendeeId !== session.user.id && !isAdmin) {
+      return NextResponse.json({ error: "Chỉ chủ đăng ký hoặc người đi gặp mới được tải ảnh" }, { status: 403 });
     }
     if (stop.trip.status !== "PENDING" && stop.trip.status !== "NEEDS_REVISION") {
       return NextResponse.json({ error: "Báo cáo đã nộp/duyệt, không tải thêm ảnh được" }, { status: 400 });

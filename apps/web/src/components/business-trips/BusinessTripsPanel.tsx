@@ -6,7 +6,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn, formatDateVN, toDateInputValueVN } from "@/lib/utils";
 import { EmployeeFilterSelect } from "@/components/shared/EmployeeFilterSelect";
 import { buildGoogleMapsMultiStopUrl } from "@/lib/business-trip-maps";
-import { TRIP_STATUS_LABEL } from "@/lib/business-trip-report";
+import { OUTCOME_LABEL, TRIP_STATUS_LABEL } from "@/lib/business-trip-report";
 import { Check, X, Trash2, Plus, MapPin, ArrowUp, ArrowDown, Pencil, FileText, ChevronDown, ChevronUp, Undo2 } from "lucide-react";
 import { TripReportForm } from "./TripReportForm";
 import { TripReportView } from "./TripReportView";
@@ -146,6 +146,7 @@ export function BusinessTripsPanel({ isAdmin, canApprove = isAdmin }: { isAdmin:
           key={reportingTrip.id}
           trip={reportingTrip}
           isAdmin={isAdmin}
+          currentUserId={session?.user?.id}
           onDone={() => {
             setReportingTrip(null);
             invalidate();
@@ -225,6 +226,7 @@ export function BusinessTripsPanel({ isAdmin, canApprove = isAdmin }: { isAdmin:
                                 <p className="text-[11px] text-sky-300">
                                   Đi gặp: {s.attendee.name}
                                   {(s.supporters?.length ?? 0) > 0 && <span className="text-muted-foreground"> · Hỗ trợ: {s.supporters!.map((p) => p.employee.name).join(", ")}</span>}
+                                  <span className={s.outcome ? "text-emerald-300" : "text-amber-400"}> · {s.outcome ? `Báo cáo: ${OUTCOME_LABEL[s.outcome]}` : "chưa báo cáo"}</span>
                                 </p>
                               )}
                               <p className="text-xs text-ink2" title={s.content}>
@@ -258,7 +260,7 @@ export function BusinessTripsPanel({ isAdmin, canApprove = isAdmin }: { isAdmin:
                       </td>
                       <td className="px-4 py-2.5 text-right whitespace-nowrap">
                         <span className="inline-flex flex-wrap items-center justify-end gap-2">
-                          {(t.status === "PENDING" || t.status === "NEEDS_REVISION") && (isAdmin || isOwner) && visitedOrToday && (
+                          {(t.status === "PENDING" || t.status === "NEEDS_REVISION") && (isAdmin || isOwner || t.stops.some((s) => s.attendee?.id === session?.user?.id)) && visitedOrToday && (
                             t.entryLocked && !isAdmin ? (
                               <span className="text-[11px] text-muted2" title="Quá hạn nộp báo cáo — liên hệ Quản trị viên">
                                 Đã khoá
