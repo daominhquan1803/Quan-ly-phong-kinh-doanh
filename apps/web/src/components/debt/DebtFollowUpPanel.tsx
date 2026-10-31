@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, BellRing } from "lucide-react";
 import { cn, formatCurrencyVND, formatDateVN, toDateInputValueVN } from "@/lib/utils";
+import { filterFollowUp, statusLabel, statusOptions } from "@/lib/debt-followup-filter";
 
 interface FollowUpRow {
   employeeId: string;
@@ -54,6 +55,9 @@ export function DebtFollowUpPanel({ isAdmin, employeeId }: { isAdmin: boolean; e
   const today = toDateInputValueVN(new Date());
   const [date, setDate] = useState(today);
   const [filter, setFilter] = useState<Filter>("all");
+  const [employee, setEmployee] = useState("");
+  const [customer, setCustomer] = useState("");
+  const [status, setStatus] = useState("");
 
   // queryKey bắt đầu bằng "debt-summary" để mọi chỗ đã invalidate ["debt-summary"] (đổi ngày dự kiến, nhập tiền về...) tự làm mới bảng này.
   const { data, isLoading, isError } = useQuery({
@@ -67,7 +71,20 @@ export function DebtFollowUpPanel({ isAdmin, employeeId }: { isAdmin: boolean; e
     },
   });
 
-  const shown = (data?.invoices ?? []).filter((i) => filter === "all" || i.kind === filter);
+  const all = data?.invoices ?? [];
+  // Lựa chọn trong danh sách thả xuống lấy từ cả tuần đang xem; lựa chọn cũ không còn trong tuần mới thì coi như "Tất cả".
+  const employees = Array.from(new Set(all.map((i) => i.employeeName))).sort((a, b) => a.localeCompare(b, "vi"));
+  const customers = Array.from(new Map(all.map((i) => [i.customerCode, i.customerName])).entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  const statuses = statusOptions(all);
+  const f = {
+    employee: employees.includes(employee) ? employee : "",
+    customer: customers.some(([code]) => code === customer) ? customer : "",
+    status: statuses.includes(status) ? status : "",
+  };
+  const base = filterFollowUp(all, { ...f, status: "" });
+  const shown = filterFollowUp(all, f).filter((i) => filter === "all" || i.kind === filter);
+  const filtering = !!(f.employee || f.customer || f.status);
+  const sum = shown.reduce((s, i) => ({ need: s.need + i.openAtStart, got: s.got + i.collected, left: s.left + i.remaining }), { need: 0, got: 0, left: 0 });
   const t = data?.totals;
 
   return (
@@ -171,9 +188,9 @@ export function DebtFollowUpPanel({ isAdmin, employeeId }: { isAdmin: boolean; e
           <div className="flex flex-wrap items-center gap-2 text-xs">
             {(
               [
-                ["all", `Tất cả (${data.invoices.length})`],
-                ["slipped", `Trượt (${t.slippedCount})`],
-                ["planned", `Kế hoạch tuần (${t.plannedCount})`],
+                ["all", `Tất cả (${base.length})`],
+                ["slipped", `Trượt (${base.filter((i) => i.kind === "slipped").length})`],
+                ["planned", `Kế hoạch tuần (${base.filter((i) => i.kind === "planned").length})`],
               ] as [Filter, string][]
             ).map(([k, label]) => (
               <button
@@ -188,7 +205,67 @@ export function DebtFollowUpPanel({ isAdmin, employeeId }: { isAdmin: boolean; e
                 {label}
               </button>
             ))}
+            {isAdmin && (
+              <select
+                value={f.employee}
+                onChange={(e) => setEmployee(e.target.value)}
+                aria-label="Lọc theo nhân viên"
+                className="rounded-lg border border-white/10 bg-card px-2.5 py-1.5 text-ink focus:outline-none focus:ring-2 focus:ring-amber-500"
+              >
+                <option value="">Tất cả nhân viên</option>
+                {employees.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            )}
+            <select
+              value={f.customer}
+              onChange={(e) => setCustomer(e.target.value)}
+              aria-label="Lọc theo khách hàng"
+              className="rounded-lg border border-white/10 bg-card px-2.5 py-1.5 text-ink focus:outline-none focus:ring-2 focus:ring-amber-500 max-w-[220px]"
+            >
+              <option value="">Tất cả khách hàng</option>
+              {customers.map(([code, name]) => (
+                <option key={code} value={code}>
+                  {code} — {name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={f.status}
+              onChange={(e) => setStatus(e.target.value)}
+              aria-label="Lọc theo tình trạng"
+              className="rounded-lg border border-white/10 bg-card px-2.5 py-1.5 text-ink focus:outline-none focus:ring-2 focus:ring-amber-500"
+            >
+              <option value="">Mọi tình trạng</option>
+              {statuses.map((s) => (
+                <option key={s} value={s}>
+                  {statusLabel(s)}
+                </option>
+              ))}
+            </select>
+            {filtering && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEmployee("");
+                  setCustomer("");
+                  setStatus("");
+                }}
+                className="text-amber-400 hover:text-amber-300 underline underline-offset-2"
+              >
+                Bỏ lọc
+              </button>
+            )}
           </div>
+          {filtering && (
+            <p className="text-xs text-muted2">
+              {shown.length} hoá đơn · Cần thu <b className="font-mono text-ink">{formatCurrencyVND(sum.need)}</b> · Đã thu{" "}
+              <b className="font-mono text-emerald-400">{formatCurrencyVND(sum.got)}</b> · Còn phải thu <b className="font-mono text-alert">{formatCurrencyVND(sum.left)}</b>
+            </p>
+          )}
 
           <div className="rounded-xl border border-white/5 bg-black/40 overflow-x-auto">
             <table className="min-w-full text-xs">
