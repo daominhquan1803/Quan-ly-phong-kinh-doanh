@@ -45,6 +45,9 @@ export const defectBodySchema = z
 
 export type DefectBody = z.infer<typeof defectBodySchema>;
 
+/** Loại xử lý khi đóng: đổi hàng theo biên bản / huỷ tại kho khách + trừ công nợ (kế toán điều chỉnh ở AMIS) / khác. */
+export const DEFECT_RESOLUTION_TYPES = ["REPLACED", "DESTROYED_DEDUCT_DEBT", "OTHER"] as const;
+
 export const closeSchema = z
   .object({
     action: z.literal("close"),
@@ -52,10 +55,16 @@ export const closeSchema = z
     invoiceAdjusted: z.boolean({ required_error: "Chọn có sửa hoá đơn bán hàng hay không" }),
     adjustedInvoiceNumbers: z.string().trim().max(500).optional().nullable(),
     invoiceAdjustNote: z.string().trim().max(5000).optional().nullable(),
+    resolutionType: z.enum(DEFECT_RESOLUTION_TYPES).default("OTHER"),
+    deductAmount: z.coerce.number().positive("Số tiền trừ phải lớn hơn 0").max(1e13).optional().nullable(),
   })
   .refine((b) => !b.invoiceAdjusted || (!!b.adjustedInvoiceNumbers && !!b.invoiceAdjustNote), {
     message: "Có sửa hoá đơn thì ghi số hoá đơn và sửa như thế nào",
     path: ["adjustedInvoiceNumbers"],
+  })
+  .refine((b) => b.resolutionType !== "DESTROYED_DEDUCT_DEBT" || (!!b.deductAmount && b.invoiceAdjusted && !!b.adjustedInvoiceNumbers), {
+    message: "Huỷ tại kho khách, trừ công nợ: nhập số tiền trừ và số hoá đơn điều chỉnh",
+    path: ["deductAmount"],
   });
 
 /** Ngày "YYYY-MM-DD" theo giờ VN -> Date 0h VN. */
@@ -75,4 +84,8 @@ export const defectInclude = {
   shipmentSlip: { select: { id: true, slipNumber: true, slipDate: true } },
   createdBy: { select: { name: true } },
   closedBy: { select: { name: true } },
+  replacements: {
+    select: { id: true, defectReportItemId: true, quantity: true, shipmentSlipItem: { select: { shipmentSlip: { select: { id: true, slipNumber: true, slipDate: true } } } } },
+    orderBy: { confirmedAt: "asc" as const },
+  },
 } satisfies Prisma.DefectReportInclude;

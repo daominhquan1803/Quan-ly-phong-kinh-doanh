@@ -16,6 +16,7 @@ interface Issue {
   kind: "NO_PO" | "NO_QTY" | "PO_NOT_FOUND" | "CODE_NOT_IN_PO";
   reason: string;
   suggestions: { poCode: string; itemCode: string; label: string }[];
+  defectCandidates: { defectReportId: string; reportNumber: string; customerName: string | null; itemId: string; itemCode: string | null; itemName: string; remaining: number; sameCustomer: boolean }[];
 }
 
 const PAGE = 8;
@@ -42,6 +43,7 @@ export function SlipIssuesPanel() {
     queryClient.invalidateQueries({ queryKey: ["shipment-slip-issues"] });
     queryClient.invalidateQueries({ queryKey: ["shipment-slips"] });
     queryClient.invalidateQueries({ queryKey: ["shipping-status-summary"] });
+    queryClient.invalidateQueries({ queryKey: ["defects"] });
   };
 
   return (
@@ -86,6 +88,24 @@ function IssueRow({ issue, onDone }: { issue: Issue; onDone: () => void }) {
     },
     onSuccess: onDone,
     onError: (e) => setError(e instanceof Error ? e.message : "Không lưu được"),
+  });
+
+  const cands = issue.defectCandidates ?? [];
+  const [defectItemId, setDefectItemId] = useState(cands[0]?.itemId ?? "");
+  const picked = cands.find((c) => c.itemId === defectItemId);
+  const [replaceQty, setReplaceQty] = useState(String(Math.min(issue.qtyActual ?? 0, cands[0]?.remaining ?? 0) || ""));
+  const replace = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/shipment-slips/items/${issue.itemId}/defect-replacement`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ defectReportItemId: defectItemId, quantity: Number(replaceQty) }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? "Không xác nhận được");
+    },
+    onSuccess: onDone,
+    onError: (e) => setError(e instanceof Error ? e.message : "Không xác nhận được"),
   });
 
   const canSave = po.trim() !== "" && code.trim() !== "" && (po.trim() !== issue.poSaleNumber || code.trim() !== issue.itemCode);
@@ -144,14 +164,47 @@ function IssueRow({ issue, onDone }: { issue: Issue; onDone: () => void }) {
           ))}
         </div>
       )}
+      {cands.length > 0 && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-2">
+          <span className="font-semibold text-emerald-300">Đổi lỗi theo biên bản:</span>
+          <select
+            value={defectItemId}
+            onChange={(e) => {
+              setDefectItemId(e.target.value);
+              const c = cands.find((x) => x.itemId === e.target.value);
+              setReplaceQty(String(Math.min(issue.qtyActual ?? 0, c?.remaining ?? 0) || ""));
+            }}
+            className={`${inputCls} w-auto`}
+            aria-label="Biên bản hàng lỗi"
+          >
+            {cands.map((c) => (
+              <option key={c.itemId} value={c.itemId}>
+                {c.reportNumber} · {c.customerName ?? "—"} · còn thiếu {c.remaining}
+                {c.sameCustomer ? "" : " (khác khách)"}
+              </option>
+            ))}
+          </select>
+          <input value={replaceQty} onChange={(e) => setReplaceQty(e.target.value)} inputMode="decimal" className={`${inputCls} w-24`} aria-label="SL đổi" />
+          <button
+            disabled={!picked || !(Number(replaceQty) > 0) || replace.isPending}
+            onClick={() => {
+              setError(null);
+              replace.mutate();
+            }}
+            className="rounded-lg bg-emerald-600 px-3 py-1 text-xs font-bold text-white disabled:opacity-40"
+          >
+            {replace.isPending ? "Đang lưu..." : "Xác nhận đổi lỗi"}
+          </button>
+        </div>
+      )}
       <div className="mt-2 flex items-center gap-3">
         <button
           disabled={patch.isPending}
           onClick={() => patch.mutate({ ignored: true })}
           className="text-[11px] font-semibold text-muted-foreground underline hover:text-ink"
-          title="Hàng bù hao/tặng/đổi lỗi hoặc không có PO — không báo nữa"
+          title="Hàng bù hao (tặng khách) hoặc không có PO — không báo nữa, không tính doanh số"
         >
-          Không cần PO / bỏ qua
+          Hàng tặng / bù hao (bỏ qua)
         </button>
         {error && <span className="text-alert">{error}</span>}
       </div>

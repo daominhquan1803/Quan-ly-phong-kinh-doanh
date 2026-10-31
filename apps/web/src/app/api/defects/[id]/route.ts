@@ -32,14 +32,14 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const body = await req.json().catch(() => null);
-    const current = await prisma.defectReport.findUnique({ where: { id: params.id }, select: { id: true, status: true } });
+    const current = await prisma.defectReport.findUnique({ where: { id: params.id }, select: { id: true, status: true, _count: { select: { replacements: true } } } });
 
     if (body?.action === "reopen") {
       await requireSystemAdmin();
       if (!current) return NextResponse.json({ error: "Không tìm thấy biên bản" }, { status: 404 });
       const defect = await prisma.defectReport.update({
         where: { id: params.id },
-        data: { status: "OPEN", closedAt: null, closedById: null },
+        data: { status: "OPEN", closedAt: null, closedById: null, resolutionType: null, deductAmount: null },
         include: defectInclude,
       });
       return NextResponse.json({ defect });
@@ -69,6 +69,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
           invoiceAdjusted: c.invoiceAdjusted,
           adjustedInvoiceNumbers: c.invoiceAdjusted ? c.adjustedInvoiceNumbers || null : null,
           invoiceAdjustNote: c.invoiceAdjusted ? c.invoiceAdjustNote || null : null,
+          resolutionType: c.resolutionType,
+          deductAmount: c.resolutionType === "DESTROYED_DEDUCT_DEBT" ? c.deductAmount ?? null : null,
         },
         include: defectInclude,
       });
@@ -76,6 +78,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
 
     if (current.status === "CLOSED") return NextResponse.json({ error: "Biên bản đã đóng, mở lại trước khi sửa" }, { status: 400 });
+    if ((current._count?.replacements ?? 0) > 0) return NextResponse.json({ error: "Biên bản đã có phiếu đổi lỗi, không sửa được danh sách hàng" }, { status: 400 });
     const parsed = defectBodySchema.safeParse(body);
     if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Dữ liệu không hợp lệ" }, { status: 400 });
     const b = parsed.data;

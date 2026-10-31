@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@hoanggia/db";
 import { requireAdmin, ForbiddenError, UnauthorizedError } from "@/lib/rbac";
 import { diagnoseSlipItem, PoLineLite } from "@/lib/shipment-slip-issues";
+import { findDefectCandidates, OpenDefectItem } from "@/lib/defect-replacement";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     await requireAdmin();
-    const [items, poLines] = await Promise.all([
+    const [items, poLines, openDefects] = await Promise.all([
       prisma.shipmentSlipItem.findMany({
         where: { issueIgnored: false },
         select: {
@@ -22,7 +23,30 @@ export async function GET() {
         },
       }),
       prisma.poTrackingLine.findMany({ select: { poCode: true, itemCode: true, itemName: true, poQuantity: true, totalDeliveredQty: true } }),
+      prisma.defectReport.findMany({
+        where: { status: "OPEN" },
+        select: {
+          id: true,
+          reportNumber: true,
+          customerName: true,
+          items: { select: { id: true, itemCode: true, itemName: true, defectQty: true } },
+          replacements: { select: { defectReportItemId: true, quantity: true } },
+        },
+      }),
     ]);
+    // Mã hàng lỗi còn thiếu của biên bản đang mở — để gợi ý "đổi lỗi theo biên bản" cho dòng phiếu không có PO.
+    const openItems: OpenDefectItem[] = openDefects.flatMap((d) =>
+      d.items.map((i) => ({
+        defectReportId: d.id,
+        reportNumber: d.reportNumber,
+        customerName: d.customerName,
+        itemId: i.id,
+        itemCode: i.itemCode,
+        itemName: i.itemName,
+        defectQty: Number(i.defectQty),
+        replacedQty: d.replacements.filter((r) => r.defectReportItemId === i.id).reduce((s, r) => s + Number(r.quantity), 0),
+      }))
+    );
     const allLines: PoLineLite[] = poLines.map((l) => ({
       poCode: l.poCode,
       itemCode: l.itemCode,
@@ -36,7 +60,10 @@ export async function GET() {
     const issues = items
       .map((it) => {
         const issue = diagnoseSlipItem({ ...it, qtyActual: it.qtyActual != null ? Number(it.qtyActual) : null }, linesByPo, allLines);
-        return issue && { itemId: it.id, slip: it.shipmentSlip, itemCode: it.itemCode, itemName: it.itemName, poSaleNumber: it.poSaleNumber, qtyActual: it.qtyActual != null ? Number(it.qtyActual) : null, ...issue };
+        return issue && { itemId: it.id, slip: it.shipmentSlip, itemCode: it.itemCode, itemName: it.itemName, poSaleNumber: it.poSaleNumber, qtyActual: it.qtyActual != null ? Number(it.qtyActual) : null,
+          ...issue,
+          defectCandidates: issue.kind === "NO_PO" ? findDefectCandidates({ itemCode: it.itemCode, itemName: it.itemName, customerName: it.shipmentSlip.customerName }, openItems) : [],
+        };
       })
       .filter((x): x is NonNullable<typeof x> => !!x)
       .sort((a, b) => (b.slip.slipDate?.getTime() ?? 0) - (a.slip.slipDate?.getTime() ?? 0));

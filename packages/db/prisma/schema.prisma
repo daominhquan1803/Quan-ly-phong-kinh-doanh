@@ -153,6 +153,7 @@ model User {
   defectReports          DefectReport[]              @relation("DefectEmployee")
   defectsCreated         DefectReport[]              @relation("DefectCreatedBy")
   defectsClosed          DefectReport[]              @relation("DefectClosedBy")
+  defectReplacementsConfirmed DefectReplacement[]    @relation("DefectReplacementConfirmedBy")
   defectResponsibilities DefectResponsible[]         @relation("DefectResponsibleUser")
   delayReasonsCreated    DeliveryDelayReason[]       @relation("DelayReasonCreatedBy")
   delayReasonsReviewed   DeliveryDelayReason[]       @relation("DelayReasonReviewedBy")
@@ -554,6 +555,7 @@ model ShipmentSlipItem {
   unitPrice          Decimal?     @db.Decimal(18, 2)
   // Admin bấm "Không cần PO" (hàng bù hao/tặng/đổi lỗi...) → không còn báo ở bảng "Dòng phiếu cần sửa" trang Phiếu đi hàng.
   issueIgnored       Boolean      @default(false)
+  defectReplacements DefectReplacement[]
 
   @@map("shipment_slip_items")
 }
@@ -1050,6 +1052,9 @@ model DefectReport {
   invoiceAdjusted        Boolean?
   adjustedInvoiceNumbers String?
   invoiceAdjustNote      String?
+  // Loại xử lý khi đóng: đổi hàng theo biên bản / huỷ tại kho khách + trừ công nợ (kế toán điều chỉnh ở AMIS) / khác.
+  resolutionType         DefectResolutionType?
+  deductAmount           Decimal?              @db.Decimal(18, 2)
 
   createdById String
   createdBy   User     @relation("DefectCreatedBy", fields: [createdById], references: [id])
@@ -1059,6 +1064,7 @@ model DefectReport {
   items        DefectReportItem[]
   responsibles DefectResponsible[]
   photos       DefectPhoto[]
+  replacements DefectReplacement[]
 
   @@index([employeeId])
   @@index([reportDate])
@@ -1082,9 +1088,36 @@ model DefectReportItem {
   unit           String?
   deliveredQty   Decimal?     @db.Decimal(14, 2)
   defectQty      Decimal      @db.Decimal(14, 2)
+  replacements   DefectReplacement[]
 
   @@index([defectReportId])
   @@map("defect_report_items")
+}
+
+enum DefectResolutionType {
+  REPLACED
+  DESTROYED_DEDUCT_DEBT
+  OTHER
+}
+
+/// Đợt đổi lỗi: 1 dòng phiếu đi hàng (không có PO) giao bù cho 1 mã hàng lỗi của biên bản. Admin xác nhận.
+model DefectReplacement {
+  id                 String           @id @default(cuid())
+  defectReportId     String
+  defectReport       DefectReport     @relation(fields: [defectReportId], references: [id], onDelete: Cascade)
+  defectReportItemId String
+  defectReportItem   DefectReportItem @relation(fields: [defectReportItemId], references: [id], onDelete: Cascade)
+  shipmentSlipItemId String
+  shipmentSlipItem   ShipmentSlipItem @relation(fields: [shipmentSlipItemId], references: [id], onDelete: Cascade)
+  quantity           Decimal          @db.Decimal(14, 2)
+  confirmedById      String
+  confirmedBy        User             @relation("DefectReplacementConfirmedBy", fields: [confirmedById], references: [id])
+  confirmedAt        DateTime         @default(now())
+
+  @@index([defectReportId])
+  @@index([defectReportItemId])
+  @@index([shipmentSlipItemId])
+  @@map("defect_replacements")
 }
 
 /// Người chịu trách nhiệm (NVKD / Admin kinh doanh) — mỗi biên bản tính vào KPI tháng của từng người ở đây.

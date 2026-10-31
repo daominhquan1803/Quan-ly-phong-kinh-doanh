@@ -128,3 +128,40 @@ describe("đóng / mở lại / xoá", () => {
     expect((await DELETE(req("/api/defects/d1", "DELETE"), { params: { id: "d1" } })).status).toBe(200);
   });
 });
+
+describe("đóng biên bản: huỷ tại kho khách, trừ công nợ", () => {
+  const closeBody = {
+    action: "close",
+    resolution: "Khách giữ hàng, trừ vào hoá đơn",
+    invoiceAdjusted: true,
+    adjustedInvoiceNumbers: "0003",
+    invoiceAdjustNote: "giảm 5tr",
+    resolutionType: "DESTROYED_DEDUCT_DEBT",
+    deductAmount: 5000000,
+  };
+  const patch = (b: unknown) => PATCH(req("/api/defects/d1", "PATCH", b), { params: { id: "d1" } });
+  beforeEach(() => {
+    h.auth.mockResolvedValue(ADMIN);
+    h.findUnique.mockResolvedValue({ id: "d1", status: "OPEN" });
+  });
+
+  it("đủ số tiền + hoá đơn thì đóng, lưu loại xử lý", async () => {
+    expect((await patch(closeBody)).status).toBe(200);
+    expect(h.update.mock.calls[0][0].data).toMatchObject({ status: "CLOSED", resolutionType: "DESTROYED_DEDUCT_DEBT", deductAmount: 5000000 });
+  });
+  it("THẤT BẠI: thiếu số tiền trừ hoặc không sửa hoá đơn -> 400", async () => {
+    for (const bad of [{ ...closeBody, deductAmount: null }, { ...closeBody, invoiceAdjusted: false }, { ...closeBody, adjustedInvoiceNumbers: "" }]) {
+      expect((await patch(bad)).status).toBe(400);
+    }
+    expect(h.update).not.toHaveBeenCalled();
+  });
+  it("loại khác không lưu số tiền trừ", async () => {
+    await patch({ action: "close", resolution: "Đã xử lý", invoiceAdjusted: false });
+    expect(h.update.mock.calls[0][0].data).toMatchObject({ resolutionType: "OTHER", deductAmount: null });
+  });
+  it("biên bản đã có phiếu đổi lỗi thì không sửa danh sách hàng", async () => {
+    h.findUnique.mockResolvedValue({ id: "d1", status: "OPEN", _count: { replacements: 1 } });
+    expect((await patch(valid)).status).toBe(400);
+    expect(h.update).not.toHaveBeenCalled();
+  });
+});

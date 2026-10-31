@@ -185,8 +185,12 @@ export function DefectsPage({ canEdit, canManage }: { canEdit: boolean; canManag
   );
 }
 
+const RESOLUTION_LABEL = { REPLACED: "Đổi hàng theo biên bản", DESTROYED_DEDUCT_DEBT: "Huỷ tại kho khách, trừ công nợ", OTHER: "Khác" } as const;
+
 function DefectDetail({ d, canEdit, canManage, onEdit, onChanged }: { d: DefectRow; canEdit: boolean; canManage: boolean; onEdit: () => void; onChanged: () => void }) {
   const [closing, setClosing] = useState(false);
+  const [resolutionType, setResolutionType] = useState<"OTHER" | "REPLACED" | "DESTROYED_DEDUCT_DEBT">("OTHER");
+  const [deductAmount, setDeductAmount] = useState("");
   const [resolution, setResolution] = useState("");
   const [invoiceAdjusted, setInvoiceAdjusted] = useState<boolean | null>(null);
   const [invoiceNumbers, setInvoiceNumbers] = useState("");
@@ -228,6 +232,7 @@ function DefectDetail({ d, canEdit, canManage, onEdit, onChanged }: { d: DefectR
                 <th className="text-left font-medium py-1">Tên hàng</th>
                 <th className="text-right font-medium py-1">SL giao</th>
                 <th className="text-right font-medium py-1">SL lỗi</th>
+                <th className="text-right font-medium py-1">Đã đổi</th>
               </tr>
             </thead>
             <tbody>
@@ -241,10 +246,21 @@ function DefectDetail({ d, canEdit, canManage, onEdit, onChanged }: { d: DefectR
                   <td className="py-1 text-right font-bold text-alert">
                     {fmtQty(i.defectQty)} {i.unit ?? ""}
                   </td>
+                  <td className="py-1 text-right">
+                    {fmtQty(String(d.replacements.filter((r) => r.defectReportItemId === i.id).reduce((s, r) => s + Number(r.quantity), 0)))} / {fmtQty(i.defectQty)}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {d.replacements.length > 0 && (
+            <p className="text-xs text-muted2">
+              Phiếu đổi lỗi:{" "}
+              {Array.from(new Map(d.replacements.map((r) => [r.shipmentSlipItem.shipmentSlip.id, r.shipmentSlipItem.shipmentSlip])).values())
+                .map((s) => s.slipNumber)
+                .join(", ")}
+            </p>
+          )}
           <p className="text-xs text-muted2">
             Lập bởi {d.createdBy.name} · Nhận khiếu nại {fmtDateTime(d.receivedAt ?? d.createdAt)} ·{" "}
             {d.respondedAt ? `Đã phản hồi khách ${fmtDateTime(d.respondedAt)}` : <span className="text-amber-300">Chưa phản hồi khách (hạn 24h)</span>}
@@ -283,6 +299,17 @@ function DefectDetail({ d, canEdit, canManage, onEdit, onChanged }: { d: DefectR
           <p className="font-semibold text-emerald-300">
             Đã đóng {formatDateVN(d.closedAt)} {d.closedBy ? `bởi ${d.closedBy.name}` : ""}
           </p>
+          {d.resolutionType && (
+            <p>
+              <span className="text-muted2">Loại xử lý:</span> {RESOLUTION_LABEL[d.resolutionType]}
+              {d.resolutionType === "DESTROYED_DEDUCT_DEBT" && d.deductAmount ? (
+                <>
+                  {" "}
+                  — trừ <b>{Number(d.deductAmount).toLocaleString("vi-VN")}đ</b>
+                </>
+              ) : null}
+            </p>
+          )}
           <p>
             <span className="text-muted2">Cách xử lý:</span> {d.resolution}
           </p>
@@ -303,16 +330,38 @@ function DefectDetail({ d, canEdit, canManage, onEdit, onChanged }: { d: DefectR
         <div className="rounded-xl border border-amber-500/30 p-4 space-y-3">
           <p className="text-sm font-semibold">Đóng biên bản {d.reportNumber}</p>
           <div className="space-y-1">
+            <p className="text-xs text-muted2">Loại xử lý *</p>
+            <select
+              className={input}
+              value={resolutionType}
+              onChange={(e) => {
+                const v = e.target.value as typeof resolutionType;
+                setResolutionType(v);
+                if (v === "DESTROYED_DEDUCT_DEBT") setInvoiceAdjusted(true);
+              }}
+            >
+              <option value="OTHER">Khác</option>
+              <option value="REPLACED">Đổi hàng theo biên bản</option>
+              <option value="DESTROYED_DEDUCT_DEBT">Huỷ tại kho khách, trừ công nợ</option>
+            </select>
+          </div>
+          {resolutionType === "DESTROYED_DEDUCT_DEBT" && (
+            <div className="space-y-1">
+              <p className="text-xs text-muted2">Số tiền trừ công nợ (đ) *</p>
+              <input className={input} inputMode="decimal" value={deductAmount} onChange={(e) => setDeductAmount(e.target.value)} placeholder="vd 5000000" />
+            </div>
+          )}
+          <div className="space-y-1">
             <p className="text-xs text-muted2">Đã xử lý thế nào *</p>
             <textarea className={`${input} min-h-[70px]`} value={resolution} onChange={(e) => setResolution(e.target.value)} />
           </div>
           <div className="flex items-center gap-4 text-sm">
             <span className="text-xs text-muted2">Có sửa hoá đơn bán hàng không? *</span>
             <label className="flex items-center gap-1.5">
-              <input type="radio" checked={invoiceAdjusted === false} onChange={() => setInvoiceAdjusted(false)} /> Không
+              <input type="radio" disabled={resolutionType === "DESTROYED_DEDUCT_DEBT"} checked={invoiceAdjusted === false} onChange={() => setInvoiceAdjusted(false)} /> Không
             </label>
             <label className="flex items-center gap-1.5">
-              <input type="radio" checked={invoiceAdjusted === true} onChange={() => setInvoiceAdjusted(true)} /> Có
+              <input type="radio" disabled={resolutionType === "DESTROYED_DEDUCT_DEBT"} checked={invoiceAdjusted === true} onChange={() => setInvoiceAdjusted(true)} /> Có
             </label>
           </div>
           {invoiceAdjusted && (
@@ -337,6 +386,8 @@ function DefectDetail({ d, canEdit, canManage, onEdit, onChanged }: { d: DefectR
                   invoiceAdjusted,
                   adjustedInvoiceNumbers: invoiceNumbers || null,
                   invoiceAdjustNote: invoiceNote || null,
+                  resolutionType,
+                  deductAmount: deductAmount ? Number(deductAmount) : null,
                 });
                 if (ok) setClosing(false);
               }}
