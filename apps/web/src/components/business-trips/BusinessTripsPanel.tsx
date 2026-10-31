@@ -12,6 +12,8 @@ import { TripReportForm } from "./TripReportForm";
 import { TripReportView } from "./TripReportView";
 import { TripNextSteps } from "./TripNextSteps";
 import { TripPendingBanner } from "./TripPendingBanner";
+import { TripBanner } from "./TripBanner";
+import { PROVINCES } from "@/lib/vn-provinces";
 import { todayVN, visitDay, type PrefillStop, type TripRow } from "./types";
 
 const STATUS_STYLE: Record<TripRow["status"], string> = {
@@ -78,6 +80,7 @@ export function BusinessTripsPanel({ isAdmin, canApprove = isAdmin }: { isAdmin:
   return (
     <div className="space-y-4">
       <TripPendingBanner linkToTrips={false} />
+      <TripBanner />
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
           {(
@@ -204,7 +207,10 @@ export function BusinessTripsPanel({ isAdmin, canApprove = isAdmin }: { isAdmin:
                 return (
                   <Fragment key={t.id}>
                     <tr className="hover:bg-white/[0.02] align-top transition-colors">
-                      <td className="px-4 py-2.5 font-medium text-ink whitespace-nowrap">{formatDateVN(t.visitDate)}</td>
+                      <td className="px-4 py-2.5 font-medium text-ink whitespace-nowrap">
+                        {formatDateVN(t.visitDate)}
+                        {t.provinces?.length > 0 && <p className="text-[11px] font-normal text-muted-foreground">{t.provinces.join(", ")}</p>}
+                      </td>
                       {isAdmin && <td className="px-4 py-2.5 whitespace-nowrap">{t.employee.name}</td>}
                       <td className="px-4 py-2.5">
                         <ol className="space-y-1.5">
@@ -376,6 +382,7 @@ function TripForm({
   onCancelEdit?: () => void;
 }) {
   const [visitDate, setVisitDate] = useState(editingTrip ? toDateInputValueVN(editingTrip.visitDate) : "");
+  const [provinces, setProvinces] = useState<string[]>(editingTrip?.provinces ?? []);
   const [stops, setStops] = useState<StopDraft[]>(
     editingTrip
       ? editingTrip.stops.map((s) => ({
@@ -436,6 +443,7 @@ function TripForm({
     setSaving(true);
     setError(null);
     try {
+      if (provinces.length === 0) throw new Error("Chọn tỉnh/TP của chuyến đi");
       const stopsPayload = validStops.map((s) => ({
         companyName: s.companyName,
         address: s.address || null,
@@ -446,13 +454,14 @@ function TripForm({
         ? await fetch(`/api/business-trips/${editingTrip.id}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "update", visitDate, stops: stopsPayload, supporterEmployeeIds: supporterIds }),
+            body: JSON.stringify({ action: "update", visitDate, provinces, stops: stopsPayload, supporterEmployeeIds: supporterIds }),
           })
         : await fetch("/api/business-trips", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               visitDate,
+              provinces,
               stops: stopsPayload,
               supporterEmployeeIds: supporterIds,
               employeeId: isAdmin && forEmployeeId ? forEmployeeId : undefined,
@@ -464,6 +473,7 @@ function TripForm({
       }
       if (!editingTrip) {
         setVisitDate("");
+        setProvinces([]);
         setStops([emptyStop()]);
         setSupporterIds([]);
       }
@@ -502,6 +512,30 @@ function TripForm({
         Ngày đi
         <input type="date" value={visitDate} onChange={(e) => setVisitDate(e.target.value)} className="input" />
       </label>
+
+      <div>
+        <p className="mb-1.5 text-xs text-muted-foreground">
+          Tỉnh/TP đi công tác * <span className="text-muted2">(chọn một hoặc nhiều tỉnh — cả phòng sẽ thấy chuyến đi và các khách trong tỉnh cần gặp)</span>
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {PROVINCES.map((p) => {
+            const on = provinces.includes(p);
+            return (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setProvinces((cur) => (on ? cur.filter((x) => x !== p) : [...cur, p]))}
+                className={cn(
+                  "rounded-full border px-2.5 py-1 text-xs transition-colors",
+                  on ? "border-amber-400 bg-amber-500/15 font-semibold text-amber-400" : "border-white/15 text-ink2 hover:bg-white/5"
+                )}
+              >
+                {p}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       <div className="space-y-3">
         <p className="text-xs text-muted-foreground">

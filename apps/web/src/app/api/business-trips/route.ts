@@ -4,6 +4,7 @@ import { requireSession, UnauthorizedError } from "@/lib/rbac";
 import { z } from "zod";
 import { stopSchema } from "@/lib/business-trip-schema";
 import { isWeekEntryLocked, snapToWeekStart, weekLockedMessage } from "@/lib/week-plan";
+import { PROVINCES } from "@/lib/vn-provinces";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +61,8 @@ export async function GET(req: NextRequest) {
 
 const createSchema = z.object({
   visitDate: z.string().min(1, "Thiếu ngày đi"),
+  // Tỉnh/TP của chuyến (anh Quân chốt 31/10/2026) — cả phòng thấy chuyến và khách gợi ý trong tỉnh.
+  provinces: z.array(z.enum(PROVINCES)).min(1, "Chọn tỉnh/TP của chuyến đi").max(5),
   // 1 buổi đi công tác có thể ghé NHIỀU khách hàng — mỗi khách 1 dòng riêng (tên/địa chỉ/giờ dự
   // kiến/nội dung), thứ tự trong mảng = thứ tự ghé dự kiến.
   stops: z.array(stopSchema).min(1, "Cần ít nhất 1 khách hàng đến gặp").max(20),
@@ -115,6 +118,7 @@ export async function POST(req: NextRequest) {
       data: {
         employeeId: ownerId,
         visitDate,
+        provinces: Array.from(new Set(parsed.data.provinces)),
         // Luồng mới: đăng ký xong ở trạng thái "Chờ báo cáo" (kể cả admin đăng ký hộ) — chỉ tính điểm sau khi có
         // báo cáo được duyệt (admin nộp báo cáo hộ thì duyệt luôn, xem action "report" ở [id]/route.ts).
         supporters: {

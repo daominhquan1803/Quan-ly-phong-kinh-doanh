@@ -184,3 +184,13 @@ describe("huỷ / sửa chỉ khi chưa nộp báo cáo", () => {
     expect((await patch({ action: "cancel" })).status).toBe(400);
   });
 });
+
+describe("sửa đăng ký: Tỉnh/TP bắt buộc", () => {
+  it("thiếu tỉnh -> 400 và không ghi", async () => {
+    h.tripFind.mockResolvedValue(tripRow());
+    const res = await patch({ action: "update", visitDate: "2026-11-02", stops: [{ companyName: "Cty A", address: "Hưng Yên", expectedTime: "09:00", content: "Gặp bàn đơn hàng quý 4" }] });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("Chọn tỉnh/TP của chuyến đi");
+    expect(h.tripUpdate).not.toHaveBeenCalled();
+  });
+});

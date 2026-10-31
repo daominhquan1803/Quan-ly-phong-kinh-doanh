@@ -6,6 +6,7 @@ import { stopSchema } from "@/lib/business-trip-schema";
 import { reportSchema, validateReportStops } from "@/lib/business-trip-report";
 import { notifyAdmins, notifyUser } from "@/lib/business-trip-notify";
 import { isWeekEntryLocked, snapToWeekStart, weekLockedMessage } from "@/lib/week-plan";
+import { PROVINCES } from "@/lib/vn-provinces";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,8 @@ const patchSchema = z.object({
   // Chỉ dùng cho action "update" — sửa lại đăng ký khi NVKD gõ nhầm, cùng hình dạng dữ liệu với
   // lúc tạo mới (xem createSchema ở ../route.ts).
   visitDate: z.string().min(1).optional(),
+  // action "update": tỉnh/TP của chuyến (bắt buộc khi sửa — chuyến cũ chưa có tỉnh phải chọn lại).
+  provinces: z.array(z.enum(PROVINCES)).max(5).optional(),
   // action "update": danh sách khách đăng ký (kiểm tra bằng stopSchema bên dưới); action "report": mảng báo cáo từng khách (reportSchema) — cùng tên field nên ở đây để lỏng.
   stops: z.array(z.unknown()).optional(),
   supporterEmployeeIds: z.array(z.string().trim().min(1)).max(20).optional(),
@@ -81,6 +84,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       if (!parsed.data.visitDate || !updStops.success) {
         return NextResponse.json({ error: (!updStops.success && updStops.error.issues[0]?.message) || "Thiếu dữ liệu sửa" }, { status: 400 });
       }
+      if (!parsed.data.provinces || parsed.data.provinces.length === 0) {
+        return NextResponse.json({ error: "Chọn tỉnh/TP của chuyến đi" }, { status: 400 });
+      }
       // Không cho NVKD chuyển ngày đi sang 1 tuần đã quá hạn (lách khoá bằng cách sửa ngày).
       const newVisitDate = new Date(parsed.data.visitDate);
       if (Number.isNaN(newVisitDate.getTime())) {
@@ -105,6 +111,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
           where: { id: params.id },
           data: {
             visitDate: new Date(parsed.data.visitDate!),
+            provinces: Array.from(new Set(parsed.data.provinces)),
             stops: {
               create: updStops.data.map((s, i) => ({
                 orderIndex: i + 1,

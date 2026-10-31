@@ -929,6 +929,8 @@ model BusinessTripRequest {
   employeeId   String
   employee     User       @relation("TripEmployee", fields: [employeeId], references: [id])
   visitDate    DateTime // Ngày đi
+  // Tỉnh/TP của chuyến (bắt buộc với chuyến đăng ký mới, chuyến cũ để trống) — dùng gợi ý khách trong tỉnh cho cả phòng.
+  provinces    String[]   @default([])
   status       TripStatus @default(PENDING)
   approvedById String?
   approvedBy   User?      @relation("TripApprovedBy", fields: [approvedById], references: [id])

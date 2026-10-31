@@ -29,6 +29,8 @@ export interface TripRow {
   id: string;
   employee: { id: string; name: string };
   visitDate: string;
+  /** Tỉnh/TP của chuyến (chuyến cũ để trống) */
+  provinces: string[];
   status: TripStatus;
   approvedBy: { id: string; name: string } | null;
   rejectReason: string | null;
