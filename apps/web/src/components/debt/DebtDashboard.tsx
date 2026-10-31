@@ -54,6 +54,7 @@ interface SummaryResponse {
 }
 
 type SortField = "dueDate" | "remaining";
+type DebtTab = "debt" | "plan" | "import";
 const PAGE_SIZE = 10;
 
 /** Số tuần trượt kế hoạch (0 = chưa trượt): còn nợ mà ngày dự kiến đã qua trước thứ 2 tuần này. */
@@ -84,6 +85,7 @@ function ImportResultToast({ message, onClose }: { message: string; onClose: () 
 
 export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
   const queryClient = useQueryClient();
+  const [tab, setTab] = useState<DebtTab>("debt");
   // "NO_SCHEDULE" = còn nợ nhưng NVKD chưa điền ngày dự kiến thanh toán (chưa có lịch thanh toán).
   const [status, setStatus] = useState<DebtStatus | "NO_SCHEDULE" | "SLIPPED" | "">("");
   // Lọc theo tháng chứng từ ("YYYY-MM", rỗng = tất cả) — lọc theo invoiceDate, không phải hạn
@@ -477,7 +479,29 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
         </div>
       )}
 
-      {summary && summary.weeklyPlan.length > 0 && (
+      <div className="flex flex-wrap gap-2 border-b border-white/10 pb-3">
+        {(
+          [
+            ["debt", "Công nợ theo NVKD & tra cứu"],
+            ["plan", "Kế hoạch & khoản cần thu"],
+            ...(isAdmin ? [["import", "Nhập dữ liệu"]] : []),
+          ] as [DebtTab, string][]
+        ).map(([k, label]) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setTab(k)}
+            className={cn(
+              "rounded-xl px-4 py-2 text-sm font-semibold transition-all",
+              tab === k ? "bg-white/10 text-white" : "text-muted2 hover:bg-white/[0.05] hover:text-ink"
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "plan" && summary && summary.weeklyPlan.length > 0 && (
         <div className="glass-card border border-white/10 p-5 space-y-4">
           <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-white/5 pb-3">
             <div>
@@ -621,11 +645,11 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
         </div>
       )}
 
-      <DebtFollowUpPanel isAdmin={isAdmin} employeeId={employeeId} />
+      {tab === "plan" && <DebtFollowUpPanel isAdmin={isAdmin} employeeId={employeeId} />}
 
-      {isAdmin && <DebtUnmatchedPaymentsPanel />}
+      {tab === "plan" && isAdmin && <DebtUnmatchedPaymentsPanel />}
 
-      {isAdmin && summary?.perEmployee && summary.perEmployee.length > 0 && (
+      {tab === "debt" && isAdmin && summary?.perEmployee && summary.perEmployee.length > 0 && (
         <div className="glass-card border border-white/10 p-5 space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-ink text-sm">Công nợ theo từng Nhân viên kinh doanh</h3>
@@ -656,8 +680,9 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {isAdmin && (
+      {tab === "import" && isAdmin && (
+          <div className="glass-card border border-white/10 p-5 space-y-3">
+            <p className="text-xs text-muted2">Nhập file Excel công nợ gốc, hoá đơn mới và tiền về.</p>
           <div className="flex flex-wrap items-center gap-2.5">
             <input
               ref={baselineInputRef}
@@ -705,8 +730,12 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
               Cập nhật Tiền về
             </button>
           </div>
-        )}
+          </div>
+      )}
 
+      {tab === "debt" && (
+        <>
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <Link
             href="/debt/reminders"
@@ -968,8 +997,10 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
           )}
         </div>
       )}
+        </>
+      )}
 
-      {showPaymentsWizard && <DebtPaymentsImportWizard onClose={() => setShowPaymentsWizard(false)} />}
+      {showPaymentsWizard &&<DebtPaymentsImportWizard onClose={() => setShowPaymentsWizard(false)} />}
       {paymentInvoice && <ManualPaymentModal invoice={paymentInvoice} onClose={() => setPaymentInvoice(null)} />}
     </div>
   );
