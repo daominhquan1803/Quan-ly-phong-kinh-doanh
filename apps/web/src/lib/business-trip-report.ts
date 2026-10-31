@@ -4,7 +4,14 @@ import { z } from "zod";
  * Báo cáo công tác: buổi đi chỉ tính điểm (Kế hoạch tuần + KPI tháng) khi báo cáo được duyệt (status APPROVED),
  * và chỉ tính KHÁCH đã gặp. Stop cũ (đăng ký trước đợt đổi luồng) không có outcome -> vẫn tính như trước.
  */
-export const COUNTED_STOP_WHERE = { OR: [{ outcome: null }, { outcome: "MET" as const }] };
+export const COUNTED_STOP_WHERE = { attendeeId: null, OR: [{ outcome: null }, { outcome: "MET" as const }] };
+/**
+ * Điểm dừng mới (có người đi gặp riêng, anh Quân chốt 31/10/2026): chỉ tính khi chính điểm dừng đó có báo cáo "gặp được" (khác điểm
+ * dừng cũ vốn tính cả khi chưa có kết quả). Ai được điểm xem lib/trip-credit.ts. COUNTED_STOP_WHERE ở trên chỉ còn là điểm dừng cũ.
+ */
+export const COUNTED_NEW_STOP_WHERE = { attendeeId: { not: null }, outcome: "MET" as const };
+/** Điểm dừng được tính, cả cũ lẫn mới — cho chỗ chỉ cần biết khách đã được gặp (không xét ai được điểm). */
+export const COUNTED_ANY_STOP_WHERE = { OR: [COUNTED_STOP_WHERE, COUNTED_NEW_STOP_WHERE] };
 /** Buổi đi tính điểm = đã duyệt VÀ có ít nhất 1 khách tính điểm. */
 export const COUNTED_TRIP_WHERE = { status: "APPROVED" as const, stops: { some: COUNTED_STOP_WHERE } };
 

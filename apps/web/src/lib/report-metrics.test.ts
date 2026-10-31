@@ -31,6 +31,7 @@ vi.mock("@hoanggia/db", () => ({
   getPoAggregates: h.poAgg,
 }));
 vi.mock("@/lib/dashboard-metrics", () => ({ getOihAsOf: h.oihAsOf }));
+vi.mock("@/lib/trip-credit", () => ({ loadStopCredits: async () => [] })); // điểm dừng mới có người đi gặp riêng — test riêng ở trip-credit.test.ts
 vi.mock("@/lib/debt-snapshot", () => ({ getDebtSnapshot: h.snapshot, getCollectionPlan: h.plan }));
 
 import { getReportData } from "./report-metrics";

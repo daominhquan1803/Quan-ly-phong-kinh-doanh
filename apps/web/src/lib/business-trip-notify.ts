@@ -1,6 +1,6 @@
 import { prisma } from "@hoanggia/db";
 
-type TripNotificationType = "TRIP_REPORT_DUE" | "TRIP_NEXT_STEP_DUE" | "TRIP_REVIEW_PENDING" | "TRIP_REVIEWED" | "CARE_ESCALATION";
+type TripNotificationType = "TRIP_REPORT_DUE" | "TRIP_NEXT_STEP_DUE" | "TRIP_REVIEW_PENDING" | "TRIP_REVIEWED" | "TRIP_ASSIGNED" | "CARE_ESCALATION";
 interface Payload {
   type: TripNotificationType;
   title: string;

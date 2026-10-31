@@ -7,6 +7,7 @@ import { reportSchema, validateReportStops } from "@/lib/business-trip-report";
 import { notifyAdmins, notifyUser } from "@/lib/business-trip-notify";
 import { isWeekEntryLocked, snapToWeekStart, weekLockedMessage } from "@/lib/week-plan";
 import { PROVINCES } from "@/lib/vn-provinces";
+import { notifyAssigned, resolveStops, stopsCreateData } from "@/lib/business-trip-stops";
 
 export const dynamic = "force-dynamic";
 
@@ -96,13 +97,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         return NextResponse.json({ error: weekLockedMessage(snapToWeekStart(newVisitDate)) }, { status: 403 });
       }
 
-      const supporterIds = Array.from(new Set(parsed.data.supporterEmployeeIds ?? [])).filter(
-        (id) => id !== trip.employeeId
-      );
-      const validSupporters =
-        supporterIds.length > 0
-          ? await prisma.user.findMany({ where: { id: { in: supporterIds }, active: true }, select: { id: true } })
-          : [];
+      // Người đi gặp + người hỗ trợ theo từng điểm dừng (mặc định người đi gặp = chủ đăng ký); sửa xong mọi điểm dừng là điểm dừng mới.
+      const resolved = await resolveStops(updStops.data, trip.employeeId, session.user.id);
+      if ("error" in resolved) return NextResponse.json({ error: resolved.error }, { status: 400 });
 
       const updated = await prisma.$transaction(async (tx) => {
         await tx.businessTripStop.deleteMany({ where: { tripId: params.id } });
@@ -112,23 +109,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
           data: {
             visitDate: new Date(parsed.data.visitDate!),
             provinces: Array.from(new Set(parsed.data.provinces)),
-            stops: {
-              create: updStops.data.map((s, i) => ({
-                orderIndex: i + 1,
-                companyName: s.companyName.trim(),
-                address: s.address?.trim() || null,
-                expectedTime: s.expectedTime?.trim() || null,
-                content: s.content.trim(),
-              })),
-            },
-            supporters: { create: validSupporters.map((u) => ({ employeeId: u.id })) },
+            stops: { create: stopsCreateData(resolved.stops) },
           },
           include: {
             supporters: { include: { employee: { select: { id: true, name: true } } } },
-            stops: { orderBy: { orderIndex: "asc" } },
+            stops: { orderBy: { orderIndex: "asc" }, include: { supporters: { include: { employee: { select: { id: true, name: true } } } } } },
           },
         });
       });
+      await notifyAssigned({ stops: resolved.stops, registrantId: session.user.id, registrantName: trip.employee.name, visitDate: new Date(parsed.data.visitDate!) });
 
       return NextResponse.json({ trip: updated });
     }

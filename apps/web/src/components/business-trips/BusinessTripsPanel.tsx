@@ -221,6 +221,12 @@ export function BusinessTripsPanel({ isAdmin, canApprove = isAdmin }: { isAdmin:
                                 {s.expectedTime && <span className="text-muted-foreground font-normal"> — {s.expectedTime}</span>}
                               </p>
                               {s.address && <p className="text-xs text-muted-foreground">{s.address}</p>}
+                              {s.attendee && (
+                                <p className="text-[11px] text-sky-300">
+                                  Đi gặp: {s.attendee.name}
+                                  {(s.supporters?.length ?? 0) > 0 && <span className="text-muted-foreground"> · Hỗ trợ: {s.supporters!.map((p) => p.employee.name).join(", ")}</span>}
+                                </p>
+                              )}
                               <p className="text-xs text-ink2" title={s.content}>
                                 {s.content}
                               </p>
@@ -357,10 +363,24 @@ interface StopDraft {
   address: string;
   expectedTime: string;
   content: string;
+  /** Khách chọn từ danh sách (rỗng = gõ tay) */
+  customerId: string;
+  /** NVKD đi gặp điểm dừng này; rỗng = người đăng ký */
+  attendeeId: string;
+  /** Người hỗ trợ của riêng điểm dừng này */
+  supporterIds: string[];
 }
 
 function emptyStop(): StopDraft {
-  return { companyName: "", address: "", expectedTime: "", content: "" };
+  return { companyName: "", address: "", expectedTime: "", content: "", customerId: "", attendeeId: "", supporterIds: [] };
+}
+
+interface CustomerOption {
+  id: string;
+  customerCode: string;
+  customerName: string;
+  address: string | null;
+  salesEmployee: { id: string; name: string } | null;
 }
 
 function TripForm({
@@ -390,13 +410,14 @@ function TripForm({
           address: s.address ?? "",
           expectedTime: s.expectedTime ?? "",
           content: s.content,
+          customerId: s.customerId ?? "",
+          // Điểm dừng cũ (chưa có người đi gặp riêng): người hỗ trợ cả chuyến chuyển thành người hỗ trợ của từng điểm dừng khi sửa.
+          attendeeId: s.attendee?.id && s.attendee.id !== editingTrip.employee.id ? s.attendee.id : "",
+          supporterIds: s.attendee ? (s.supporters ?? []).map((p) => p.employee.id) : editingTrip.supporters.map((p) => p.employee.id),
         }))
       : prefillStop
         ? [{ ...emptyStop(), companyName: prefillStop.companyName, address: prefillStop.address }]
         : [emptyStop()]
-  );
-  const [supporterIds, setSupporterIds] = useState<string[]>(
-    editingTrip ? editingTrip.supporters.map((s) => s.employee.id) : []
   );
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -412,10 +433,35 @@ function TripForm({
   // Admin đăng ký bổ sung HỘ nhân viên (không bị hạn khoá) — rỗng = cho chính mình.
   const [forEmployeeId, setForEmployeeId] = useState("");
   const ownerId = isAdmin && forEmployeeId ? forEmployeeId : currentUserId;
-  const supporterOptions = (employeesData?.users ?? []).filter((u) => u.id !== ownerId);
+  const employees = employeesData?.users ?? [];
+  const ownerName = employees.find((u) => u.id === ownerId)?.name ?? "người đăng ký";
 
-  function toggleSupporter(id: string) {
-    setSupporterIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  // Danh sách khách cho ô tên: mọi NVKD thấy cả khách của đồng nghiệp (đăng ký đi hộ / đăng ký chung).
+  const { data: customersData } = useQuery({
+    queryKey: ["customers-options-for-trip"],
+    queryFn: async () => {
+      const res = await fetch("/api/customers/options");
+      if (!res.ok) throw new Error("Không tải được danh sách khách hàng");
+      return res.json() as Promise<{ customers: CustomerOption[] }>;
+    },
+    staleTime: 5 * 60_000,
+  });
+  const customers = customersData?.customers ?? [];
+
+  /** Gõ/chọn tên: trùng đúng tên 1 khách trong danh sách thì gắn khách, điền địa chỉ (nếu trống) và đặt người đi gặp = người phụ trách. */
+  function changeCompany(index: number, name: string) {
+    const c = customers.find((x) => x.customerName.trim().toLowerCase() === name.trim().toLowerCase());
+    setStops((prev) =>
+      prev.map((s, i) => {
+        if (i !== index) return s;
+        if (!c) return { ...s, companyName: name, customerId: "" };
+        const owner = c.salesEmployee && c.salesEmployee.id !== ownerId ? c.salesEmployee.id : "";
+        return { ...s, companyName: name, customerId: c.id, address: s.address || c.address || "", attendeeId: owner };
+      })
+    );
+  }
+  function toggleStopSupporter(index: number, id: string) {
+    setStops((prev) => prev.map((s, i) => (i === index ? { ...s, supporterIds: s.supporterIds.includes(id) ? s.supporterIds.filter((x) => x !== id) : [...s.supporterIds, id] } : s)));
   }
 
   function updateStop(index: number, patch: Partial<StopDraft>) {
@@ -449,12 +495,15 @@ function TripForm({
         address: s.address || null,
         expectedTime: s.expectedTime || null,
         content: s.content,
+        customerId: s.customerId || null,
+        attendeeId: s.attendeeId || null,
+        supporterEmployeeIds: s.supporterIds,
       }));
       const res = editingTrip
         ? await fetch(`/api/business-trips/${editingTrip.id}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "update", visitDate, provinces, stops: stopsPayload, supporterEmployeeIds: supporterIds }),
+            body: JSON.stringify({ action: "update", visitDate, provinces, stops: stopsPayload }),
           })
         : await fetch("/api/business-trips", {
             method: "POST",
@@ -463,7 +512,6 @@ function TripForm({
               visitDate,
               provinces,
               stops: stopsPayload,
-              supporterEmployeeIds: supporterIds,
               employeeId: isAdmin && forEmployeeId ? forEmployeeId : undefined,
             }),
           });
@@ -475,7 +523,6 @@ function TripForm({
         setVisitDate("");
         setProvinces([]);
         setStops([emptyStop()]);
-        setSupporterIds([]);
       }
       onCreated();
     } catch (e) {
@@ -579,8 +626,9 @@ function TripForm({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <input
                 value={s.companyName}
-                onChange={(e) => updateStop(i, { companyName: e.target.value })}
-                placeholder="Tên khách hàng / công ty"
+                onChange={(e) => changeCompany(i, e.target.value)}
+                list="trip-customer-options"
+                placeholder="Tên khách hàng / công ty (gõ để chọn từ danh sách)"
                 className="input"
               />
               <input
@@ -602,9 +650,47 @@ function TripForm({
                 placeholder="Mục đích, nội dung trao đổi..."
                 className="input sm:col-span-2"
               />
+              <label className="flex flex-col gap-1 text-xs text-muted-foreground sm:col-span-2">
+                NVKD đi gặp khách này
+                <select value={s.attendeeId} onChange={(e) => updateStop(i, { attendeeId: e.target.value })} className="input">
+                  <option value="">{ownerName} (người đăng ký)</option>
+                  {employees
+                    .filter((u) => u.id !== ownerId)
+                    .map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name}
+                      </option>
+                    ))}
+                </select>
+                {s.customerId && customers.find((c) => c.id === s.customerId)?.salesEmployee && (
+                  <span className="text-[11px] text-muted2">Phụ trách khách: {customers.find((c) => c.id === s.customerId)?.salesEmployee?.name}. Chọn người khác = đi hộ, điểm gặp khách tính cho người đi.</span>
+                )}
+              </label>
+              <div className="flex flex-col gap-1 text-xs text-muted-foreground sm:col-span-2">
+                Người hỗ trợ khách này (không bắt buộc) — hỗ trợ giao tiếp, kỹ thuật; được tính điểm gặp khách cho khách này
+                <div className="flex flex-wrap gap-x-4 gap-y-1.5 rounded-md border border-gray-200 bg-card px-3 py-2 max-h-28 overflow-y-auto">
+                  {employees.filter((u) => u.id !== (s.attendeeId || ownerId)).length === 0 && <span className="text-muted2">Không có đồng nghiệp nào khác</span>}
+                  {employees
+                    .filter((u) => u.id !== (s.attendeeId || ownerId))
+                    .map((u) => (
+                      <label key={u.id} className="flex items-center gap-1.5 text-ink2">
+                        <input type="checkbox" checked={s.supporterIds.includes(u.id)} onChange={() => toggleStopSupporter(i, u.id)} />
+                        {u.name}
+                      </label>
+                    ))}
+                </div>
+              </div>
             </div>
           </div>
         ))}
+        <datalist id="trip-customer-options">
+          {customers.map((c) => (
+            <option key={c.id} value={c.customerName}>
+              {c.customerCode}
+              {c.salesEmployee ? ` · ${c.salesEmployee.name}` : ""}
+            </option>
+          ))}
+        </datalist>
         <button
           type="button"
           onClick={addStop}
@@ -614,18 +700,9 @@ function TripForm({
         </button>
       </div>
 
-      <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-        Người đi hỗ trợ (không bắt buộc) — cũng được tính điểm KPI &quot;đi gặp khách&quot; cho từng khách trong lượt đi này
-        <div className="flex flex-wrap gap-x-4 gap-y-1.5 rounded-md border border-gray-200 bg-card px-3 py-2 max-h-32 overflow-y-auto">
-          {supporterOptions.length === 0 && <span className="text-muted2">Không có đồng nghiệp nào khác</span>}
-          {supporterOptions.map((u) => (
-            <label key={u.id} className="flex items-center gap-1.5 text-ink2">
-              <input type="checkbox" checked={supporterIds.includes(u.id)} onChange={() => toggleSupporter(u.id)} />
-              {u.name}
-            </label>
-          ))}
-        </div>
-      </div>
+      <p className="text-[11px] text-muted2">
+        Điểm gặp khách tính riêng cho từng khách: NVKD đi gặp và người hỗ trợ của khách đó, mỗi khách 1 điểm. Khách phải có báo cáo &quot;gặp được&quot; và buổi đi được duyệt mới tính.
+      </p>
       {error && <p className="text-xs text-alert">{error}</p>}
       <div className="flex items-center gap-2">
         <button

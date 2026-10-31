@@ -2,7 +2,8 @@ import { prisma } from "@hoanggia/db";
 import { WeekPlanMetric } from "@prisma/client";
 import { normalizeVN } from "./text-normalize";
 import { classifyEntries, hasCountedTrip, missingFields, RETRO_EXISTING_CHECK, WEEK_ENTRY_COMPLETE_FROM, type EntryClass, type TripStopLite } from "./week-plan-entry";
-import { COUNTED_STOP_WHERE, COUNTED_TRIP_WHERE } from "./business-trip-report";
+import { COUNTED_NEW_STOP_WHERE, COUNTED_STOP_WHERE, COUNTED_TRIP_WHERE } from "./business-trip-report";
+import { loadStopCredits } from "./trip-credit";
 
 /**
  * Kế hoạch làm việc tuần — theo đúng file mẫu "KẾ HOẠCH LÀM VIỆC TUẦN" anh Quân gửi (bản
@@ -390,6 +391,8 @@ async function computeAutoMetrics(
   // 1 buổi đi công tác (BusinessTripRequest) có thể có NHIỀU khách hàng (BusinessTripStop) — mỗi
   // khách ghé trong buổi đó là 1 công ty riêng, đếm qua quan hệ stops thay vì field companyName cũ
   // (đã bỏ khỏi BusinessTripRequest khi tách model, xem schema.prisma).
+  // Điểm dừng mới (có người đi gặp riêng, anh Quân chốt 31/10/2026): mỗi điểm dừng tính riêng cho người đi gặp + người hỗ trợ của điểm dừng đó.
+  const stopCredits = await loadStopCredits({ start, end, employeeIds });
   const [primaryVisits, supporterVisits] = await Promise.all([
     prisma.businessTripRequest.findMany({
       where: { ...COUNTED_TRIP_WHERE, visitDate: { gte: start, lt: end }, employeeId: { in: employeeIds } },
@@ -412,6 +415,7 @@ async function computeAutoMetrics(
   };
   for (const v of primaryVisits) for (const s of v.stops) addVisitCompany(v.employeeId, s.companyName);
   for (const v of supporterVisits) for (const s of v.trip.stops) addVisitCompany(v.employeeId, s.companyName);
+  for (const c of stopCredits) addVisitCompany(c.employeeId, c.companyName);
   // So khớp CHÍNH XÁC customerName sẽ bỏ sót gần hết trong thực tế: NVKD ghi tên tắt/thân mật lúc
   // đăng ký đi công tác (vd "Pmj"), trong khi Order.customerName đồng bộ từ AMIS luôn là tên pháp
   // nhân đầy đủ (vd "CÔNG TY CỔ PHẦN PMJ GREENTECH") — đã xác nhận qua dữ liệu thật (anh Quân báo
@@ -485,6 +489,7 @@ async function computeAutoMetrics(
   };
   for (const t of primaryTrips) addDate(t.employeeId, t.visitDate);
   for (const t of supporterTrips) addDate(t.employeeId, t.trip.visitDate);
+  for (const c of stopCredits) addDate(c.employeeId, c.visitDate);
   for (const [empId, dates] of dateSetByEmployee) result.get(empId)!.BUSINESS_TRIP = dates.size;
 
   return result;
@@ -584,6 +589,9 @@ export async function loadWeekEntries(employeeIds: string[], weekStart: Date, me
     ]);
     for (const t of primary) for (const s of t.stops) tripStops.push({ employeeId: t.employeeId, visitDate: t.visitDate, companyName: s.companyName });
     for (const t of supporter) for (const s of t.trip.stops) tripStops.push({ employeeId: t.employeeId, visitDate: t.trip.visitDate, companyName: s.companyName });
+    for (const c of await loadStopCredits({ start: minVisit, end: new Date("2100-01-01T00:00:00Z"), employeeIds: empIds })) {
+      tripStops.push({ employeeId: c.employeeId, visitDate: c.visitDate, companyName: c.companyName });
+    }
   }
   const status = classifyEntries(
     rows.map((r) => ({
@@ -836,9 +844,24 @@ export async function getWeekPlanMetricDetail(
         select: { trip: { select: { visitDate: true, stops: { where: COUNTED_STOP_WHERE, select: { companyName: true, content: true }, orderBy: { orderIndex: "asc" } } } } },
       }),
     ]);
+    // Điểm dừng mới: người đi gặp riêng (vai "Đi gặp") hoặc người hỗ trợ của điểm dừng (vai "Hỗ trợ").
+    const attendeeCredits = await prisma.businessTripStop.findMany({
+      where: {
+        ...COUNTED_NEW_STOP_WHERE,
+        trip: { status: "APPROVED", visitDate: { gte: start, lt: end } },
+        OR: [{ attendeeId: employeeId }, { supporters: { some: { employeeId } } }],
+      },
+      select: { companyName: true, content: true, attendeeId: true, trip: { select: { visitDate: true } } },
+      orderBy: { orderIndex: "asc" },
+    });
     const trips = [
       ...primary.map((t) => ({ ...t, role: "Đi chính" })),
       ...supporter.map((t) => ({ ...t.trip, role: "Hỗ trợ" })),
+      ...attendeeCredits.map((s) => ({
+        visitDate: s.trip.visitDate,
+        stops: [{ companyName: s.companyName, content: s.content }],
+        role: s.attendeeId === employeeId ? "Đi gặp" : "Hỗ trợ",
+      })),
     ];
 
     if (metric === "BUSINESS_TRIP") {

@@ -20,6 +20,7 @@ vi.mock("@hoanggia/db", () => ({
   getPoAggregates: h.poAgg,
 }));
 vi.mock("@/lib/dashboard-metrics", () => ({ getOihAsOf: h.oihAsOf }));
+vi.mock("@/lib/trip-credit", () => ({ loadStopCredits: async () => [] }));
 vi.mock("@/lib/debt-snapshot", () => ({ getDebtSnapshot: h.snapshot, getCollectionPlan: h.plan }));
 
 import { getReportData } from "./report-metrics";

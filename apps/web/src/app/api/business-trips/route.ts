@@ -5,6 +5,7 @@ import { z } from "zod";
 import { stopSchema } from "@/lib/business-trip-schema";
 import { isWeekEntryLocked, snapToWeekStart, weekLockedMessage } from "@/lib/week-plan";
 import { PROVINCES } from "@/lib/vn-provinces";
+import { notifyAssigned, resolveStops, stopsCreateData } from "@/lib/business-trip-stops";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,12 @@ export async function GET(req: NextRequest) {
     // SALES thấy cả lượt đi mình đăng ký chính LẪN lượt đi mình được chọn làm người hỗ trợ (để
     // biết vì sao KPI "đi gặp khách" của mình tăng) — ADMIN thấy tất cả như cũ.
     if (session.user.role !== "ADMIN") {
-      where.OR = [{ employeeId: session.user.id }, { supporters: { some: { employeeId: session.user.id } } }];
+      where.OR = [
+        { employeeId: session.user.id },
+        { supporters: { some: { employeeId: session.user.id } } },
+        // Chuyến có điểm dừng mình được chọn đi gặp hoặc hỗ trợ (đăng ký chung bởi đồng nghiệp).
+        { stops: { some: { OR: [{ attendeeId: session.user.id }, { supporters: { some: { employeeId: session.user.id } } }] } } },
+      ];
     }
     if (employeeId && session.user.role === "ADMIN") where.employeeId = employeeId;
     if (status) where.status = status;
@@ -40,7 +46,12 @@ export async function GET(req: NextRequest) {
         // Ảnh chỉ lấy id (nội dung ảnh phục vụ riêng qua /api/business-trips/photos/[id]).
         stops: {
           orderBy: { orderIndex: "asc" },
-          include: { photos: { select: { id: true } }, nextActionOwner: { select: { id: true, name: true } } },
+          include: {
+            photos: { select: { id: true } },
+            nextActionOwner: { select: { id: true, name: true } },
+            attendee: { select: { id: true, name: true } },
+            supporters: { include: { employee: { select: { id: true, name: true } } } },
+          },
         },
       },
       orderBy: { visitDate: "desc" },
@@ -104,15 +115,10 @@ export async function POST(req: NextRequest) {
       if (!owner) return NextResponse.json({ error: "Nhân viên không hợp lệ" }, { status: 400 });
     }
 
-    // Loại trùng + loại chính người đăng ký (đã là người đăng ký chính, không cần thêm làm người
-    // hỗ trợ) — không suy đoán/báo lỗi, chỉ lặng lẽ bỏ qua các trường hợp không hợp lệ này.
-    const supporterIds = Array.from(new Set(parsed.data.supporterEmployeeIds ?? [])).filter((id) => id !== ownerId);
-    // Xác thực đúng là nhân viên đang hoạt động — tránh gán nhầm ID rác/ID đã khoá tài khoản vào
-    // KPI người khác.
-    const validSupporters =
-      supporterIds.length > 0
-        ? await prisma.user.findMany({ where: { id: { in: supporterIds }, active: true }, select: { id: true } })
-        : [];
+    // Người đi gặp + người hỗ trợ theo TỪNG điểm dừng (anh Quân chốt 31/10/2026): xác thực nhân viên đang hoạt động / khách có thật, mặc
+    // định người đi gặp = người đăng ký. Người hỗ trợ cấp chuyến (supporterEmployeeIds) không còn dùng cho chuyến mới.
+    const resolved = await resolveStops(parsed.data.stops, ownerId, session.user.id);
+    if ("error" in resolved) return NextResponse.json({ error: resolved.error }, { status: 400 });
 
     const trip = await prisma.businessTripRequest.create({
       data: {
@@ -121,24 +127,16 @@ export async function POST(req: NextRequest) {
         provinces: Array.from(new Set(parsed.data.provinces)),
         // Luồng mới: đăng ký xong ở trạng thái "Chờ báo cáo" (kể cả admin đăng ký hộ) — chỉ tính điểm sau khi có
         // báo cáo được duyệt (admin nộp báo cáo hộ thì duyệt luôn, xem action "report" ở [id]/route.ts).
-        supporters: {
-          create: validSupporters.map((u) => ({ employeeId: u.id })),
-        },
-        stops: {
-          create: parsed.data.stops.map((s, i) => ({
-            orderIndex: i + 1,
-            companyName: s.companyName.trim(),
-            address: s.address?.trim() || null,
-            expectedTime: s.expectedTime?.trim() || null,
-            content: s.content.trim(),
-          })),
-        },
+        stops: { create: stopsCreateData(resolved.stops) },
       },
       include: {
         supporters: { include: { employee: { select: { id: true, name: true } } } },
-        stops: { orderBy: { orderIndex: "asc" } },
+        stops: { orderBy: { orderIndex: "asc" }, include: { supporters: { include: { employee: { select: { id: true, name: true } } } } } },
       },
     });
+
+    // Người được chọn đi gặp / hỗ trợ chỉ nhận thông báo (không cần xác nhận).
+    await notifyAssigned({ stops: resolved.stops, registrantId: session.user.id, registrantName: session.user.name ?? "Đồng nghiệp", visitDate });
 
     return NextResponse.json({ trip }, { status: 201 });
   } catch (err) {

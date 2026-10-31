@@ -1,7 +1,7 @@
 export type TripStatus = "PENDING" | "REPORTED" | "NEEDS_REVISION" | "APPROVED" | "REJECTED";
 export type StopOutcome = "MET" | "NOT_MET" | "RESCHEDULED";
 
-export interface StopRow {
+export interface StopRow extends StopPeople {
   id: string;
   orderIndex: number;
   companyName: string;
@@ -23,6 +23,13 @@ export interface StopRow {
   checkinAccuracyM: number | null;
   checkinAt: string | null;
   photos: { id: string }[];
+}
+
+/** Người đi gặp / người hỗ trợ của riêng 1 điểm dừng (điểm dừng cũ: attendee = null, tính cả chuyến như trước). */
+export interface StopPeople {
+  customerId?: string | null;
+  attendee?: { id: string; name: string } | null;
+  supporters?: { employee: { id: string; name: string } }[];
 }
 
 export interface TripRow {

@@ -3,6 +3,7 @@ import { monthRange, getEmployeeTargetVsActual, getProductGroupTargetVsActual } 
 import { getMonthlyWeekPlanScore } from "./week-plan";
 import { computeDebtStatus, countsAsOverdue, remainingAmount } from "./debt-status";
 import { COUNTED_STOP_WHERE, COUNTED_TRIP_WHERE } from "./business-trip-report";
+import { loadStopCredits } from "./trip-credit";
 import { CARE_KPI_FROM, evaluateCare, fakePenalty, monthRangeVN } from "./customer-care-plan";
 import { profilePenalty } from "./customer-profile";
 import { profileAbPctByEmployee } from "./customer-report";
@@ -356,7 +357,7 @@ export async function getKpiMonthlyReport(
   });
   const pkd1EmployeeIds = pkd1Employees.map((u) => u.id);
 
-  const [revenueRows, entries, visitCounts, supporterVisitCounts, newCustomerCounts, defectCounts] = await Promise.all([
+  const [revenueRows, entries, visitCounts, supporterVisitCounts, newCustomerCounts, defectCounts, stopCredits] = await Promise.all([
     getEmployeeTargetVsActual(year, month, onlyEmployeeId),
     prisma.kpiMonthlyEntry.findMany({
       where: { year, month, ...(onlyEmployeeId ? { employeeId: onlyEmployeeId } : {}) },
@@ -388,6 +389,8 @@ export async function getKpiMonthlyReport(
       where: { defectReport: { reportDate: { gte: start, lt: end } }, ...(onlyEmployeeId ? { userId: onlyEmployeeId } : {}) },
       _count: { _all: true },
     }),
+    // Điểm dừng mới (có người đi gặp riêng): mỗi điểm dừng 1 điểm cho người đi gặp + từng người hỗ trợ của điểm dừng đó (lib/trip-credit.ts).
+    loadStopCredits({ start, end, employeeIds: onlyEmployeeId ? [onlyEmployeeId] : undefined }),
   ]);
   const defectByEmployee = new Map(defectCounts.map((d) => [d.userId, d._count._all]));
   // Điểm CSKH theo lịch chăm sóc — áp dụng từ CARE_KPI_FROM (tháng 11/2026 chạy thử, xem ở trang Chăm sóc).
@@ -405,6 +408,7 @@ export async function getKpiMonthlyReport(
   for (const v of supporterVisitCounts) {
     visitByEmployee.set(v.employeeId, (visitByEmployee.get(v.employeeId) ?? 0) + v.trip._count.stops);
   }
+  for (const c of stopCredits) visitByEmployee.set(c.employeeId, (visitByEmployee.get(c.employeeId) ?? 0) + 1);
 
   const rows: KpiMonthlyReportRow[] = [];
 

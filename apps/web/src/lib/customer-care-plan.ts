@@ -1,6 +1,6 @@
 import { prisma, normalizeCustomerCode } from "@hoanggia/db";
 import { normalizeVN } from "./text-normalize";
-import { COUNTED_STOP_WHERE, COUNTED_TRIP_WHERE } from "./business-trip-report";
+import { COUNTED_ANY_STOP_WHERE } from "./business-trip-report";
 import { workingDeadline } from "./admin-kpi";
 
 /**
@@ -171,7 +171,8 @@ export async function loadCarePlan(options: { onlyEmployeeId?: string } = {}, no
       select: { customerId: true, createdAt: true },
     }),
     prisma.businessTripStop.findMany({
-      where: { ...COUNTED_STOP_WHERE, trip: { ...COUNTED_TRIP_WHERE, visitDate: { gte: new Date(monthStart - 120 * DAY) } } },
+      // Lần gặp khách: điểm dừng cũ hoặc mới (có người đi gặp riêng) đã duyệt và gặp được — không xét ai được điểm.
+      where: { ...COUNTED_ANY_STOP_WHERE, trip: { status: "APPROVED", visitDate: { gte: new Date(monthStart - 120 * DAY) } } },
       select: { companyName: true, trip: { select: { visitDate: true } } },
     }),
   ]);

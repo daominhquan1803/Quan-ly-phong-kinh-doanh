@@ -9,4 +9,9 @@ export const stopSchema = z.object({
   address: z.string().trim().max(500).optional().nullable(),
   expectedTime: z.string().trim().max(20).optional().nullable(),
   content: z.string().trim().min(1, "Thiếu nội dung buổi gặp"),
+  // Khách chọn từ danh sách khách (không có = gõ tay).
+  customerId: z.string().trim().min(1).optional().nullable(),
+  // NVKD đi gặp điểm dừng này (không có = người đăng ký) và người hỗ trợ của riêng điểm dừng này — điểm gặp khách tính riêng từng điểm dừng.
+  attendeeId: z.string().trim().min(1).optional().nullable(),
+  supporterEmployeeIds: z.array(z.string().trim().min(1)).max(10).optional(),
 });

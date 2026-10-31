@@ -3,6 +3,7 @@ import { monthWeekBuckets } from "@/lib/debt-status";
 import { getDebtSnapshot, getCollectionPlan, type DebtOverdueInvoice } from "@/lib/debt-snapshot";
 import { getOihAsOf } from "@/lib/dashboard-metrics";
 import { COUNTED_STOP_WHERE, COUNTED_TRIP_WHERE } from "@/lib/business-trip-report";
+import { loadStopCredits } from "@/lib/trip-credit";
 import { asOfDateForPeriod, type ReportPeriod, type ReportType } from "@/lib/report-period";
 
 export const TOTAL_LABEL = "Cả phòng";
@@ -134,7 +135,7 @@ export async function getReportData(opts: {
   // Kỳ đã kết thúc -> OIH tính ngược về cuối kỳ; kỳ đang chạy -> số hiện tại.
   const oihAsOfEnd = now >= current.end;
   const todayStartVN = new Date(`${new Date(now.getTime() + 7 * 3600_000).toISOString().slice(0, 10)}T00:00:00+07:00`);
-  const [poLines, events, targets, poAgg, customers, oihPast, primaryTrips, supporterTrips, pendingReviewTrips, overdueSteps] = await Promise.all([
+  const [poLines, events, targets, poAgg, customers, oihPast, primaryTrips, supporterTrips, pendingReviewTrips, overdueSteps, stopCredits] = await Promise.all([
     prisma.poTrackingLine.findMany({
       where: { poDate: { gte: rangeStart, lt: rangeEnd }, salesEmployeeId: { in: empIds } },
       select: { salesEmployeeId: true, itemCode: true, poValue: true, poDate: true },
@@ -177,6 +178,8 @@ export async function getReportData(opts: {
       },
       select: { nextActionOwnerId: true },
     }),
+    // Điểm dừng mới (có người đi gặp riêng): mỗi điểm dừng 1 điểm cho người đi gặp + từng người hỗ trợ của điểm dừng đó.
+    loadStopCredits({ start: rangeStart, end: rangeEnd, employeeIds: empIds }),
   ]);
 
   // ---- Gom số theo (nhân viên, chỉ số, kỳ) ----
@@ -217,6 +220,7 @@ export async function getReportData(opts: {
   };
   for (const t of primaryTrips) addTrip(t.employeeId, t.visitDate, t.stops.length);
   for (const t of supporterTrips) addTrip(t.employeeId, t.trip.visitDate, t.trip.stops.length);
+  for (const c of stopCredits) addTrip(c.employeeId, c.visitDate, 1);
   for (const [k, days] of tripDaySets) {
     const [empId, i] = k.split("|");
     add(empId, "trip_days", Number(i), days.size);

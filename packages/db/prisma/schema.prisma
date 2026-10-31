@@ -154,6 +154,9 @@ model User {
   defectsCreated         DefectReport[]              @relation("DefectCreatedBy")
   defectsClosed          DefectReport[]              @relation("DefectClosedBy")
   defectReplacementsConfirmed DefectReplacement[]    @relation("DefectReplacementConfirmedBy")
+  tripStopsAttended           BusinessTripStop[]     @relation("TripStopAttendee")
+  tripStopsAdded              BusinessTripStop[]     @relation("TripStopAddedBy")
+  tripStopSupports            BusinessTripStopSupporter[] @relation("TripStopSupporter")
   defectResponsibilities DefectResponsible[]         @relation("DefectResponsibleUser")
   delayReasonsCreated    DeliveryDelayReason[]       @relation("DelayReasonCreatedBy")
   delayReasonsReviewed   DeliveryDelayReason[]       @relation("DelayReasonReviewedBy")
@@ -629,7 +632,8 @@ model Customer {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  careLogs CustomerCareLog[]
+  careLogs  CustomerCareLog[]
+  tripStops BusinessTripStop[] @relation("TripStopCustomer")
 
   @@map("customers")
 }
@@ -965,6 +969,17 @@ model BusinessTripStop {
   expectedTime String? // Giờ dự kiến gặp (vd "09:30") — chỉ là mốc dự kiến, không phải DateTime đầy đủ
   content      String // Nội dung buổi gặp (dự kiến, lúc đăng ký)
 
+  // ----- Điểm gặp khách theo từng điểm dừng (anh Quân chốt 31/10/2026) -----
+  // Khách chọn từ danh sách (null = gõ tay). attendeeId = NVKD đi gặp điểm dừng này; null = điểm dừng cũ (người đi chính + người
+  // hỗ trợ cả chuyến cùng được tính, như trước). Có attendeeId: chỉ người đi gặp + người hỗ trợ CỦA ĐIỂM DỪNG này được điểm, và chỉ khi có báo cáo "gặp được".
+  customerId String?
+  customer   Customer? @relation("TripStopCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  attendeeId String?
+  attendee   User?     @relation("TripStopAttendee", fields: [attendeeId], references: [id])
+  addedById  String?
+  addedBy    User?     @relation("TripStopAddedBy", fields: [addedById], references: [id])
+  supporters BusinessTripStopSupporter[]
+
   // ----- Báo cáo sau buổi gặp (NVKD nộp; chưa nộp = tất cả null) -----
   outcome           TripStopOutcome?
   contactName       String? // Người đã gặp
@@ -987,7 +1002,21 @@ model BusinessTripStop {
 
   @@index([tripId])
   @@index([nextActionOwnerId, nextActionDue])
+  @@index([attendeeId])
   @@map("business_trip_stops")
+}
+
+/// Người hỗ trợ (giao tiếp, kỹ thuật) của 1 điểm dừng — được tính điểm gặp khách cho đúng điểm dừng này.
+model BusinessTripStopSupporter {
+  id         String           @id @default(cuid())
+  stopId     String
+  stop       BusinessTripStop @relation(fields: [stopId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   User             @relation("TripStopSupporter", fields: [employeeId], references: [id])
+
+  @@unique([stopId, employeeId])
+  @@index([employeeId])
+  @@map("business_trip_stop_supporters")
 }
 
 // Ảnh chứng minh buổi gặp — lưu thẳng trong DB (đã nén ở trình duyệt, ≤ 2MB/ảnh, ≤ 5 ảnh/khách) nên không phụ
@@ -1445,6 +1474,7 @@ enum NotificationType {
   TRIP_NEXT_STEP_DUE // nhắc bước tiếp theo sau buổi gặp tới hạn
   TRIP_REVIEW_PENDING // nhắc Quản trị viên duyệt báo cáo công tác
   TRIP_REVIEWED // báo NVKD kết quả duyệt báo cáo
+  TRIP_ASSIGNED // báo NVKD được chọn đi gặp / hỗ trợ khách trong chuyến công tác của đồng nghiệp
   WEEK_PLAN_DAILY // hằng ngày: điểm Kế hoạch tuần hiện tại + mục còn thiếu nhiều nhất
   DEBT_WEEK_FOLLOWUP // đầu tuần: tuần này cần thu bao nhiêu, trượt bao nhiêu
   ADMIN_KPI_DAILY // hằng ngày cho Admin kinh doanh: điểm KPI tuần + việc còn thiếu
