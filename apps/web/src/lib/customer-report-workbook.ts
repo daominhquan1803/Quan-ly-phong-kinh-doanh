@@ -131,7 +131,7 @@ export async function buildCustomerReportFile(report: CustomerReport, rows: Cust
   list.getCell(1, 1).font = { bold: true, size: 14, color: { argb: NAVY } };
   list.mergeCells(2, 1, 2, 12);
   list.getCell(2, 1).value =
-    "Cột tiêu đề màu CAM là thông tin NVKD sửa được: sửa trực tiếp ở đây rồi vào app > Báo cáo > Danh sách khách hàng > \"Nhập lại từ Excel\" để cập nhật. Không đổi cột Mã KH.";
+    "Cột tiêu đề màu CAM là thông tin NVKD sửa được: sửa trực tiếp ở đây rồi vào app > Khách hàng > Hồ sơ khách hàng >\"Nhập lại từ Excel\" để cập nhật. Không đổi cột Mã KH.";
   list.getCell(2, 1).font = { italic: true, color: { argb: ORANGE } };
   LIST_COLUMNS.forEach((c, i) => {
     head(list.getCell(HEADER_ROW, i + 1), c.header, c.editable ? ORANGE : NAVY);

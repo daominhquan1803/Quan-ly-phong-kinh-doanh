@@ -1,5 +1,6 @@
-import { CustomersPanel } from "@/components/customers/CustomersPanel";
+import { CustomersTabs } from "@/components/customers/CustomersTabs";
 import { auth } from "@/lib/auth";
+import { isSystemAdmin } from "@/lib/rbac";
 import { Users, ShieldCheck } from "lucide-react";
 
 export default async function CustomersPage() {
@@ -23,13 +24,13 @@ export default async function CustomersPage() {
             </div>
             <p className="text-xs text-gray-400 mt-0.5">
               {isAdmin
-                ? "Hồ sơ khách hàng, phân công NVKD phụ trách và quy chuẩn hạn nợ — tự động kích hoạt tính hạn trên Hub Công Nợ"
+                ? "Danh sách khách, phân công NVKD phụ trách, quy chuẩn hạn nợ (tự động tính hạn trên Hub Công Nợ) và Hồ sơ khách hàng"
                 : "Danh sách khách hàng do anh/chị phụ trách và quy chuẩn hạn nợ — tự động kích hoạt tính hạn trên Hub Công Nợ"}
             </p>
           </div>
         </div>
       </div>
-      <CustomersPanel isAdmin={isAdmin} />
+      <CustomersTabs isAdmin={isAdmin} isSystem={isSystemAdmin(session)} />
     </div>
   );
 }
