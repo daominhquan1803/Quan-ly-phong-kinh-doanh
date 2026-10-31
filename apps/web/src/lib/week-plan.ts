@@ -1,7 +1,7 @@
 import { prisma } from "@hoanggia/db";
 import { WeekPlanMetric } from "@prisma/client";
 import { normalizeVN } from "./text-normalize";
-import { classifyEntries, missingFields, RETRO_EXISTING_CHECK, WEEK_ENTRY_COMPLETE_FROM, type EntryClass } from "./week-plan-entry";
+import { classifyEntries, hasCountedTrip, missingFields, RETRO_EXISTING_CHECK, WEEK_ENTRY_COMPLETE_FROM, type EntryClass, type TripStopLite } from "./week-plan-entry";
 import { COUNTED_STOP_WHERE, COUNTED_TRIP_WHERE } from "./business-trip-report";
 
 /**
@@ -565,7 +565,35 @@ export async function loadWeekEntries(employeeIds: string[], weekStart: Date, me
       if (hit) lastOf.set(r.id, hit);
     }
   }
-  const status = classifyEntries(rows.map((r) => ({ ...r, checkExisting: checkExisting(r), lastOrderDate: lastOf.get(r.id)?.date ?? null, lastOrderCustomer: lastOf.get(r.id)?.customerName ?? null })));
+  // "KH mới hẹn gặp được" chỉ tính khi có đăng ký công tác đã duyệt (điểm dừng khớp công ty, ngày đi từ ngày ghi) — chính + hỗ trợ.
+  const needsTrip = (r: { metric: string; entryDate: Date }) => r.metric === "NEW_MEETING" && r.entryDate >= WEEK_ENTRY_COMPLETE_FROM;
+  const meetingRows = rows.filter(needsTrip);
+  const tripStops: TripStopLite[] = [];
+  if (meetingRows.length > 0) {
+    const empIds = Array.from(new Set(meetingRows.map((r) => r.employeeId)));
+    const minVisit = new Date(Math.min(...meetingRows.map((r) => r.entryDate.getTime())) - 12 * 3600_000);
+    const [primary, supporter] = await Promise.all([
+      prisma.businessTripRequest.findMany({
+        where: { ...COUNTED_TRIP_WHERE, visitDate: { gte: minVisit }, employeeId: { in: empIds } },
+        select: { employeeId: true, visitDate: true, stops: { where: COUNTED_STOP_WHERE, select: { companyName: true } } },
+      }),
+      prisma.businessTripSupporter.findMany({
+        where: { trip: { ...COUNTED_TRIP_WHERE, visitDate: { gte: minVisit } }, employeeId: { in: empIds } },
+        select: { employeeId: true, trip: { select: { visitDate: true, stops: { where: COUNTED_STOP_WHERE, select: { companyName: true } } } } },
+      }),
+    ]);
+    for (const t of primary) for (const s of t.stops) tripStops.push({ employeeId: t.employeeId, visitDate: t.visitDate, companyName: s.companyName });
+    for (const t of supporter) for (const s of t.trip.stops) tripStops.push({ employeeId: t.employeeId, visitDate: t.trip.visitDate, companyName: s.companyName });
+  }
+  const status = classifyEntries(
+    rows.map((r) => ({
+      ...r,
+      checkExisting: checkExisting(r),
+      lastOrderDate: lastOf.get(r.id)?.date ?? null,
+      lastOrderCustomer: lastOf.get(r.id)?.customerName ?? null,
+      tripOk: needsTrip(r) ? hasCountedTrip(r, tripStops) : undefined,
+    }))
+  );
   const firstIds = Array.from(new Set([...status.values()].map((s) => s.firstEmployeeId).filter((x): x is string => !!x)));
   const names = new Map(
     (firstIds.length ? await prisma.user.findMany({ where: { id: { in: firstIds } }, select: { id: true, name: true } }) : []).map((u) => [u.id, u.name])
@@ -751,6 +779,7 @@ export async function getWeekPlanMetricDetail(
           e.status === "EXISTING"
             ? `Không tính: khách đã mua hàng của công ty (đơn gần nhất ${fmtVN(e.lastOrderDate!)}${e.lastOrderCustomer ? ` — ${e.lastOrderCustomer}` : ""}). Chỉ tính khách chưa từng mua hoặc ngừng mua từ 1 năm`
             : null,
+          e.status === "NO_TRIP" ? "Không tính: chưa có đăng ký công tác đã duyệt đi gặp khách này (từ ngày ghi nhận trở đi). Có đăng ký được duyệt thì tự tính" : null,
           e.status === "DUPLICATE" ? `Không tính: khách này đã được ${e.firstEmployeeName ?? "bạn"} ghi ngày ${fmtVN(e.firstDate!)} — mỗi khách chỉ tính 1 lần/tháng, cho người ghi trước` : null,
         ]
           .filter(Boolean)

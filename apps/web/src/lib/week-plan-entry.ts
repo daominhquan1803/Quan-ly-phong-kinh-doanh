@@ -143,13 +143,35 @@ export function mapImportColumns(headers: string[]): Record<keyof typeof IMPORT_
 
 export const METRIC_IMPORT_LABEL = { NEW_CONTACT: "Khách hàng mới liên hệ", NEW_MEETING: "Khách hàng mới hẹn gặp được" } as const;
 
-export type EntryStatus = "COUNTED" | "INCOMPLETE" | "DUPLICATE" | "EXISTING";
+export type EntryStatus = "COUNTED" | "INCOMPLETE" | "DUPLICATE" | "EXISTING" | "NO_TRIP";
+
+/**
+ * "KH mới hẹn gặp được" chỉ tính khi NVKD đã đi gặp khách (anh Quân chốt 31/10/2026): có điểm dừng của đăng ký công tác ĐÃ DUYỆT
+ * (đã nộp báo cáo, gặp được khách — cùng định nghĩa buổi đi tính điểm ở business-trip-report.ts) của chính NVKD, tên công ty điểm dừng nằm trong
+ * tên khách của dòng (cùng cách khớp với mục khách cũ), ngày đi từ ngày ghi nhận trở đi. Áp cho dòng ghi từ 26/10/2026.
+ */
+export interface TripStopLite {
+  employeeId: string;
+  visitDate: Date;
+  companyName: string;
+}
+const HALF_DAY = 12 * 3600_000; // ngày đi / ngày ghi có thể lưu lệch múi giờ — cho lệch nửa ngày
+export function hasCountedTrip(e: { employeeId: string; customerName: string; entryDate: Date }, stops: TripStopLite[]): boolean {
+  const name = normalizeVN(e.customerName);
+  return stops.some((s) => {
+    const company = normalizeVN(s.companyName);
+    return s.employeeId === e.employeeId && s.visitDate.getTime() >= e.entryDate.getTime() - HALF_DAY && company.length >= 3 && name.includes(company);
+  });
+}
+
 export interface ClassifiableEntry extends EntryFields {
   id: string;
   employeeId: string;
   metric: string;
   weekStart: Date;
   createdAt: Date;
+  /** Chỉ mục NEW_MEETING: có đăng ký công tác đã duyệt khớp không (hasCountedTrip). undefined = không xét. */
+  tripOk?: boolean;
   /** Đơn/hoá đơn gần nhất của khách (khớp theo tên) TRƯỚC tuần của dòng — để loại khách cũ. */
   lastOrderDate?: Date | null;
   lastOrderCustomer?: string | null;
@@ -192,6 +214,11 @@ export function classifyEntries(entries: ClassifiableEntry[]): Map<string, Entry
         out.set(e.id, { status: "EXISTING", lastOrderDate: e.lastOrderDate, lastOrderCustomer: e.lastOrderCustomer ?? null });
         continue;
       }
+    }
+    // Chưa có đăng ký công tác đã duyệt thì chưa tính và không giữ chỗ (khi có đăng ký được duyệt, dòng tự được tính).
+    if (e.metric === "NEW_MEETING" && e.entryDate >= WEEK_ENTRY_COMPLETE_FROM && e.tripOk === false) {
+      out.set(e.id, { status: "NO_TRIP" });
+      continue;
     }
     const key = `${e.metric}|${e.weekStart.getFullYear()}-${e.weekStart.getMonth()}|${normalizeVN(e.customerName)}`;
     const seen = first.get(key);

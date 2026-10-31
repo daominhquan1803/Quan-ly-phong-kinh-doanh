@@ -49,7 +49,7 @@ interface ResultEntry {
   missing?: string[];
   contactName?: string | null;
   contactPhone?: string | null;
-  status?: "COUNTED" | "INCOMPLETE" | "DUPLICATE" | "EXISTING";
+  status?: "COUNTED" | "INCOMPLETE" | "DUPLICATE" | "EXISTING" | "NO_TRIP";
   lastOrderDate?: string;
   lastOrderCustomer?: string | null;
   firstDate?: string;
@@ -958,6 +958,10 @@ function ResultEntrySection({
                   {e.status === "EXISTING" ? (
                     <span className="text-alert" title={`Khách đã mua hàng của công ty${e.lastOrderCustomer ? ` (${e.lastOrderCustomer})` : ""}${e.lastOrderDate ? `, đơn gần nhất ${formatDateVN(e.lastOrderDate)}` : ""}. Chỉ tính khách chưa từng mua hoặc ngừng mua từ 1 năm.`}>
                       Khách cũ — không tính{e.lastOrderDate ? ` (mua ${formatDateVN(e.lastOrderDate)})` : ""}
+                    </span>
+                  ) : e.status === "NO_TRIP" ? (
+                    <span className="text-amber-400" title="KH mới hẹn gặp được chỉ tính khi NVKD đã đi gặp khách: có điểm dừng của Đăng ký đi công tác đã duyệt (đã nộp báo cáo) khớp tên công ty, ngày đi từ ngày ghi nhận. Có đăng ký được duyệt thì dòng tự được tính.">
+                      Chưa có đăng ký công tác được duyệt
                     </span>
                   ) : e.status === "DUPLICATE" ? (
                     <span className="text-amber-400" title="Mỗi khách chỉ tính 1 lần/tháng, cho người ghi trước">Trùng khách{e.firstDate ? ` (${e.firstEmployeeName ? `${e.firstEmployeeName} ` : ""}đã ghi ${formatDateVN(e.firstDate)})` : ""}</span>

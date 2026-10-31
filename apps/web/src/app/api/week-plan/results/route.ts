@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
     const entries = await loadWeekEntries([employeeId], weekStart, (metric as (typeof MANUAL_METRICS)[number] | null) ?? undefined);
 
     // `missing`: các mục còn thiếu của dòng mới (từ 26/10/2026) — dòng thiếu chưa được tính vào kế hoạch tuần.
-    // `status`: COUNTED = được tính; INCOMPLETE = thiếu `missing`; DUPLICATE = khách đã ghi từ `firstDate` trong tháng.
+    // `status`: COUNTED = được tính; INCOMPLETE = thiếu `missing`; DUPLICATE = khách đã ghi từ `firstDate` trong tháng; NO_TRIP = mục KH mới hẹn gặp được chưa có đăng ký công tác đã duyệt khớp.
     return NextResponse.json({ entries: entries.map((e) => ({ ...e, missing: e.status === "INCOMPLETE" ? missingFields(e) : [] })) });
   } catch (err) {
     if (err instanceof UnauthorizedError) return NextResponse.json({ error: err.message }, { status: 401 });

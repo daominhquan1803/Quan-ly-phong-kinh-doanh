@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyEntries, entryCounts, isPhone, missingFields, validateNewEntry, WEEK_ENTRY_COMPLETE_FROM, type ClassifiableEntry, type EntryFields } from "./week-plan-entry";
+import { classifyEntries, hasCountedTrip, entryCounts, isPhone, missingFields, validateNewEntry, WEEK_ENTRY_COMPLETE_FROM, type ClassifiableEntry, type EntryFields } from "./week-plan-entry";
 
 const after = new Date("2026-10-27T03:00:00Z");
 const before = new Date("2026-10-20T03:00:00Z");
@@ -109,6 +109,57 @@ describe("classifyEntries — mỗi khách chỉ tính 1 lần/tháng, cho ngư�
     const fresh = mk({ weekStart: wk("2026-10-26"), entryDate: new Date("2026-10-27T00:00:00Z") });
     const m = classifyEntries([old1, old2, fresh]);
     expect([st(m, old1), st(m, old2), st(m, fresh)]).toEqual(["COUNTED", "COUNTED", "DUPLICATE"]);
+  });
+});
+
+describe("KH mới hẹn gặp được — phải có đăng ký công tác đã duyệt (anh Quân chốt 31/10/2026)", () => {
+  const weekStart = new Date(2026, 10, 2);
+  let t = 0;
+  const mk = (over: Partial<ClassifiableEntry>): ClassifiableEntry => ({
+    ...full,
+    id: `t${++t}`,
+    employeeId: "u1",
+    metric: "NEW_MEETING",
+    weekStart,
+    entryDate: new Date("2026-11-03T00:00:00Z"),
+    createdAt: new Date(`2026-11-03T0${t % 10}:00:00Z`),
+    ...over,
+  });
+  const st = (m: ReturnType<typeof classifyEntries>, e: ClassifiableEntry) => m.get(e.id)?.status;
+
+  it("chưa có điểm dừng công tác khớp thì NO_TRIP, có thì COUNTED", () => {
+    const no = mk({ customerName: "Cty A", tripOk: false });
+    const yes = mk({ customerName: "Cty B", tripOk: true });
+    const m = classifyEntries([no, yes]);
+    expect([st(m, no), st(m, yes)]).toEqual(["NO_TRIP", "COUNTED"]);
+  });
+  it("dòng NO_TRIP không giữ chỗ: dòng có đăng ký công tác ghi sau vẫn được tính", () => {
+    const no = mk({ tripOk: false });
+    const yes = mk({ entryDate: new Date("2026-11-04T00:00:00Z"), tripOk: true });
+    const m = classifyEntries([no, yes]);
+    expect([st(m, no), st(m, yes)]).toEqual(["NO_TRIP", "COUNTED"]);
+  });
+  it("dòng trước 26/10/2026 và mục khác (NEW_CONTACT) không bị xét đăng ký công tác", () => {
+    const old = mk({ entryDate: new Date("2026-10-20T00:00:00Z"), weekStart: new Date(2026, 9, 19), tripOk: false });
+    const contact = mk({ metric: "NEW_CONTACT", tripOk: false });
+    const m = classifyEntries([old, contact]);
+    expect([st(m, old), st(m, contact)]).toEqual(["COUNTED", "COUNTED"]);
+  });
+});
+
+describe("hasCountedTrip", () => {
+  const stops = [
+    { employeeId: "u1", visitDate: new Date("2026-10-13T00:00:00+07:00"), companyName: "Khóa Việt - Tiệp" },
+    { employeeId: "u2", visitDate: new Date("2026-10-13T00:00:00+07:00"), companyName: "Rise" },
+  ];
+  const e = (over: object) => ({ employeeId: "u1", customerName: "Công ty Cổ phần Khóa Việt - Tiệp", entryDate: new Date("2026-10-11T00:00:00+07:00"), ...over });
+  it("cùng NVKD, tên điểm dừng nằm trong tên khách, ngày đi >= ngày ghi", () => {
+    expect(hasCountedTrip(e({}), stops)).toBe(true);
+  });
+  it("khác NVKD, khác công ty hoặc đi trước ngày ghi thì không khớp", () => {
+    expect(hasCountedTrip(e({ employeeId: "u3" }), stops)).toBe(false);
+    expect(hasCountedTrip(e({ customerName: "CÔNG TY RISE VIỆT NAM" }), stops)).toBe(false); // Rise là của u2
+    expect(hasCountedTrip(e({ entryDate: new Date("2026-10-14T00:00:00+07:00") }), stops)).toBe(false);
   });
 });
 
