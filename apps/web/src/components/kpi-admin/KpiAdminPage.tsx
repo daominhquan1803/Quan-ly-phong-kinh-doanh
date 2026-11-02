@@ -240,6 +240,22 @@ function AdminKpiView({ month, adminId, canEdit, isSystem }: { month: string; ad
               <li key={r.raterId}>
                 <b className="text-ink">{r.rater}</b>: <span className="text-amber-300">{"★".repeat(r.score)}</span>
                 <span className="text-muted2">{"★".repeat(5 - r.score)}</span> {r.comment && <span className="text-muted2">— {r.comment}</span>}
+                {isSystem && (
+                  <button
+                    className="ml-2 rounded-lg border border-red-500/30 px-2 py-0.5 text-[11px] text-red-300 hover:bg-red-500/10"
+                    onClick={async () => {
+                      if (!confirm(`Thu hồi đánh giá của ${r.rater} tháng ${k.month}/${k.year}? NVKD này sẽ chấm lại được.`)) return;
+                      try {
+                        await send("DELETE", "/api/kpi-admin/ratings", { adminId: targetAdmin, month, raterId: r.raterId });
+                        refresh();
+                      } catch (e) {
+                        alert(e instanceof Error ? e.message : "Không thu hồi được");
+                      }
+                    }}
+                  >
+                    Thu hồi
+                  </button>
+                )}
               </li>
             ))}
           </ul>
@@ -597,6 +613,22 @@ function RatingCard({
       setBusy(false);
     }
   }
+  async function revoke() {
+    if (!confirm("Thu hồi đánh giá đã gửi cho tháng này?")) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      await send("DELETE", "/api/kpi-admin/ratings", { adminId: admin.id, month });
+      setScore(0);
+      setComment("");
+      setMsg("Đã thu hồi đánh giá");
+      onSaved();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Thu hồi thất bại");
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
     <div className={cn(card, "space-y-3 max-w-xl")}>
       <p className="text-sm font-semibold text-ink">
@@ -614,6 +646,11 @@ function RatingCard({
         <button disabled={busy || score === 0} onClick={save} className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-bold text-white hover:bg-amber-500 disabled:opacity-50">
           {mine ? "Chấm lại" : "Gửi đánh giá"}
         </button>
+        {mine && (
+          <button disabled={busy} onClick={revoke} className="rounded-xl border border-white/10 px-4 py-2 text-sm text-muted2 hover:text-ink disabled:opacity-50">
+            Thu hồi
+          </button>
+        )}
         {msg && <span className="text-xs text-muted2">{msg}</span>}
       </div>
     </div>

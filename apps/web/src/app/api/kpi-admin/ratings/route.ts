@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@hoanggia/db";
-import { requireSession, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
+import { requireSession, isSystemAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +21,34 @@ export async function GET(req: NextRequest) {
     if (err instanceof UnauthorizedError) return NextResponse.json({ error: err.message }, { status: 401 });
     console.error("kpi-admin ratings GET error", err);
     return NextResponse.json({ error: "Không tải được" }, { status: 500 });
+  }
+}
+
+const revokeSchema = z.object({
+  adminId: z.string().min(1),
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+  /** Chỉ quản trị hệ thống: thu hồi đánh giá của NVKD này. Bỏ trống = đánh giá của chính mình. */
+  raterId: z.string().min(1).optional(),
+});
+
+/** Thu hồi đánh giá: NVKD thu hồi đánh giá của mình; quản trị hệ thống thu hồi của bất kỳ NVKD nào (chấm nhầm tháng...). */
+export async function DELETE(req: NextRequest) {
+  try {
+    const session = await requireSession();
+    const parsed = revokeSchema.safeParse(await req.json().catch(() => null));
+    if (!parsed.success) return NextResponse.json({ error: "Dữ liệu không hợp lệ" }, { status: 400 });
+    const { adminId, raterId } = parsed.data;
+    if (raterId && raterId !== session.user.id && !isSystemAdmin(session)) throw new ForbiddenError("Chỉ quản trị hệ thống thu hồi được đánh giá của người khác");
+    if (!raterId && session.user.role !== "SALES") throw new ForbiddenError("Chọn đánh giá của NVKD cần thu hồi");
+    const [year, month] = parsed.data.month.split("-").map(Number);
+    const { count } = await prisma.adminSatisfactionRating.deleteMany({ where: { adminId, raterId: raterId ?? session.user.id, year, month } });
+    if (count === 0) return NextResponse.json({ error: "Không có đánh giá để thu hồi" }, { status: 404 });
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    if (err instanceof UnauthorizedError) return NextResponse.json({ error: err.message }, { status: 401 });
+    if (err instanceof ForbiddenError) return NextResponse.json({ error: err.message }, { status: 403 });
+    console.error("kpi-admin ratings DELETE error", err);
+    return NextResponse.json({ error: "Không thu hồi được" }, { status: 500 });
   }
 }
 
