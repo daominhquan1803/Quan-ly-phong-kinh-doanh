@@ -191,7 +191,7 @@ async function loadPeriodData(start: Date, endExcl: Date, adminId: string, now: 
       where: { OR: [{ receivedAt: { gte: start, lt: endExcl } }, { receivedAt: null, createdAt: { gte: start, lt: endExcl } }] },
       select: { receivedAt: true, createdAt: true, respondedAt: true, closedAt: true },
     }),
-    prisma.defectReport.count({ where: { reportDate: { gte: start, lt: endExcl }, responsibles: { some: { userId: adminId } } } }),
+    prisma.defectReport.count({ where: { reportDate: { gte: start, lt: endExcl }, otherResponsible: null, responsibles: { some: { userId: adminId } } } }),
     countOrderConfirmErrors(start, endExcl, now),
   ]);
   const lineRows: LineIn[] = lines.map((l) => ({

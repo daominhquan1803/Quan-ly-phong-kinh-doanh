@@ -386,7 +386,8 @@ export async function getKpiMonthlyReport(
     getNewCustomerCounts(year, month, pkd1EmployeeIds),
     prisma.defectResponsible.groupBy({
       by: ["userId"],
-      where: { defectReport: { reportDate: { gte: start, lt: end } }, ...(onlyEmployeeId ? { userId: onlyEmployeeId } : {}) },
+      // Biên bản do bộ phận khác chịu trách nhiệm (otherResponsible) không tính KPI cho NVKD đứng tên theo dõi.
+      where: { defectReport: { reportDate: { gte: start, lt: end }, otherResponsible: null }, ...(onlyEmployeeId ? { userId: onlyEmployeeId } : {}) },
       _count: { _all: true },
     }),
     // Điểm dừng mới (có người đi gặp riêng): mỗi điểm dừng 1 điểm cho người đi gặp + từng người hỗ trợ của điểm dừng đó (lib/trip-credit.ts).

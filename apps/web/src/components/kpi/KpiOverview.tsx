@@ -445,12 +445,13 @@ function DefectsPanel({ year, month }: { year: number; month: number }) {
     queryFn: async () => {
       const res = await fetch(`/api/defects?status=ALL&month=${ym}`);
       if (!res.ok) throw new Error("Không tải được");
-      return res.json() as Promise<{ defects: { id: string; reportNumber: string; reportDate: string; customerName: string | null; status: "OPEN" | "CLOSED"; responsibles: { user: { id: string; name: string } }[] }[] }>;
+      return res.json() as Promise<{ defects: { id: string; reportNumber: string; reportDate: string; customerName: string | null; status: "OPEN" | "CLOSED"; otherResponsible: string | null; responsibles: { user: { id: string; name: string } }[] }[] }>;
     },
   });
   const defects = data?.defects ?? [];
   const byPerson = new Map<string, number>();
-  for (const d of defects) for (const r of d.responsibles) byPerson.set(r.user.name, (byPerson.get(r.user.name) ?? 0) + 1);
+  // Biên bản do bộ phận khác chịu trách nhiệm không tính cho ai.
+  for (const d of defects) if (!d.otherResponsible) for (const r of d.responsibles) byPerson.set(r.user.name, (byPerson.get(r.user.name) ?? 0) + 1);
   return (
     <div className="px-5 pb-5 space-y-3 text-sm">
       <p className="text-xs text-muted2">
@@ -473,7 +474,7 @@ function DefectsPanel({ year, month }: { year: number; month: number }) {
             {defects.map((d) => (
               <li key={d.id} className="text-xs">
                 <span className="font-mono text-amber-400">{d.reportNumber}</span> · {formatDateVN(d.reportDate)} · {d.customerName} ·{" "}
-                {d.responsibles.map((r) => r.user.name).join(", ") || "—"} · {d.status === "OPEN" ? "Đang mở" : "Đã đóng"}
+                {d.otherResponsible ? `Do ${d.otherResponsible} (không tính KPI)` : d.responsibles.map((r) => r.user.name).join(", ") || "—"} · {d.status === "OPEN" ? "Đang mở" : "Đã đóng"}
               </li>
             ))}
           </ul>

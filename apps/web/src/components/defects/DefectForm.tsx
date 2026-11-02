@@ -64,6 +64,8 @@ export function DefectForm({ initial, onDone, onCancel }: { initial?: DefectRow 
   );
   const [responsibleIds, setResponsibleIds] = useState<string[]>(initial?.responsibles.map((r) => r.user.id) ?? []);
   const [otherResponsible, setOtherResponsible] = useState(initial?.otherResponsible ?? "");
+  // Lỗi do nhân viên (tính KPI) hay do bộ phận khác (không tính KPI) — biên bản mới phải chọn rõ.
+  const [cause, setCause] = useState<"STAFF" | "OTHER">(initial ? (initial.otherResponsible ? "OTHER" : "STAFF") : "STAFF");
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -132,6 +134,10 @@ export function DefectForm({ initial, onDone, onCancel }: { initial?: DefectRow 
   const updateItem = (key: string, patch: Partial<ItemDraft>) => setItems((cur) => cur.map((x) => (x.key === key ? { ...x, ...patch } : x)));
 
   async function save() {
+    if (cause === "OTHER" && !otherResponsible) {
+      setError("Chọn bộ phận chịu trách nhiệm");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -152,7 +158,7 @@ export function DefectForm({ initial, onDone, onCancel }: { initial?: DefectRow 
           defectQty: Number(i.defectQty),
         })),
         responsibleUserIds: responsibleIds,
-        otherResponsible: otherResponsible || null,
+        otherResponsible: cause === "OTHER" ? otherResponsible || null : null,
         receivedAt: receivedAt || null,
       };
       const res = await fetch(initial ? `/api/defects/${initial.id}` : "/api/defects", {
@@ -339,9 +345,21 @@ export function DefectForm({ initial, onDone, onCancel }: { initial?: DefectRow 
         <textarea className={`${input} min-h-[90px]`} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Mô tả lỗi: hiện tượng, nguyên nhân sơ bộ, khách phản ánh..." />
       </div>
 
+      <div className="space-y-2">
+        <p className={label}>Lỗi do ai? *</p>
+        <div className="flex flex-wrap gap-4 text-sm">
+          <label className="flex items-center gap-1.5">
+            <input type="radio" checked={cause === "STAFF"} onChange={() => setCause("STAFF")} /> Do nhân viên (NVKD / Admin kinh doanh) — tính KPI
+          </label>
+          <label className="flex items-center gap-1.5">
+            <input type="radio" checked={cause === "OTHER"} onChange={() => setCause("OTHER")} /> Do bộ phận khác — không tính KPI cho nhân viên
+          </label>
+        </div>
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <p className={label}>Người chịu trách nhiệm (tính vào KPI tháng)</p>
+          <p className={label}>{cause === "STAFF" ? "Nhân viên chịu trách nhiệm (tính vào KPI tháng)" : "NVKD phụ trách đơn (để theo dõi biên bản, không tính KPI)"}</p>
           <div className="flex flex-wrap gap-2">
             {people.map((p) => {
               const on = responsibleIds.includes(p.id);
@@ -360,17 +378,19 @@ export function DefectForm({ initial, onDone, onCancel }: { initial?: DefectRow 
             })}
           </div>
         </div>
-        <div className="space-y-1">
-          <p className={label}>Bộ phận khác chịu trách nhiệm (không tính KPI)</p>
-          <select className={input} value={otherResponsible} onChange={(e) => setOtherResponsible(e.target.value)}>
-            <option value="">— Không —</option>
-            {DEFECT_OTHER_PARTIES.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-        </div>
+        {cause === "OTHER" && (
+          <div className="space-y-1">
+            <p className={label}>Bộ phận chịu trách nhiệm *</p>
+            <select className={input} value={otherResponsible} onChange={(e) => setOtherResponsible(e.target.value)}>
+              <option value="">— Chọn bộ phận —</option>
+              {DEFECT_OTHER_PARTIES.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       <div className="space-y-1">

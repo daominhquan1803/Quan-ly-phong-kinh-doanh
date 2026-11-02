@@ -4,7 +4,8 @@ import { Prisma } from "@hoanggia/db";
 /**
  * Biên bản hàng lỗi (anh Quân chốt 17/10/2026): số biên bản nhập tay theo số của công ty; chọn khách + phiếu đi hàng (hoặc
  * ngày giao) + mặt hàng + SL lỗi; thông tin lỗi; người chịu trách nhiệm (NVKD và/hoặc Admin kinh doanh — tính vào KPI tháng
- * của từng người) hoặc bộ phận khác; ảnh lỗi. Giải quyết xong thì đóng biên bản, ghi có sửa hoá đơn bán hàng không, sửa hoá
+ * của từng người) hoặc bộ phận khác (otherResponsible có giá trị = lỗi do bộ phận khác, KHÔNG tính KPI cho ai, người
+ * chọn kèm chỉ để theo dõi/xem biên bản — anh Quân chốt 02/11/2026); ảnh lỗi. Giải quyết xong thì đóng biên bản, ghi có sửa hoá đơn bán hàng không, sửa hoá
  * đơn nào, sửa thế nào.
  */
 export { DEFECT_OTHER_PARTIES } from "./defect-report-shared";

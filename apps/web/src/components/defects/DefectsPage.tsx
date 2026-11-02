@@ -172,8 +172,17 @@ export function DefectsPage({ canEdit, canManage }: { canEdit: boolean; canManag
                     {d.items.length > 2 && <p className="text-[11px] text-muted2">+{d.items.length - 2} mặt hàng</p>}
                   </td>
                   <td className="px-4 py-2.5 text-xs">
-                    {d.responsibles.map((r) => r.user.name).join(", ") || "—"}
-                    {d.otherResponsible && <p className="text-muted2">{d.otherResponsible}</p>}
+                    {d.otherResponsible ? (
+                      <>
+                        <p className="font-semibold text-sky-300">Do bộ phận: {d.otherResponsible}</p>
+                        <p className="text-muted2">Không tính KPI{d.responsibles.length > 0 ? ` · phụ trách đơn: ${d.responsibles.map((r) => r.user.name).join(", ")}` : ""}</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-semibold text-amber-300">Do nhân viên (tính KPI)</p>
+                        <p>{d.responsibles.map((r) => r.user.name).join(", ") || "—"}</p>
+                      </>
+                    )}
                   </td>
                   <td className="px-4 py-2.5 whitespace-nowrap">
                     <span
