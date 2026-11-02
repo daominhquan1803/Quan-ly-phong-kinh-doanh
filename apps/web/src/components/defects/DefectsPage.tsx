@@ -175,11 +175,11 @@ export function DefectsPage({ canEdit, canManage }: { canEdit: boolean; canManag
                     {d.otherResponsible ? (
                       <>
                         <p className="font-semibold text-sky-300">Do bộ phận: {d.otherResponsible}</p>
-                        <p className="text-muted2">Không tính KPI{d.responsibles.length > 0 ? ` · phụ trách đơn: ${d.responsibles.map((r) => r.user.name).join(", ")}` : ""}</p>
+                        {d.responsibles.length > 0 && <p className="text-muted2">Phụ trách đơn: {d.responsibles.map((r) => r.user.name).join(", ")}</p>}
                       </>
                     ) : (
                       <>
-                        <p className="font-semibold text-amber-300">Do nhân viên (tính KPI)</p>
+                        <p className="font-semibold text-amber-300">Do nhân viên</p>
                         <p>{d.responsibles.map((r) => r.user.name).join(", ") || "—"}</p>
                       </>
                     )}
