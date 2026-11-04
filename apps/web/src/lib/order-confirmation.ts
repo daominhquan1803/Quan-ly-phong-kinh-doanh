@@ -5,7 +5,7 @@
  * Giờ làm việc: Thứ Hai–Thứ Bảy, 7h30–17h30 (giờ Việt Nam), Chủ nhật nghỉ. Đơn tạo ngoài giờ thì bắt đầu đếm từ 7h30 ngày làm việc kế tiếp.
  * Chỉ áp dụng cho đơn AMIS tạo từ CONFIRM_FROM; đơn huỷ và đơn giá trị 0 (hàng mẫu) không phải xác nhận.
  */
-export const CONFIRM_FROM = new Date("2026-10-30T00:00:00+07:00");
+export const CONFIRM_FROM = new Date("2026-10-29T00:00:00+07:00");
 export const CONFIRM_HOURS = 2;
 const VN = 7 * 3600_000;
 const DAY = 86_400_000;

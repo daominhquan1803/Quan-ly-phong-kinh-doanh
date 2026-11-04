@@ -37,14 +37,15 @@ describe("confirmInfo / needsConfirmation", () => {
     expect(l.state).toBe("LATE");
     expect(isConfirmError(l)).toBe(true);
   });
-  it("không áp dụng: đơn trước 30/10/2026, đơn huỷ, đơn giá trị 0 (mẫu), đơn không từ AMIS", () => {
+  it("không áp dụng: đơn trước 29/10/2026, đơn huỷ, đơn giá trị 0 (mẫu), đơn không từ AMIS", () => {
     const at = { amisCreatedAt: created, confirmedAt: null };
     expect(needsConfirmation({ ...base, ...at })).toBe(true);
-    expect(needsConfirmation({ ...base, amisCreatedAt: vn("2026-10-29T09:00:00") })).toBe(false);
+    expect(needsConfirmation({ ...base, amisCreatedAt: vn("2026-10-29T09:00:00") })).toBe(true);
+    expect(needsConfirmation({ ...base, amisCreatedAt: vn("2026-10-28T09:00:00") })).toBe(false);
     expect(needsConfirmation({ ...base, ...at, status: "CANCELLED" })).toBe(false);
     expect(needsConfirmation({ ...base, ...at, totalValue: 0 })).toBe(false);
     expect(needsConfirmation({ ...base, ...at, source: "MANUAL" })).toBe(false);
-    expect(confirmInfo({ ...base, amisCreatedAt: vn("2026-10-29T09:00:00"), confirmedAt: null }).state).toBe("NA");
+    expect(confirmInfo({ ...base, amisCreatedAt: vn("2026-10-28T09:00:00"), confirmedAt: null }).state).toBe("NA");
   });
   it("đơn cũ nhưng Admin đã xác nhận → DONE (không phải lỗi)", () => {
     const i = confirmInfo({ ...base, amisCreatedAt: vn("2026-10-20T09:00:00"), confirmedAt: vn("2026-11-01T09:00:00") });
