@@ -49,8 +49,8 @@ interface SummaryResponse {
   overdueRate: number;
   badDebtRate: number;
   perEmployee: { employeeId: string; employeeName: string; totalDebt: number; overdueDebt: number; badDebt: number }[] | null;
-  weeklyPlan: { weekIndex: number; start: string; end: string; planned: number; collected: number; rate: number | null }[];
-  monthlyPlan: { planned: number; collected: number; rate: number | null; totalReceived: number };
+  weeklyPlan: { weekIndex: number; start: string; end: string; planned: number; collected: number; early: number; outsidePlan: number; rate: number | null }[];
+  monthlyPlan: { planned: number; collected: number; early: number; outsidePlan: number; rate: number | null; totalReceived: number };
 }
 
 type SortField = "dueDate" | "remaining";
@@ -552,9 +552,21 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                 <span className="text-ink">{formatCurrencyVND(weekSummary?.monthlyPlan.planned ?? 0)}</span>
                 {weekSummary?.monthlyPlan.rate != null && (
                   <span className={cn("ml-2 font-semibold", weekSummary.monthlyPlan.rate >= 1 ? "text-emerald-400" : "text-alert")}>
-                    ({pct(weekSummary.monthlyPlan.rate)} đạt)
+                    ({pct(weekSummary.monthlyPlan.rate)} thực hiện)
                   </span>
                 )}
+              </div>
+              <div
+                className="text-xs font-mono text-muted2 bg-white/5 px-3 py-1.5 rounded-lg border border-white/5"
+                title="Tiền hoá đơn hẹn thu các tuần sau nhưng khách đã trả sớm — đã tính trong 'Cả tháng'"
+              >
+                Về sớm: <span className="text-ink font-semibold">{formatCurrencyVND(weekSummary?.monthlyPlan.early ?? 0)}</span>
+              </div>
+              <div
+                className="text-xs font-mono text-muted2 bg-white/5 px-3 py-1.5 rounded-lg border border-white/5"
+                title="Tiền về của hoá đơn không hẹn thu trong tháng này — không tính vào 'Cả tháng'"
+              >
+                Ngoài kế hoạch: <span className="text-ink font-semibold">{formatCurrencyVND(weekSummary?.monthlyPlan.outsidePlan ?? 0)}</span>
               </div>
               <div
                 className="text-xs font-mono text-muted2 bg-white/5 px-3 py-1.5 rounded-lg border border-white/5"
@@ -585,15 +597,27 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                   </p>
                   <span className="text-[10px] text-muted2 font-mono">{formatDateVN(w.start).slice(0, 5)}–{formatDateVN(w.end).slice(0, 5)}</span>
                 </div>
-                <p className="text-sm font-bold font-mono text-ink mt-2">
-                  <span className="text-emerald-400">{formatCurrencyVND(w.collected)}</span>
-                  <span className="text-muted2 text-xs font-normal"> / {formatCurrencyVND(w.planned)}</span>
+                <p
+                  className={cn("text-2xl font-bold font-mono mt-2", w.rate === null ? "text-muted2" : w.rate >= 1 ? "text-emerald-400" : "text-alert")}
+                  title="% thực hiện = tiền đã về của các hoá đơn hẹn thu tuần này (kể cả về sớm) / kế hoạch thu tuần"
+                >
+                  {w.rate === null ? "—" : pct(w.rate)}
                 </p>
-                {w.rate !== null && (
-                  <p className={cn("text-xs mt-1.5 font-medium font-mono", w.rate >= 1 ? "text-emerald-400" : "text-alert")}>
-                    {pct(w.rate)} đạt chỉ tiêu
+                <p className="text-[11px] text-muted2 -mt-0.5">thực hiện kế hoạch</p>
+                <p className="text-xs font-mono text-ink mt-1.5">
+                  <span className="text-emerald-400 font-semibold">{formatCurrencyVND(w.collected)}</span>
+                  <span className="text-muted2"> / {formatCurrencyVND(w.planned)}</span>
+                </p>
+                <div className="mt-2 space-y-0.5 border-t border-white/5 pt-1.5 text-[11px] text-muted2">
+                  <p className="flex justify-between gap-2" title="Phần đã tính trong % thực hiện: hoá đơn hẹn thu tuần này nhưng khách trả trước tuần này">
+                    <span>Về sớm</span>
+                    <span className="font-mono text-ink">{formatCurrencyVND(w.early)}</span>
                   </p>
-                )}
+                  <p className="flex justify-between gap-2" title="Tiền về trong tuần này của hoá đơn không hẹn thu trong tháng — không tính vào % thực hiện">
+                    <span>Ngoài kế hoạch</span>
+                    <span className="font-mono text-ink">{formatCurrencyVND(w.outsidePlan)}</span>
+                  </p>
+                </div>
               </button>
             ))}
           </div>

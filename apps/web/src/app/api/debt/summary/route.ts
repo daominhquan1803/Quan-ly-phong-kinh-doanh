@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma } from "@hoanggia/db";
 import { requireSession, scopeByOwner, UnauthorizedError } from "@/lib/rbac";
 import { monthWeekBuckets } from "@/lib/debt-status";
+import { classifyWeekCollections } from "@/lib/debt-plan-collection";
 import { getDebtSnapshot } from "@/lib/debt-snapshot";
 
 export const dynamic = "force-dynamic";
@@ -48,7 +49,7 @@ export async function GET(req: NextRequest) {
     // "Tuần 1-5" như file Công nợ gốc anh Quân gửi).
     const monthStart = new Date(year, month - 1, 1);
     const monthEnd = new Date(year, month, 0);
-    const weeks = monthWeekBuckets(year, month).map((b) => ({ ...b, planned: 0, collected: 0 }));
+    const weeks = monthWeekBuckets(year, month).map((b) => ({ ...b, planned: 0, collected: 0, early: 0, outsidePlan: 0 }));
     const planInvoices = await prisma.debtInvoice.findMany({
       where,
       select: { originalAmount: true, expectedPaymentDate: true },
@@ -64,16 +65,27 @@ export async function GET(req: NextRequest) {
     // không tính vào đây vì không biết thuộc kế hoạch của ai.
     const allocations = await prisma.debtPaymentAllocation.findMany({
       where: { invoice: where },
-      select: { amount: true, payment: { select: { paymentDate: true } } },
+      select: { amount: true, payment: { select: { paymentDate: true } }, invoice: { select: { expectedPaymentDate: true } } },
     });
-    for (const alloc of allocations) {
-      const d = alloc.payment.paymentDate;
-      if (!d) continue;
-      const bucket = weeks.find((w) => d >= w.start && d <= w.end);
-      if (bucket) bucket.collected += Number(alloc.amount);
-    }
+    // "Thực hiện" tuần N = tiền về trong tháng của các hoá đơn hẹn thu tuần N (kể cả về sớm); "về sớm" và "ngoài kế hoạch"
+    // là dòng phụ — xem debt-plan-collection.ts.
+    const collections = classifyWeekCollections(
+      weeks,
+      allocations.map((a) => ({
+        amount: Number(a.amount),
+        paymentDate: a.payment.paymentDate,
+        expectedPaymentDate: a.invoice.expectedPaymentDate,
+      }))
+    );
+    weeks.forEach((w, i) => {
+      w.collected = collections[i].collected;
+      w.early = collections[i].early;
+      w.outsidePlan = collections[i].outsidePlan;
+    });
     const monthlyPlanned = weeks.reduce((s, w) => s + w.planned, 0);
     const monthlyCollected = weeks.reduce((s, w) => s + w.collected, 0);
+    const monthlyEarly = weeks.reduce((s, w) => s + w.early, 0);
+    const monthlyOutsidePlan = weeks.reduce((s, w) => s + w.outsidePlan, 0);
 
     // Tổng TẤT CẢ tiền về trong tháng (không lọc theo NVKD/kế hoạch) — khác với monthlyCollected
     // ở trên (chỉ tính khoản đã khớp vào đúng hoá đơn trong phạm vi đang xem). Khoản "Chưa khớp"
@@ -103,11 +115,15 @@ export async function GET(req: NextRequest) {
         end: w.end,
         planned: w.planned,
         collected: w.collected,
+        early: w.early,
+        outsidePlan: w.outsidePlan,
         rate: w.planned > 0 ? w.collected / w.planned : null,
       })),
       monthlyPlan: {
         planned: monthlyPlanned,
         collected: monthlyCollected,
+        early: monthlyEarly,
+        outsidePlan: monthlyOutsidePlan,
         rate: monthlyPlanned > 0 ? monthlyCollected / monthlyPlanned : null,
         totalReceived: monthlyTotalReceived,
       },
