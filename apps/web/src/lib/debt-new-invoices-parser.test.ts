@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import * as XLSX from "xlsx";
 import { classifyInvoiceStatus, parseDebtNewInvoicesExcel } from "./debt-new-invoices-parser";
-import { isFuzzyDuplicate, paymentDescKey } from "./debt-payment-dedupe";
+import { isFuzzyDuplicate, isSameCustomerTransaction, paymentDescKey } from "./debt-payment-dedupe";
 
 describe("classifyInvoiceStatus", () => {
   it("phân loại đúng các trạng thái thật của AMIS (T8-T9/2026)", () => {
@@ -119,6 +119,17 @@ describe("chống nhập trùng Tiền về theo số tiền + nội dung", () =
   it("ngày vô lý (năm 2027+ do đọc sai) hoặc thiếu ngày -> coi là trùng nếu nội dung giống hệt", () => {
     expect(isFuzzyDuplicate(key(100, d("2027-05-08")), key(100, d("2026-09-16")), new Date("2026-10-16"))).toBe(true);
     expect(isFuzzyDuplicate(key(100, null), key(100, d("2026-09-16")))).toBe(true);
+  });
+  it("cùng khách + cùng số tiền + cùng ngày thì trùng dù nội dung khác (kế toán vs sao kê ngân hàng: Quang Xanh 11/2026)", () => {
+    const tx = (amount: number, date: Date | null, customerCode: string | null) => ({ amount, date, customerCode });
+    const old = tx(23124744, d("2026-11-02"), "MP-QUANGXANH");
+    expect(isSameCustomerTransaction(tx(23124744, d("2026-11-02"), "MP-QUANGXANH"), old)).toBe(true);
+    expect(isSameCustomerTransaction(tx(23124744, d("2026-11-03"), "MP-QUANGXANH"), old)).toBe(true); // lệch 1 ngày vẫn trùng
+    expect(isSameCustomerTransaction(tx(23124744, d("2026-11-05"), "MP-QUANGXANH"), old)).toBe(false); // lệch nhiều ngày: giao dịch khác
+    expect(isSameCustomerTransaction(tx(23124744, d("2026-11-02"), "KHAC"), old)).toBe(false); // khác khách
+    expect(isSameCustomerTransaction(tx(23124745, d("2026-11-02"), "MP-QUANGXANH"), old)).toBe(false); // khác số tiền
+    expect(isSameCustomerTransaction(tx(23124744, d("2026-11-02"), null), old)).toBe(false); // không có mã khách
+    expect(isSameCustomerTransaction(tx(23124744, null, "MP-QUANGXANH"), old)).toBe(false); // thiếu ngày
   });
   it("khác số tiền hoặc nội dung ngắn/chung chung -> không coi là trùng", () => {
     expect(isFuzzyDuplicate(key(100, d("2026-10-08")), key(101, d("2026-10-08")))).toBe(false);

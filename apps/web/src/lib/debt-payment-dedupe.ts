@@ -23,6 +23,21 @@ export interface DedupeKey {
   descKey: string;
 }
 
+export interface CustomerTxKey {
+  amount: number;
+  date: Date | null;
+  customerCode: string | null;
+}
+
+/** Cùng khách + cùng số tiền + ngày cách nhau không quá 1 ngày, KHÔNG cần nội dung giống nhau: cùng 1 giao dịch hay được ghi 2 kiểu
+ * ở 2 file ("Thu tiền khách hàng ... theo hóa đơn ..." của kế toán và dòng sao kê "IBBIZ6088193311.CT TNHH ... chuyen tien") nên
+ * so nội dung không nhận ra. Chỉ dùng để so với giao dịch ĐÃ ghi từ file trước, không so các dòng trong cùng 1 file. */
+export function isSameCustomerTransaction(a: CustomerTxKey, b: CustomerTxKey): boolean {
+  if (!a.customerCode || a.customerCode !== b.customerCode) return false;
+  if (Math.abs(a.amount - b.amount) > 0.5 || !a.date || !b.date) return false;
+  return Math.abs(a.date.getTime() - b.date.getTime()) <= DAY_MS;
+}
+
 /** Cùng số tiền + cùng nội dung (đủ dài) và ngày gần nhau — hoặc 1 bên ngày vô lý (thiếu / ở tương lai do đọc sai năm). */
 export function isFuzzyDuplicate(a: DedupeKey, b: DedupeKey, now: Date = new Date()): boolean {
   if (Math.abs(a.amount - b.amount) > 0.5) return false;

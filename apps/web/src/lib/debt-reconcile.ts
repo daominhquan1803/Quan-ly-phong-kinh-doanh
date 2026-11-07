@@ -4,7 +4,7 @@
 import { prisma, Prisma } from "@hoanggia/db";
 import { planPaymentAllocation, invoiceKey } from "./debt-payment-allocation";
 import { extractInvoiceNumbersFromDescription } from "./debt-payments-parser";
-import { isFuzzyDuplicate, paymentDescKey } from "./debt-payment-dedupe";
+import { isFuzzyDuplicate, isSameCustomerTransaction, paymentDescKey } from "./debt-payment-dedupe";
 
 type Db = typeof prisma;
 const EPS = 0.5;
@@ -159,19 +159,25 @@ export async function releaseGuessedAllocations(db: Db, paymentId: string): Prom
 /** Chỉ số các dòng của file Tiền về mới TRÙNG (số tiền + nội dung giống hệt, ngày gần nhau hoặc ngày vô lý) với giao dịch đã ghi trước đó. */
 export async function findFuzzyDuplicates(
   db: Db,
-  rows: { amount: number; paymentDate: Date | null; rawDescription: string | null }[]
+  rows: { amount: number; paymentDate: Date | null; rawDescription: string | null; customerCode?: string | null }[]
 ): Promise<Set<number>> {
   const dup = new Set<number>();
   const amounts = Array.from(new Set(rows.map((r) => r.amount)));
   if (amounts.length === 0) return dup;
   const existing = await db.debtPayment.findMany({
     where: { amount: { in: amounts } },
-    select: { amount: true, paymentDate: true, rawDescription: true },
+    select: { amount: true, paymentDate: true, rawDescription: true, customerCode: true },
   });
-  const keyed = existing.map((e) => ({ amount: Number(e.amount), date: e.paymentDate, descKey: paymentDescKey(e.rawDescription) }));
+  const keyed = existing.map((e) => ({
+    amount: Number(e.amount),
+    date: e.paymentDate,
+    descKey: paymentDescKey(e.rawDescription),
+    customerCode: e.customerCode,
+  }));
   rows.forEach((r, i) => {
     const k = { amount: r.amount, date: r.paymentDate, descKey: paymentDescKey(r.rawDescription) };
-    if (keyed.some((e) => isFuzzyDuplicate(k, e))) dup.add(i);
+    const tx = { amount: r.amount, date: r.paymentDate, customerCode: r.customerCode ?? null };
+    if (keyed.some((e) => isFuzzyDuplicate(k, e) || isSameCustomerTransaction(tx, e))) dup.add(i);
   });
   return dup;
 }
