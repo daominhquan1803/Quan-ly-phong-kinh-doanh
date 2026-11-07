@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma } from "@hoanggia/db";
 import { requireSession, scopeByOwner, UnauthorizedError } from "@/lib/rbac";
 import { monthWeekBuckets } from "@/lib/debt-status";
-import { classifyWeekCollections } from "@/lib/debt-plan-collection";
+import { buildWeekPlan } from "@/lib/debt-plan-collection";
 import { getDebtSnapshot } from "@/lib/debt-snapshot";
 
 export const dynamic = "force-dynamic";
@@ -50,37 +50,32 @@ export async function GET(req: NextRequest) {
     const monthStart = new Date(year, month - 1, 1);
     const monthEnd = new Date(year, month, 0);
     const weeks = monthWeekBuckets(year, month).map((b) => ({ ...b, planned: 0, collected: 0, early: 0, outsidePlan: 0 }));
+    // Chỉ tính các khoản Tiền về đã khớp được vào đúng hoá đơn nằm trong phạm vi đang xem (cùng `where`) — khoản "Chưa khớp"
+    // (không rõ hoá đơn/nhân viên nào) không tính vào đây vì không biết thuộc kế hoạch của ai.
+    // Luật kế hoạch / thực hiện / về sớm / ngoài kế hoạch: xem debt-plan-collection.ts.
     const planInvoices = await prisma.debtInvoice.findMany({
       where,
-      select: { originalAmount: true, expectedPaymentDate: true },
+      select: {
+        originalAmount: true,
+        expectedPaymentDate: true,
+        dueDate: true,
+        allocations: { select: { amount: true, payment: { select: { paymentDate: true } } } },
+      },
     });
-    for (const inv of planInvoices) {
-      if (!inv.expectedPaymentDate) continue;
-      const d = new Date(inv.expectedPaymentDate);
-      const bucket = weeks.find((w) => d >= w.start && d <= w.end);
-      if (bucket) bucket.planned += Number(inv.originalAmount);
-    }
-    // Chỉ tính các khoản Tiền về đã khớp được vào đúng hoá đơn nằm trong phạm vi đang xem (cùng
-    // `where` với danh sách hoá đơn ở trên) — khoản "Chưa khớp" (không rõ hoá đơn/nhân viên nào)
-    // không tính vào đây vì không biết thuộc kế hoạch của ai.
-    const allocations = await prisma.debtPaymentAllocation.findMany({
-      where: { invoice: where },
-      select: { amount: true, payment: { select: { paymentDate: true } }, invoice: { select: { expectedPaymentDate: true } } },
-    });
-    // "Thực hiện" tuần N = tiền về trong tháng của các hoá đơn hẹn thu tuần N (kể cả về sớm); "về sớm" và "ngoài kế hoạch"
-    // là dòng phụ — xem debt-plan-collection.ts.
-    const collections = classifyWeekCollections(
+    const planResult = buildWeekPlan(
       weeks,
-      allocations.map((a) => ({
-        amount: Number(a.amount),
-        paymentDate: a.payment.paymentDate,
-        expectedPaymentDate: a.invoice.expectedPaymentDate,
+      planInvoices.map((inv) => ({
+        originalAmount: Number(inv.originalAmount),
+        expectedPaymentDate: inv.expectedPaymentDate,
+        dueDate: inv.dueDate,
+        allocations: inv.allocations.map((a) => ({ amount: Number(a.amount), paymentDate: a.payment.paymentDate })),
       }))
     );
     weeks.forEach((w, i) => {
-      w.collected = collections[i].collected;
-      w.early = collections[i].early;
-      w.outsidePlan = collections[i].outsidePlan;
+      w.planned = planResult[i].planned;
+      w.collected = planResult[i].collected;
+      w.early = planResult[i].early;
+      w.outsidePlan = planResult[i].outsidePlan;
     });
     const monthlyPlanned = weeks.reduce((s, w) => s + w.planned, 0);
     const monthlyCollected = weeks.reduce((s, w) => s + w.collected, 0);
