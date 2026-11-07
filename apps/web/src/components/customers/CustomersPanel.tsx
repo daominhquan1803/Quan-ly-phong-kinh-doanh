@@ -96,7 +96,7 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
   const [onlyWithTerms, setOnlyWithTerms] = useState<boolean | null>(null);
   const [onlyMissingEmail, setOnlyMissingEmail] = useState(false);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState<number>(50);
+  const [pageSize, setPageSize] = useState<number>(10);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data, isLoading } = useQuery({
@@ -794,13 +794,12 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
           <table className="min-w-full text-sm">
             <thead>
               <tr className="border-b border-gray-200/80 bg-gray-50/90 text-xs font-semibold uppercase tracking-wider text-ink2/70">
-                <th className="px-5 py-3.5 text-left w-36">Mã khách hàng</th>
-                <th className="px-5 py-3.5 text-left min-w-[280px]">Tên khách hàng & Người liên hệ</th>
-                <th className="px-5 py-3.5 text-left min-w-[240px]">Email nhận thư nhắc</th>
-                <th className="px-5 py-3.5 text-left w-32">Đã nhắc tay</th>
-                <th className="px-5 py-3.5 text-left min-w-[200px]">NVKD phụ trách</th>
-                <th className="px-5 py-3.5 text-left min-w-[240px]">Thời hạn công nợ</th>
-                <th className="px-5 py-3.5 text-right w-44">Thao tác</th>
+                <th className="px-3 py-3 text-left">Mã khách hàng</th>
+                <th className="px-3 py-3 text-left">Email nhận thư nhắc</th>
+                <th className="px-3 py-3 text-left w-20">Đã nhắc tay</th>
+                <th className="px-3 py-3 text-left">NVKD phụ trách</th>
+                <th className="px-3 py-3 text-left">Thời hạn công nợ</th>
+                <th className="px-3 py-3 text-right w-28">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200/40">
@@ -825,35 +824,17 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
                     }`}
                   >
                     {/* Cột Mã khách hàng */}
-                    <td className="px-5 py-3.5 align-middle">
-                      <span className="font-mono text-xs font-semibold px-2.5 py-1 rounded-lg bg-navy-100/90 border border-gray-300 text-amber-400/95 tracking-wide shadow-sm inline-flex items-center gap-1">
+                    <td className="px-3 py-2.5 align-middle">
+                      <span
+                        title={c.contactPerson ? `${c.customerName} — LH: ${c.contactPerson}` : c.customerName}
+                        className="font-mono text-xs font-semibold px-2.5 py-1 rounded-lg bg-navy-100/90 border border-gray-300 text-amber-400/95 tracking-wide shadow-sm inline-flex items-center gap-1"
+                      >
                         {c.customerCode}
                       </span>
                     </td>
 
-                    {/* Cột Tên khách hàng & Người liên hệ */}
-                    <td className="px-5 py-3.5 align-middle">
-                      <div className="space-y-1">
-                        <input
-                          value={edit.customerName}
-                          onChange={(e) => setEdit({ customerName: e.target.value })}
-                          placeholder="Nhập tên công ty / khách hàng"
-                          className="w-full text-sm font-medium text-ink bg-transparent hover:bg-gray-50/80 focus:bg-gray-50 border border-transparent hover:border-gray-200/80 focus:border-amber-500 rounded-lg px-2.5 py-1 transition-all focus:outline-none"
-                        />
-                        <div className="flex items-center gap-1.5 pl-2">
-                          <span className="text-[11px] text-muted-foreground">LH:</span>
-                          <input
-                            value={edit.contactPerson}
-                            onChange={(e) => setEdit({ contactPerson: e.target.value })}
-                            placeholder="Chưa có người liên hệ"
-                            className="w-full text-xs text-ink2/90 bg-transparent hover:bg-gray-50/80 focus:bg-gray-50 border border-transparent hover:border-gray-200/80 focus:border-amber-500 rounded-md px-1.5 py-0.5 transition-all focus:outline-none placeholder:text-muted2/50"
-                          />
-                        </div>
-                      </div>
-                    </td>
-
                     {/* Cột Email nhận thư nhắc công nợ (nhiều email cách nhau dấu phẩy) */}
-                    <td className="px-5 py-3.5 align-middle">
+                    <td className="px-3 py-2.5 align-middle">
                       <input
                         type="text"
                         value={edit.email}
@@ -866,7 +847,7 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
 
                     {/* Cột "Đã nhắc tay" — số lần NVKD đã tự nhắc nợ quá hạn thủ công TRƯỚC khi dùng hệ
                         thống (chỉ ảnh hưởng số "lần thứ N" in trong thư quá hạn, không đổi lịch gửi). */}
-                    <td className="px-5 py-3.5 align-middle">
+                    <td className="px-3 py-2.5 align-middle">
                       <input
                         type="number"
                         min={0}
@@ -879,7 +860,7 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
                     </td>
 
                     {/* Cột NVKD phụ trách */}
-                    <td className="px-5 py-3.5 align-middle">
+                    <td className="px-3 py-2.5 align-middle">
                       {!isAdmin ? (
                         <span className="whitespace-nowrap text-sm text-ink">{c.salesEmployee?.name ?? "—"}</span>
                       ) : (
@@ -887,7 +868,7 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
                         <select
                           value={edit.salesEmployeeId}
                           onChange={(e) => setEdit({ salesEmployeeId: e.target.value })}
-                          className={`w-full min-w-[190px] text-xs font-medium rounded-xl border px-3 py-2 transition-all focus:outline-none ${
+                          className={`w-full min-w-[130px] text-xs font-medium rounded-xl border px-2 py-1.5 transition-all focus:outline-none ${
                             edit.salesEmployeeId
                               ? "bg-navy-50/80 border-gray-200/90 text-ink focus:border-amber-500"
                               : "bg-brandRed-50/90 border-brandRed-600/40 text-alert font-semibold focus:border-brandRed-600 shadow-[0_0_10px_rgba(200,16,46,0.1)]"
@@ -907,9 +888,9 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
                     </td>
 
                     {/* Cột Thời hạn công nợ */}
-                    <td className="px-5 py-3.5 align-middle">
+                    <td className="px-3 py-2.5 align-middle">
                       <div className="space-y-1.5">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
                           <select
                             value={edit.paymentTermType}
                             onChange={(e) =>
@@ -954,7 +935,7 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
                     </td>
 
                     {/* Cột Thao tác */}
-                    <td className="px-5 py-3.5 align-middle text-right">
+                    <td className="px-3 py-2.5 align-middle text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         {isEditing && (
                           <>
@@ -1005,7 +986,7 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
 
               {filteredCustomers.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-5 py-12 text-center">
+                  <td colSpan={6} className="px-5 py-12 text-center">
                     <div className="flex flex-col items-center justify-center space-y-2 text-muted-foreground">
                       <Building2 className="h-10 w-10 text-muted2 opacity-50" />
                       <p className="text-sm font-medium text-ink">Không tìm thấy khách hàng nào</p>
@@ -1047,6 +1028,7 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
                 }}
                 className="rounded-lg border border-gray-200 bg-card py-1 px-2 text-xs text-ink focus:border-amber-500 focus:outline-none"
               >
+                <option value={10}>10</option>
                 <option value={25}>25</option>
                 <option value={50}>50</option>
                 <option value={100}>100</option>
