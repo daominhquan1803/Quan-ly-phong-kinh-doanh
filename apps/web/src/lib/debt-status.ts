@@ -111,13 +111,16 @@ export function monthWeekBuckets(year: number, month: number): { weekIndex: numb
   const buckets: { weekIndex: number; start: Date; end: Date }[] = [];
   let cursor = mondayOfWeek(monthStart);
   let weekIndex = 1;
-  while (cursor <= monthEnd && weekIndex <= 5) {
+  while (cursor <= monthEnd) {
     const rawEnd = addDays(cursor, 6);
-    buckets.push({
-      weekIndex,
-      start: cursor < monthStart ? monthStart : cursor,
-      end: rawEnd > monthEnd ? monthEnd : rawEnd,
-    });
+    const end = rawEnd > monthEnd ? monthEnd : rawEnd;
+    if (weekIndex > 5) {
+      // Tháng trải qua 6 tuần dương lịch (vd 11/2026: 1/11 là Chủ nhật, 30/11 là Thứ Hai) nhưng file chỉ có Tuần 1-5:
+      // gộp tuần thứ 6 vào "Tuần 5" — trước đây bị bỏ nên kế hoạch thu mất hết các khoản hẹn ngày 30/11.
+      buckets[buckets.length - 1].end = end;
+    } else {
+      buckets.push({ weekIndex, start: cursor < monthStart ? monthStart : cursor, end });
+    }
     cursor = addDays(cursor, 7);
     weekIndex++;
   }

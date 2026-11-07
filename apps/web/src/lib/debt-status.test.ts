@@ -41,6 +41,15 @@ describe("monthWeekBuckets", () => {
     expect(ymd(last.end)).toBe("2026-09-30");
   });
 
+  it("tháng trải qua 6 tuần dương lịch (11/2026: 1/11 là Chủ nhật, 30/11 là Thứ Hai): gộp tuần 6 vào Tuần 5, không mất ngày 30/11", () => {
+    const buckets = monthWeekBuckets(2026, 11);
+    expect(buckets.map((b) => b.weekIndex)).toEqual([1, 2, 3, 4, 5]);
+    expect(ymd(buckets[0].start)).toBe("2026-11-01");
+    expect(ymd(buckets[0].end)).toBe("2026-11-01");
+    expect(ymd(buckets[4].start)).toBe("2026-11-23");
+    expect(ymd(buckets[4].end)).toBe("2026-11-30");
+  });
+
   it("tuần giữa vẫn là tuần dương lịch đầy đủ Thứ 2 - Chủ nhật", () => {
     const buckets = monthWeekBuckets(2026, 10);
     expect(ymd(buckets[1].start)).toBe("2026-10-05");
