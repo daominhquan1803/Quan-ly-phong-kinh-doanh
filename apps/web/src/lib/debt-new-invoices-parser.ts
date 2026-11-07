@@ -58,6 +58,17 @@ export function classifyInvoiceStatus(statusRaw: string): { kind: InvoiceKind; r
   return { kind: "NORMAL", refs: [] };
 }
 
+/** Hoá đơn điều chỉnh ÂM (trả hàng / giảm giá) ghi rõ điều chỉnh cho hoá đơn nào: trừ số tiền đó vào hoá đơn gốc. */
+export interface InvoiceReduction {
+  customerCode: string;
+  /** Số hoá đơn gốc bị giảm. */
+  originalNumber: string;
+  /** Số hoá đơn điều chỉnh (dùng làm dấu đã trừ, tránh trừ lại khi nhập lại file). */
+  adjustmentNumber: string;
+  /** Số tiền giảm (dương). */
+  amount: number;
+}
+
 export interface ParseNewInvoicesResult {
   rows: ParsedNewInvoiceRow[];
   errors: { rowNumber: number; message: string }[];
@@ -65,8 +76,12 @@ export interface ParseNewInvoicesResult {
   skippedReplaced: number;
   removals: InvoiceRemoval[];
   skippedNonPkd1: number;
-  /** Hoá đơn điều chỉnh số tiền 0 hoặc âm — không phải công nợ, không nhập (hoá đơn gốc vẫn bị xoá). */
+  /** Hoá đơn điều chỉnh số tiền 0 hoặc âm — không phải công nợ, không nhập. */
   skippedNonPositiveAdjustment: number;
+  /** Điều chỉnh âm có số hoá đơn gốc: trừ vào hoá đơn gốc (hoá đơn gốc KHÔNG bị xoá) — anh Quân chốt 07/11/2026. */
+  reductions: InvoiceReduction[];
+  /** Điều chỉnh âm không ghi (hoặc ghi nhiều) hoá đơn gốc: không tự trừ được, Admin chỉnh tay. */
+  unresolvedReductions: { customerCode: string; invoiceNumber: string; amount: number; refs: string[] }[];
   /** Mọi hoá đơn thay thế / điều chỉnh trong file (kể cả điều chỉnh âm/0 đồng) — ghi lại để gán nguyên nhân cho KPI Admin. */
   corrections: InvoiceCorrectionRow[];
 }
@@ -111,7 +126,32 @@ export function parseDebtNewInvoicesExcel(buffer: Buffer): ParseNewInvoicesResul
     );
   }
 
-  const result: ParseNewInvoicesResult = { rows: [], errors: [], skippedReplaced: 0, removals: [], skippedNonPkd1: 0, skippedNonPositiveAdjustment: 0, corrections: [] };
+  const result: ParseNewInvoicesResult = {
+    rows: [],
+    errors: [],
+    skippedReplaced: 0,
+    removals: [],
+    skippedNonPkd1: 0,
+    skippedNonPositiveAdjustment: 0,
+    reductions: [],
+    unresolvedReductions: [],
+    corrections: [],
+  };
+
+  // Điều chỉnh ÂM (trả hàng): hoá đơn gốc "đã bị điều chỉnh" của nó phải được GIỮ và trừ tiền, không xoá (anh Quân chốt 07/11/2026).
+  const negAdjNumbers = new Set<string>();
+  const negAdjCustomers = new Set<string>();
+  for (let i = headerRowIdx + 1; i < allRows.length; i++) {
+    const row = allRows[i];
+    const no = String(row[idx.invoiceNumber] ?? "").trim();
+    const cc = normalizeCustomerCode(String(row[idx.customerCode] ?? "").trim());
+    const st = idx.status >= 0 ? String(row[idx.status] ?? "").trim() : "";
+    if (!no || !cc || classifyInvoiceStatus(st).kind !== "ADJUSTMENT") continue;
+    if (parseNumber(row[idx.totalAmount]) < 0) {
+      negAdjNumbers.add(no);
+      negAdjCustomers.add(cc);
+    }
+  }
 
   for (let i = headerRowIdx + 1; i < allRows.length; i++) {
     const row = allRows[i];
@@ -128,6 +168,16 @@ export function parseDebtNewInvoicesExcel(buffer: Buffer): ParseNewInvoicesResul
     const statusRaw = idx.status >= 0 ? String(row[idx.status] ?? "").trim() : "";
     const { kind, refs } = classifyInvoiceStatus(statusRaw);
     const customerCode = normalizeCustomerCode(customerCodeRaw);
+
+    if (kind === "ADJUSTED_ORIGINAL") {
+      // Gốc bị điều chỉnh bằng hoá đơn âm (trả hàng): giữ lại, số tiền được trừ theo hoá đơn điều chỉnh. Không ghi số điều chỉnh
+      // thì coi là bị điều chỉnh âm nếu khách đó có hoá đơn điều chỉnh âm trong file.
+      const reducedOnly = refs.length > 0 ? refs.every((n) => negAdjNumbers.has(n)) : negAdjCustomers.has(customerCode);
+      if (reducedOnly) {
+        result.skippedReplaced++;
+        continue;
+      }
+    }
 
     if (kind === "SUPERSEDED" || kind === "ADJUSTED_ORIGINAL") {
       // Bản cũ/bản gốc: không nhập; nếu đã lỡ nhập từ trước thì xoá.
@@ -169,8 +219,18 @@ export function parseDebtNewInvoicesExcel(buffer: Buffer): ParseNewInvoicesResul
     const removalReason = kind === "REPLACEMENT" ? "REPLACED" : "ADJUSTED";
 
     if (kind === "ADJUSTMENT" && !(originalAmount > 0)) {
-      // Điều chỉnh giảm/0 đồng: không phải khoản phải thu. Hoá đơn gốc vẫn xoá theo quy tắc.
-      for (const n of replaces) result.removals.push({ customerCode, invoiceNumber: n, reason: removalReason, replacedBy: null });
+      // Điều chỉnh giảm/0 đồng: không phải khoản phải thu, không nhập.
+      if (originalAmount < 0) {
+        // Trả hàng / giảm giá: ghi rõ 1 hoá đơn gốc thì trừ vào hoá đơn đó; không thì để Admin chỉnh tay (hoá đơn gốc giữ nguyên).
+        if (replaces.length === 1) {
+          result.reductions.push({ customerCode, originalNumber: replaces[0], adjustmentNumber: invoiceNumber, amount: -originalAmount });
+        } else {
+          result.unresolvedReductions.push({ customerCode, invoiceNumber, amount: -originalAmount, refs: replaces });
+        }
+      } else {
+        // 0 đồng (đổi tên/sửa thông tin): giữ quy tắc cũ, hoá đơn gốc vẫn xoá.
+        for (const n of replaces) result.removals.push({ customerCode, invoiceNumber: n, reason: removalReason, replacedBy: null });
+      }
       result.skippedNonPositiveAdjustment++;
       continue;
     }

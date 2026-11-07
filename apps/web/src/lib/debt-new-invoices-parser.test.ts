@@ -65,13 +65,34 @@ describe("parseDebtNewInvoicesExcel — thay thế / điều chỉnh / khách ng
     expect(r.removals).toContainEqual({ customerCode: "PANASONIC", invoiceNumber: "00002707", reason: "ADJUSTED", replacedBy: "00002800" });
   });
 
-  it("hoá đơn điều chỉnh dương: nhập + xoá hoá đơn gốc; điều chỉnh âm/0 đồng: không nhập nhưng vẫn xoá hoá đơn gốc", () => {
+  it("hoá đơn điều chỉnh dương: nhập + xoá hoá đơn gốc; điều chỉnh 0 đồng: không nhập nhưng vẫn xoá hoá đơn gốc", () => {
     expect(r.rows.find((x) => x.invoiceNumber === "00002800")).toMatchObject({ kind: "ADJUSTMENT", replaces: ["00002707"] });
     expect(r.rows.find((x) => x.invoiceNumber === "00002735")).toBeUndefined();
     expect(r.rows.find((x) => x.invoiceNumber === "00002911")).toBeUndefined();
     expect(r.skippedNonPositiveAdjustment).toBe(2);
-    expect(r.removals).toContainEqual({ customerCode: "VNPTHANOI", invoiceNumber: "00002472", reason: "ADJUSTED", replacedBy: null });
+    expect(r.removals).toContainEqual({ customerCode: "BOSHOKU", invoiceNumber: "00002110", reason: "ADJUSTED", replacedBy: null });
     expect(r.errors).toEqual([]); // điều chỉnh 0 đồng không còn báo lỗi "sai tổng tiền"
+  });
+
+  it("điều chỉnh âm (trả hàng) ghi rõ hoá đơn gốc: trừ tiền vào hoá đơn gốc, KHÔNG xoá hoá đơn gốc", () => {
+    expect(r.reductions).toEqual([{ customerCode: "VNPTHANOI", originalNumber: "00002472", adjustmentNumber: "00002735", amount: 103709808 }]);
+    expect(r.removals.find((x) => x.invoiceNumber === "00002472")).toBeUndefined();
+    expect(r.unresolvedReductions).toEqual([]);
+  });
+
+  it("gốc 'đã bị điều chỉnh' bởi hoá đơn âm: giữ, không vào danh sách xoá; điều chỉnh âm không ghi gốc: báo Admin chỉnh tay", () => {
+    const x = parseDebtNewInvoicesExcel(
+      sheet([
+        ["00003200", "15/10/2026", "GLOBAL", 32637168, "Hóa đơn đã bị điều chỉnh bởi hóa đơn số 00003313", "MINHQUAN", "C.GLOBAL-VN"],
+        ["00003313", "23/10/2026", "GLOBAL", -25688448, "Hoá đơn điều chỉnh cho hóa đơn số 00003200", "MINHQUAN", "C.GLOBAL-VN"],
+        ["00003274", "20/10/2026", "GLOBAL", 28167210, "Hóa đơn đã bị điều chỉnh", "MINHQUAN", "C.GLOBAL-VN"],
+        ["00003340", "26/10/2026", "NOVOPHARM", -242613, "Hoá đơn điều chỉnh", "THANHTUNG", "C.NOVOPHARM"],
+      ])
+    );
+    expect(x.removals).toEqual([]);
+    expect(x.reductions).toEqual([{ customerCode: "GLOBAL-VN", originalNumber: "00003200", adjustmentNumber: "00003313", amount: 25688448 }]);
+    expect(x.unresolvedReductions).toEqual([{ customerCode: "NOVOPHARM", invoiceNumber: "00003340", amount: 242613, refs: [] }]);
+    expect(x.rows).toEqual([]);
   });
 
   it("khách không thuộc phòng (Interplex, Pavico, AVI1, Đồng Song Xanh, Hoàng Long, PB Global) bị bỏ qua hoàn toàn", () => {

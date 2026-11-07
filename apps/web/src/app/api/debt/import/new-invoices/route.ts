@@ -18,7 +18,8 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const { rows, errors, skippedReplaced, removals, skippedNonPkd1, skippedNonPositiveAdjustment, corrections } = parseDebtNewInvoicesExcel(buffer);
+    const { rows, errors, skippedReplaced, removals, skippedNonPkd1, skippedNonPositiveAdjustment, reductions, unresolvedReductions, corrections } =
+      parseDebtNewInvoicesExcel(buffer);
 
     // Quy tắc thời hạn công nợ theo khách hàng (trang Khách hàng) — hoá đơn mới cuối tháng KHÔNG
     // có cột hạn thanh toán trong file AMIS, tự tính thay vì để trống chờ nhập tay.
@@ -89,6 +90,26 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Hoá đơn điều chỉnh ÂM (trả hàng / giảm giá) ghi rõ hoá đơn gốc: trừ số tiền vào hoá đơn gốc (anh Quân chốt 07/11/2026).
+    // Số hoá đơn điều chỉnh được ghi vào `supersedes` của hoá đơn gốc làm dấu đã trừ, nhập lại file không trừ lần hai.
+    let reducedCount = 0;
+    const reductionSkipped: string[] = [];
+    for (const rd of reductions) {
+      const inv = await prisma.debtInvoice.findUnique({
+        where: { customerCode_invoiceNumber: { customerCode: rd.customerCode, invoiceNumber: rd.originalNumber } },
+      });
+      if (!inv) {
+        reductionSkipped.push(`${rd.adjustmentNumber} (-${rd.amount}) cho ${rd.originalNumber} (${rd.customerCode}): không có trong công nợ`);
+        continue;
+      }
+      if ((inv.supersedes ?? []).includes(rd.adjustmentNumber)) continue;
+      await prisma.debtInvoice.update({
+        where: { id: inv.id },
+        data: { originalAmount: Math.max(0, Number(inv.originalAmount) - rd.amount), supersedes: { push: rd.adjustmentNumber } },
+      });
+      reducedCount++;
+    }
+
     // Hoá đơn gốc/hoá đơn cũ đã bị thay thế hoặc điều chỉnh -> xoá khỏi công nợ (sau khi đã nhập hoá đơn thay thế để chuyển
     // các khoản đã thu sang). Hoá đơn đã thu đủ mà không có hoá đơn thay thế thì giữ lại, báo trong kết quả.
     let removedCount = 0;
@@ -139,6 +160,9 @@ export async function POST(req: NextRequest) {
       rematchedCount,
       skippedNonPkd1,
       skippedNonPositiveAdjustment,
+      reducedCount,
+      reductionSkipped,
+      unresolvedReductions,
       correctionsRecorded: corrections.length,
     });
   } catch (err) {
