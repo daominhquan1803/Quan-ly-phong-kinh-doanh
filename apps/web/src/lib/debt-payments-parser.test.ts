@@ -41,6 +41,25 @@ describe("parseDebtPaymentsExcel", () => {
   });
 });
 
+describe("parseDebtPaymentsExcel — file THU TIEN BAN HANG có dòng tiêu đề + cột STT (11/2026)", () => {
+  const rows: (string | number)[][] = [
+    ["", "", "", "", "", 529068543, "", ""],
+    ["STT", "NGÀY HẠCH TOÁN", "MÃ ĐỐI TƯỢNG", "ĐỐI TƯỢNG", "Diễn giải", "SỐ TIỀN", "Tháng", "NVKD"],
+    ["", "2026-11-01", "CAUVONGVIET", "Công ty TNHH Cầu Vồng Việt", "Thu tiền khách hàng Công ty TNHH Cầu Vồng Việt theo hóa đơn 00003222", 4590000, 11, "Ngô Thanh Tùng"],
+    ["", "2026-11-02", "V.MP-QUANGXANH", "CÔNG TY TNHH DƯỢC MỸ PHẨM QUANG XANH", "IBBIZ6088193311.CT TNHH DUOC MY PHAM QUANG XANH chuyen tien HOANG GIA", 23124744, 11, "Đào Minh Quân"],
+  ];
+
+  it("đọc cột theo tên tiêu đề: số tiền lấy từ SỐ TIỀN, không đọc nhầm số trong Diễn giải; bỏ dòng tổng và dòng tiêu đề", () => {
+    const { rows: parsed, errors } = parseDebtPaymentsExcel(makeBuffer(rows));
+    expect(errors).toEqual([]);
+    expect(parsed.map((p) => p.amount)).toEqual([4590000, 23124744]);
+    expect(parsed[0]).toMatchObject({ customerCode: "CAUVONGVIET", customerName: "Công ty TNHH Cầu Vồng Việt", candidateInvoiceNumbers: ["00003222"] });
+    expect(parsed[0].paymentDate?.getFullYear()).toBe(2026);
+    expect(parsed[1].customerCode).toBe("MP-QUANGXANH");
+    expect(parsed[1].note).toBeNull();
+  });
+});
+
 describe("sourceHash chống trùng", () => {
   const rows: (string | number)[][] = [
     ["2026-09-04", "E.JNC FILTER", "CÔNG TY TNHH JNC FILTER VIỆT NAM", "theo hóa đơn 00002337", 1944000, "", ""],

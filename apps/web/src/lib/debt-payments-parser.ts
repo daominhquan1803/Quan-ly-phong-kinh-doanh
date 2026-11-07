@@ -31,9 +31,36 @@ function computeSourceHash(fields: { paymentDate: Date | null; customerCode: str
   return createHash("sha256").update(key).digest("hex");
 }
 
-/** Cột trong file "Tiền về" không có dòng tiêu đề — vị trí cột cố định theo mẫu thật: Ngày, Mã
+interface ColMap {
+  date: number;
+  customerCode: number;
+  customerName: number;
+  description: number;
+  amount: number;
+  note: number;
+}
+
+/** Cột trong file "Tiền về" kiểu cũ không có dòng tiêu đề — vị trí cột cố định theo mẫu thật: Ngày, Mã
  * khách hàng, Tên khách hàng, Mô tả giao dịch, Số tiền, (cột trống), Ghi chú. */
-const COL = { date: 0, customerCode: 1, customerName: 2, description: 3, amount: 4, note: 6 } as const;
+const LEGACY_COLS: ColMap = { date: 0, customerCode: 1, customerName: 2, description: 3, amount: 4, note: 6 };
+
+/** File "THU TIEN BAN HANG" kiểu mới CÓ dòng tiêu đề và cột STT ở đầu (STT, NGÀY HẠCH TOÁN, MÃ ĐỐI TƯỢNG, ĐỐI TƯỢNG, Diễn giải,
+ * SỐ TIỀN, Tháng, NVKD), phía trên còn 1 dòng tổng. Đọc theo vị trí cố định của file cũ thì cột "Diễn giải" bị đọc thành số tiền
+ * (số trong mô tả, vd 3.222 từ "hóa đơn 00003222") và ngày trống — nên dò dòng tiêu đề và lấy cột theo tên. */
+function detectHeader(rows: unknown[][]): { headerIdx: number; cols: ColMap } | null {
+  for (let i = 0; i < Math.min(rows.length, 10); i++) {
+    const labels = rows[i].map((c) => paymentDescKey(String(c ?? "")));
+    const find = (...names: string[]) => labels.findIndex((l) => names.includes(l));
+    const amount = find("so tien");
+    const description = find("dien giai", "mo ta", "noi dung");
+    const customerCode = find("ma doi tuong", "ma khach hang", "ma kh");
+    const date = find("ngay hach toan", "ngay", "ngay thu");
+    if (amount >= 0 && description >= 0 && customerCode >= 0 && date >= 0) {
+      return { headerIdx: i, cols: { date, customerCode, customerName: find("doi tuong", "ten khach hang", "ten kh"), description, amount, note: find("ghi chu") } };
+    }
+  }
+  return null;
+}
 
 const INVOICE_KEYWORD = /(?<![a-z0-9])(?:hoa don|hdon|hd|inv|invoice)(?![a-z])|(?<![a-z0-9])hd(?=\d)/g;
 
@@ -69,7 +96,12 @@ export function parseDebtPaymentsExcel(buffer: Buffer): { rows: ParsedPaymentRow
   // Không có dòng tiêu đề thật — cột không có tên (Unnamed: 0..7), đọc thẳng từ dòng đầu.
   const result: { rows: ParsedPaymentRow[]; errors: { rowNumber: number; message: string }[] } = { rows: [], errors: [] };
 
+  const header = detectHeader(rows);
+  const COL = header?.cols ?? LEGACY_COLS;
+  const cell = (row: unknown[], col: number) => (col >= 0 ? row[col] : undefined);
+
   rows.forEach((row, i) => {
+    if (header && i <= header.headerIdx) return; // dòng tổng phía trên + dòng tiêu đề
     const rowNumber = i + 1;
     const amount = parseNumber(row[COL.amount]);
     const customerCodeRaw = String(row[COL.customerCode] ?? "").trim() || null;
@@ -97,10 +129,10 @@ export function parseDebtPaymentsExcel(buffer: Buffer): { rows: ParsedPaymentRow
       paymentDate,
       customerCodeRaw,
       customerCode,
-      customerName: String(row[COL.customerName] ?? "").trim() || null,
+      customerName: String(cell(row, COL.customerName) ?? "").trim() || null,
       rawDescription: description,
       amount,
-      note: String(row[COL.note] ?? "").trim() || null,
+      note: String(cell(row, COL.note) ?? "").trim() || null,
       candidateInvoiceNumbers: extractInvoiceNumbersFromDescription(description),
       sourceHash: computeSourceHash({ paymentDate, customerCode, amount, rawDescription: description }),
     });
