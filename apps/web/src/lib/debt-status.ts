@@ -87,11 +87,16 @@ export function mondayOfWeek(d: Date): Date {
  * tháng, tuần 2-5 nối tiếp mỗi 7 ngày (giống hệt cách chia tuần ở /api/debt/summary). Dùng để quy
  * đổi "Kế hoạch thu Tuần 1-5" trong file Công nợ gốc thành 1 ngày dự kiến thanh toán cụ thể. */
 export function monthWeekMonday(year: number, month: number, weekIndex: number): Date {
-  const monthStart = new Date(year, month - 1, 1);
-  const week1Monday = mondayOfWeek(monthStart);
-  const monday = new Date(week1Monday);
+  const monday = new Date(week1Monday(new Date(year, month - 1, 1)));
   monday.setDate(monday.getDate() + (weekIndex - 1) * 7);
   return monday;
+}
+
+/** Thứ 2 mở đầu "Tuần 1" = Thứ 2 của tuần dương lịch chứa ngày 1. Riêng ngày 1 là Chủ nhật thì gộp vào tuần sau (tuần 1 =
+ * 1..8, vd 11/2026: tuần 1 là 1-8/11, tuần 5 là 30/11) — anh Quân chốt 07/11/2026. */
+function week1Monday(monthStart: Date): Date {
+  const monday = mondayOfWeek(monthStart);
+  return monthStart.getDay() === 0 ? addDays(monday, 7) : monday;
 }
 
 function addDays(d: Date, n: number): Date {
@@ -109,17 +114,17 @@ export function monthWeekBuckets(year: number, month: number): { weekIndex: numb
   const monthStart = new Date(year, month - 1, 1);
   const monthEnd = new Date(year, month, 0);
   const buckets: { weekIndex: number; start: Date; end: Date }[] = [];
-  let cursor = mondayOfWeek(monthStart);
+  let cursor = week1Monday(monthStart);
   let weekIndex = 1;
   while (cursor <= monthEnd) {
     const rawEnd = addDays(cursor, 6);
     const end = rawEnd > monthEnd ? monthEnd : rawEnd;
     if (weekIndex > 5) {
-      // Tháng trải qua 6 tuần dương lịch (vd 11/2026: 1/11 là Chủ nhật, 30/11 là Thứ Hai) nhưng file chỉ có Tuần 1-5:
-      // gộp tuần thứ 6 vào "Tuần 5" — trước đây bị bỏ nên kế hoạch thu mất hết các khoản hẹn ngày 30/11.
+      // Vẫn còn tuần thứ 6 (vd tháng 31 ngày bắt đầu từ Thứ Bảy) nhưng file chỉ có Tuần 1-5: gộp vào "Tuần 5" — trước đây bị
+      // bỏ nên kế hoạch thu mất các khoản hẹn những ngày cuối tháng đó.
       buckets[buckets.length - 1].end = end;
     } else {
-      buckets.push({ weekIndex, start: cursor < monthStart ? monthStart : cursor, end });
+      buckets.push({ weekIndex, start: weekIndex === 1 ? monthStart : cursor, end });
     }
     cursor = addDays(cursor, 7);
     weekIndex++;

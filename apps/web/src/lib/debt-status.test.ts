@@ -41,13 +41,24 @@ describe("monthWeekBuckets", () => {
     expect(ymd(last.end)).toBe("2026-09-30");
   });
 
-  it("tháng trải qua 6 tuần dương lịch (11/2026: 1/11 là Chủ nhật, 30/11 là Thứ Hai): gộp tuần 6 vào Tuần 5, không mất ngày 30/11", () => {
+  it("ngày 1 là Chủ nhật thì gộp vào tuần sau: 11/2026 tuần 1 là 1-8/11, tuần 5 là 30/11 (anh Quân chốt 07/11/2026)", () => {
     const buckets = monthWeekBuckets(2026, 11);
+    expect(buckets.map((b) => [ymd(b.start), ymd(b.end)])).toEqual([
+      ["2026-11-01", "2026-11-08"],
+      ["2026-11-09", "2026-11-15"],
+      ["2026-11-16", "2026-11-22"],
+      ["2026-11-23", "2026-11-29"],
+      ["2026-11-30", "2026-11-30"],
+    ]);
+    expect(ymd(monthWeekMonday(2026, 11, 1))).toBe("2026-11-02");
+    expect(ymd(monthWeekMonday(2026, 11, 5))).toBe("2026-11-30");
+  });
+
+  it("tháng vẫn trải qua 6 tuần (8/2026: 1/8 là Thứ Bảy, 31/8 là Thứ Hai): gộp tuần 6 vào Tuần 5, không mất ngày 31", () => {
+    const buckets = monthWeekBuckets(2026, 8);
     expect(buckets.map((b) => b.weekIndex)).toEqual([1, 2, 3, 4, 5]);
-    expect(ymd(buckets[0].start)).toBe("2026-11-01");
-    expect(ymd(buckets[0].end)).toBe("2026-11-01");
-    expect(ymd(buckets[4].start)).toBe("2026-11-23");
-    expect(ymd(buckets[4].end)).toBe("2026-11-30");
+    expect(ymd(buckets[4].start)).toBe("2026-08-24");
+    expect(ymd(buckets[4].end)).toBe("2026-08-31");
   });
 
   it("tuần giữa vẫn là tuần dương lịch đầy đủ Thứ 2 - Chủ nhật", () => {
