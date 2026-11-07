@@ -56,6 +56,19 @@ interface RowEdit {
   paymentTermValue: string;
 }
 
+/** Khoá nhóm thời hạn công nợ để lọc: "D:30" = 30 ngày, "M:2" = cuối tháng N+2, "NONE" = chưa có thời hạn. */
+function termKey(c: Pick<CustomerRow, "paymentTermType" | "paymentTermDays" | "paymentTermMonthOffset">): string {
+  if (c.paymentTermType === "DAYS_FROM_INVOICE" && c.paymentTermDays != null) return `D:${c.paymentTermDays}`;
+  if (c.paymentTermType === "END_OF_MONTH_OFFSET" && c.paymentTermMonthOffset != null) return `M:${c.paymentTermMonthOffset}`;
+  return "NONE";
+}
+
+function termKeyLabel(key: string): string {
+  if (key === "NONE") return "Chưa có thời hạn";
+  const n = key.slice(2);
+  return key.startsWith("D:") ? `Công nợ ${n} ngày` : `Cuối tháng N+${n}`;
+}
+
 function toRowEdit(c: CustomerRow): RowEdit {
   return {
     customerName: c.customerName,
@@ -94,6 +107,7 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
   const [search, setSearch] = useState("");
   const [nvkdFilter, setNvkdFilter] = useState("");
   const [onlyWithTerms, setOnlyWithTerms] = useState<boolean | null>(null);
+  const [termFilter, setTermFilter] = useState("");
   const [onlyMissingEmail, setOnlyMissingEmail] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(10);
@@ -148,9 +162,20 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
     return counts;
   }, [data?.customers]);
 
+  // Các nhóm thời hạn công nợ đang có (kèm số khách) cho ô lọc: 0, 30, 60 ngày..., cuối tháng N+x, rồi "chưa có thời hạn".
+  const termOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const c of data?.customers ?? []) counts.set(termKey(c), (counts.get(termKey(c)) ?? 0) + 1);
+    const rank = (k: string) => (k.startsWith("D:") ? 0 : k.startsWith("M:") ? 1 : 2);
+    return Array.from(counts.entries())
+      .map(([key, count]) => ({ key, count }))
+      .sort((a, b) => rank(a.key) - rank(b.key) || Number(a.key.slice(2)) - Number(b.key.slice(2)));
+  }, [data?.customers]);
+
   // Bộ lọc khách hàng
   const filteredCustomers = useMemo(() => {
     let list = data?.customers ?? [];
+    if (termFilter) list = list.filter((c) => termKey(c) === termFilter);
     if (nvkdFilter === "UNASSIGNED") {
       list = list.filter((c) => !c.salesEmployee?.id);
     } else if (nvkdFilter) {
@@ -174,7 +199,7 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
       );
     }
     return list;
-  }, [data, search, nvkdFilter, onlyWithTerms, onlyMissingEmail]);
+  }, [data, search, nvkdFilter, termFilter, onlyWithTerms, onlyMissingEmail]);
 
   // Phân trang
   const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / (pageSize || 50)));
@@ -350,6 +375,7 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
           onClick={() => {
             setNvkdFilter("");
             setOnlyWithTerms(null);
+            setTermFilter("");
           }}
           className="group relative overflow-hidden rounded-2xl border border-gray-200/80 bg-gradient-to-br from-navy-900/90 via-gray-100/70 to-navy-900/90 p-5 shadow-card backdrop-blur-xl transition-all duration-300 hover:border-amber-500/40 hover:shadow-[0_8px_30px_rgba(224,163,39,0.12)] cursor-pointer"
         >
@@ -378,6 +404,7 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
           onClick={() => {
             setNvkdFilter("");
             setOnlyWithTerms(null);
+            setTermFilter("");
           }}
           className="group relative overflow-hidden rounded-2xl border border-gray-200/80 bg-gradient-to-br from-navy-900/90 via-gray-100/70 to-navy-900/90 p-5 shadow-card backdrop-blur-xl transition-all duration-300 hover:border-success-600/40 hover:shadow-[0_8px_30px_rgba(34,179,120,0.12)] cursor-pointer"
         >
@@ -725,6 +752,23 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
             </select>
           </div>
 
+          {/* Bộ lọc thời hạn công nợ */}
+          <select
+            value={termFilter}
+            onChange={(e) => {
+              setTermFilter(e.target.value);
+              setPage(1);
+            }}
+            className="rounded-xl border border-gray-200/80 bg-navy-50/80 px-3 py-2 text-sm text-ink transition-all focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+          >
+            <option value="">Mọi thời hạn công nợ</option>
+            {termOptions.map(({ key, count }) => (
+              <option key={key} value={key}>
+                {termKeyLabel(key)} ({count})
+              </option>
+            ))}
+          </select>
+
           {/* Lọc khách còn thiếu email nhận thư nhắc công nợ */}
           <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-gray-200/80 bg-navy-50/80 px-3 py-2 text-sm text-ink">
             <input
@@ -740,11 +784,12 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
           </label>
 
           {/* Reset Filters badge nếu đang lọc */}
-          {(nvkdFilter || search || onlyWithTerms !== null || onlyMissingEmail) && (
+          {(nvkdFilter || termFilter || search || onlyWithTerms !== null || onlyMissingEmail) && (
             <button
               onClick={() => {
                 setSearch("");
                 setNvkdFilter("");
+                setTermFilter("");
                 setOnlyWithTerms(null);
                 setOnlyMissingEmail(false);
                 setPage(1);
