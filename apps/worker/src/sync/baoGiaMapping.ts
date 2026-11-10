@@ -21,7 +21,27 @@ export function isOnOrAfterCutoff(year: number, month: number, requestDay: numbe
 
 export type MappedQuoteStatus = "WON" | "NEGOTIATING" | "LOST" | "NOT_QUOTED";
 
-const LOST_RESULTS = new Set(["KHACH_CHE_DAT", "DOI_THU_RE_HON", "KHACH_DOI_MAU", "HUY_KHAC"]);
+// KHACH_KHONG_PHAN_HOI / CHON_NCC_KHAC: 2 lý do trượt anh Quân duyệt thêm ngày 10/11/2026 (tách khỏi nhóm "Khác").
+const LOST_RESULTS = new Set([
+  "KHACH_CHE_DAT",
+  "DOI_THU_RE_HON",
+  "KHACH_DOI_MAU",
+  "HUY_KHAC",
+  "KHACH_KHONG_PHAN_HOI",
+  "CHON_NCC_KHAC",
+]);
+
+/**
+ * Thành tiền báo giá: Σ số lượng × đơn giá của các mặt hàng đã có giá. L2 dùng giá L2 nếu mặt hàng có, không thì giữ L1
+ * (khách đàm phán lại một phần). null khi chưa mặt hàng nào có giá ở lần đó.
+ */
+export function quoteAmounts(items: AppQuoteItem[]): { amountL1: number | null; amountL2: number | null } {
+  const priced = items.filter((i) => i.unitPriceL1 != null);
+  const amountL1 = priced.length ? priced.reduce((s, i) => s + i.quantity * (i.unitPriceL1 as number), 0) : null;
+  const hasL2 = items.some((i) => i.unitPriceL2 != null);
+  const amountL2 = hasL2 ? items.reduce((s, i) => s + i.quantity * (i.unitPriceL2 ?? i.unitPriceL1 ?? 0), 0) : null;
+  return { amountL1, amountL2 };
+}
 
 /**
  * 4 nhóm trạng thái hiển thị: chốt được giá / đang thương thảo / không bán được / chưa báo giá.
@@ -112,6 +132,7 @@ export function mapAppQuote(row: AppQuoteRow, items: AppQuoteItem[], assigneeCod
     quoteL2: join(items.filter((i) => i.unitPriceL2 != null).map((i) => `${clip(i.itemName, 60)}: ${num(i.unitPriceL2 as number)}`)),
     feedbackL2: join(items.map((i) => clip(i.feedbackL2, 120))),
     note: clip(row.notes, 1000),
+    ...quoteAmounts(items),
     sourceColorHex: null,
     sourceSheetName: "App báo giá",
     sourceRowNumber: 0,

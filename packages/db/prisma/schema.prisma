@@ -846,6 +846,10 @@ model QuoteRequest {
   requestedAt        DateTime? // thời điểm tạo báo giá thật (chỉ có với dòng từ app báo giá)
   statusRaw          String? // trạng thái gốc trong app báo giá (CHO_BAO_GIA, DA_CO_GIA_L1...)
   finalResult        String? // kết quả chốt gốc trong app báo giá (DANG_THEO, CHOT_PO, KHACH_CHE_DAT...)
+  // Thành tiền (VND, chưa VAT) = Σ số lượng × đơn giá của các mặt hàng đã có giá. null = chưa có giá / dòng từ Google Sheet.
+  // amountL2 tính theo giá L2 nếu mặt hàng có L2, không thì giữ giá L1; null khi chưa mặt hàng nào có L2.
+  amountL1           Decimal?    @db.Decimal(18, 2)
+  amountL2           Decimal?    @db.Decimal(18, 2)
   syncedAt           DateTime    @default(now())
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt

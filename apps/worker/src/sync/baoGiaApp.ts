@@ -128,12 +128,16 @@ export async function runBaoGiaAppSync(
     const mapped = rows.map((r) => mapAppQuote(r, items.get(r.code) ?? [], assigneeCodeFor));
     const existing = await prisma.quoteRequest.findMany({
       where: { sourceApp: "BAOGIA_APP" },
-      select: { sourceCode: true, sourceUpdatedAt: true },
+      select: { sourceCode: true, sourceUpdatedAt: true, amountL1: true },
     });
-    const existingByCode = new Map(existing.map((e) => [e.sourceCode as string, e.sourceUpdatedAt?.getTime() ?? null]));
+    const existingByCode = new Map(existing.map((e) => [e.sourceCode as string, e]));
     const currentCodes = new Set(mapped.map((m) => m.sourceCode));
 
-    const toWrite = mapped.filter((m) => existingByCode.get(m.sourceCode) !== m.sourceUpdatedAt.getTime());
+    // Ghi khi báo giá đổi bên app báo giá, hoặc khi dòng cũ chưa có thành tiền (bù dữ liệu 1 lần sau khi thêm cột thành tiền).
+    const toWrite = mapped.filter((m) => {
+      const e = existingByCode.get(m.sourceCode);
+      return !e || e.sourceUpdatedAt?.getTime() !== m.sourceUpdatedAt.getTime() || (e.amountL1 == null && m.amountL1 != null);
+    });
     const toDelete = existing.map((e) => e.sourceCode as string).filter((c) => !currentCodes.has(c));
     if (toWrite.length === 0 && toDelete.length === 0) {
       const message = `App báo giá: ${mapped.length} báo giá, không có thay đổi.`;

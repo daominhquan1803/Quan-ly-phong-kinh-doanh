@@ -21,6 +21,7 @@ interface StatusStat {
   label: string;
   count: number;
   pct: number;
+  amount?: number; // thành tiền (VND) theo giá báo gần nhất; chỉ có với báo giá từ app báo giá
 }
 interface AssigneeStat {
   assigneeRaw: string;
@@ -297,6 +298,11 @@ export function QuoteOverview() {
                 <span style={{ color: STATUS_CHART_COLOR[s.status] }}>{s.pct}%</span>
               </p>
               <p className="text-xs font-mono text-muted2 mt-1">{s.count} báo giá</p>
+              {s.amount ? (
+                <p className="text-xs font-mono text-ink mt-0.5" title="Thành tiền theo giá báo gần nhất (chưa VAT)">
+                  {new Intl.NumberFormat("vi-VN").format(Math.round(s.amount / 1_000_000))} tr
+                </p>
+              ) : null}
               <div
                 className="h-0.5 w-12 mt-3 group-hover:w-full transition-all duration-300"
                 style={{ backgroundColor: STATUS_CHART_COLOR[s.status] }}

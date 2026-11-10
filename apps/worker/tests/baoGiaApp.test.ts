@@ -25,7 +25,7 @@ vi.mock("@hoanggia/db", () => ({
 vi.mock("../src/logger", () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 
 import { runBaoGiaAppSync } from "../src/sync/baoGiaApp";
-import { cutoffMs, isOnOrAfterCutoff, mapAppQuote, mapAppStatus, vnDateParts, type AppQuoteRow } from "../src/sync/baoGiaMapping";
+import { cutoffMs, isOnOrAfterCutoff, mapAppQuote, mapAppStatus, quoteAmounts, vnDateParts, type AppQuoteRow } from "../src/sync/baoGiaMapping";
 
 const msVN = (ymd: string, hms = "09:00:00") => new Date(`${ymd}T${hms}+07:00`).getTime();
 const baseRow = (o: Partial<AppQuoteRow> = {}): AppQuoteRow => ({
@@ -57,6 +57,8 @@ describe("mapAppStatus — 4 nhóm hiển thị", () => {
     expect(mapAppStatus("KHACH_PHAN_HOI", "DOI_THU_RE_HON")).toBe("LOST");
     expect(mapAppStatus("CHO_BAO_GIA", "DANG_THEO")).toBe("NOT_QUOTED");
     expect(mapAppStatus("DANG_TINH_GIA", null)).toBe("NOT_QUOTED");
+    expect(mapAppStatus("DA_CO_GIA_L1", "KHACH_KHONG_PHAN_HOI")).toBe("LOST");
+    expect(mapAppStatus("DA_CO_GIA_L2", "CHON_NCC_KHAC")).toBe("LOST");
     for (const s of ["BAO_GIA_MOT_PHAN", "DA_CO_GIA_L1", "KHACH_PHAN_HOI", "DA_CO_GIA_L2"]) {
       expect(mapAppStatus(s, "DANG_THEO")).toBe("NEGOTIATING");
     }
@@ -107,6 +109,19 @@ describe("mapAppQuote", () => {
     expect(q.feedbackL1).toBe("Khách chê đắt");
     expect(q.quoteL2).toBeNull();
     expect(q.deliveryAddress).toBe("KCN A"); // thiếu địa chỉ của đơn -> lấy địa chỉ khách
+    expect(q.amountL1).toBe(62_500_000); // 5000 × 12.500; mặt hàng chưa có giá không tính
+    expect(q.amountL2).toBeNull();
+  });
+});
+
+describe("quoteAmounts", () => {
+  const it2 = (q: number, l1: number | null, l2: number | null) =>
+    ({ itemName: "x", quantity: q, unit: "Cái", unitPriceL1: l1, unitPriceL2: l2, feedbackL1: null, feedbackL2: null });
+  it("chưa có giá -> null cả hai", () => {
+    expect(quoteAmounts([it2(100, null, null)])).toEqual({ amountL1: null, amountL2: null });
+  });
+  it("L2 lấy giá L2 nếu có, mặt hàng không có L2 giữ giá L1", () => {
+    expect(quoteAmounts([it2(10, 1000, 900), it2(5, 2000, null)])).toEqual({ amountL1: 20_000, amountL2: 19_000 });
   });
 });
 
@@ -144,6 +159,15 @@ describe("runBaoGiaAppSync", () => {
     expect(h.upsert).toHaveBeenCalledTimes(1);
     expect((h.upsert.mock.calls[0][0] as { create: { sourceCode: string } }).create.sourceCode).toBe("BG-26-0901");
     expect(h.deleteMany).toHaveBeenCalledWith({ where: { sourceApp: "BAOGIA_APP", sourceCode: { in: ["BG-26-0777"] } } });
+  });
+
+  it("bù thành tiền: dòng cũ chưa có amountL1 thì ghi lại dù updatedAt không đổi", async () => {
+    const row = baseRow();
+    const priced = { ...item, quantity: 10, unitPriceL1: 1000 };
+    h.existing.mockResolvedValue([{ sourceCode: row.code, sourceUpdatedAt: new Date(row.updatedAt), amountL1: null }]);
+    await runBaoGiaAppSync("CRON", () => ({ rows: [row], items: new Map([[row.code, [priced]]]) }));
+    expect(h.upsert).toHaveBeenCalledTimes(1);
+    expect((h.upsert.mock.calls[0][0] as { create: { amountL1: number } }).create.amountL1).toBe(10_000);
   });
 
   it("cron không có thay đổi: không ghi DB, không ghi SyncLog", async () => {

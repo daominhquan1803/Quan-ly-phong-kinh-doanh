@@ -41,17 +41,31 @@ export async function GET(req: NextRequest) {
 
     const where = { year: target.year, month: target.month };
 
-    const [statusCounts, assigneeStatusCounts, latest] = await Promise.all([
+    const [statusCounts, assigneeStatusCounts, latest, amountRows] = await Promise.all([
       prisma.quoteRequest.groupBy({ by: ["status"], where, _count: { _all: true } }),
       prisma.quoteRequest.groupBy({ by: ["assigneeRaw", "status"], where, _count: { _all: true } }),
       prisma.quoteRequest.findFirst({ where, orderBy: { syncedAt: "desc" }, select: { syncedAt: true } }),
+      prisma.quoteRequest.findMany({ where, select: { status: true, amountL1: true, amountL2: true } }),
     ]);
+
+    // Giá trị báo giá theo trạng thái: lấy giá lần gần nhất (L2 nếu có, không thì L1). Dòng Google Sheet cũ không có thành tiền.
+    const amountByStatus = new Map<QuoteStatus, number>();
+    for (const r of amountRows) {
+      const v = Number(r.amountL2 ?? r.amountL1 ?? 0);
+      amountByStatus.set(r.status, (amountByStatus.get(r.status) ?? 0) + v);
+    }
 
     const total = statusCounts.reduce((s, r) => s + r._count._all, 0);
     const countByStatus = new Map(statusCounts.map((r) => [r.status, r._count._all]));
     const byStatus = STATUS_ORDER.map((status) => {
       const count = countByStatus.get(status) ?? 0;
-      return { status, label: QUOTE_STATUS_LABEL[status], count, pct: total > 0 ? Math.round((count / total) * 100) : 0 };
+      return {
+        status,
+        label: QUOTE_STATUS_LABEL[status],
+        count,
+        pct: total > 0 ? Math.round((count / total) * 100) : 0,
+        amount: amountByStatus.get(status) ?? 0,
+      };
     });
 
     // Gộp theo Phụ trách (giữ nguyên văn từ file, có thể null nếu ô trống trong sheet gốc).
