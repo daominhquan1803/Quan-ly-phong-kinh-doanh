@@ -686,7 +686,7 @@ function TripForm({
       </div>
 
       <p className="text-[11px] text-muted2">
-        Điểm gặp khách tính riêng cho từng khách: NVKD đi gặp và người hỗ trợ của khách đó, mỗi khách 1 điểm. Khách phải có báo cáo &quot;gặp được&quot; và buổi đi được duyệt mới tính.
+        Điểm gặp khách tính riêng cho từng khách: NVKD đi gặp được 1 điểm mỗi khách. Người hỗ trợ được 1 điểm mỗi khách nếu trong chuyến không có khách của mình, 0,5 điểm mỗi khách hỗ trợ nếu trong chuyến có khách của mình (từ 1/11/2026). Khách phải có báo cáo &quot;gặp được&quot; và buổi đi được duyệt mới tính.
       </p>
       {error && <p className="text-xs text-alert">{error}</p>}
       <div className="flex items-center gap-2">

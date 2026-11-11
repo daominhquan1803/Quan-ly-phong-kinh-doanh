@@ -220,7 +220,7 @@ export async function getReportData(opts: {
   };
   for (const t of primaryTrips) addTrip(t.employeeId, t.visitDate, t.stops.length);
   for (const t of supporterTrips) addTrip(t.employeeId, t.trip.visitDate, t.trip.stops.length);
-  for (const c of stopCredits) addTrip(c.employeeId, c.visitDate, 1);
+  for (const c of stopCredits) addTrip(c.employeeId, c.visitDate, c.weight);
   for (const [k, days] of tripDaySets) {
     const [empId, i] = k.split("|");
     add(empId, "trip_days", Number(i), days.size);

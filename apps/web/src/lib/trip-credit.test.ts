@@ -34,3 +34,62 @@ describe("điểm gặp khách theo điểm dừng", () => {
     expect(creditsOfStops([stop({ companyName: "Rise", content: "báo giá" })])[0]).toMatchObject({ visitDate: visit, companyName: "Rise", content: "báo giá" });
   });
 });
+
+describe("điểm người hỗ trợ từ 1/11/2026", () => {
+  const w = (credits: ReturnType<typeof creditsOfStops>, id: string) => credits.filter((c) => c.employeeId === id).reduce((s, c) => s + c.weight, 0);
+
+  it("hỗ trợ mà chuyến không có khách của mình: 1 điểm mỗi điểm dừng", () => {
+    const credits = creditsOfStops([
+      stop({ id: "s1", attendeeId: "tung", supporters: [{ employeeId: "ky" }] }),
+      stop({ id: "s2", attendeeId: "dung", supporters: [{ employeeId: "ky" }] }),
+    ]);
+    expect(w(credits, "ky")).toBe(2);
+  });
+
+  it("hỗ trợ mà chuyến có khách của mình: 0,5 điểm cho điểm dừng hỗ trợ, khách của mình vẫn 1 điểm", () => {
+    const credits = creditsOfStops([
+      stop({ id: "s1", attendeeId: "tung" }),
+      stop({ id: "s2", attendeeId: "dung", supporters: [{ employeeId: "tung" }] }),
+    ]);
+    expect(w(credits, "tung")).toBe(1.5);
+    expect(w(credits, "dung")).toBe(1);
+  });
+
+  it("khách của mình trong chuyến nhưng chưa báo 'gặp được' (không có trong danh sách điểm dừng tính điểm) vẫn tính là có khách", () => {
+    const credits = creditsOfStops(
+      [stop({ id: "s2", attendeeId: "dung", supporters: [{ employeeId: "tung" }], trip: { id: "t1", visitDate: visit } })],
+      undefined,
+      [{ tripId: "t1", attendeeId: "tung" }]
+    );
+    expect(w(credits, "tung")).toBe(0.5);
+  });
+
+  it("khách của mình ở chuyến khác không làm giảm điểm", () => {
+    const credits = creditsOfStops(
+      [stop({ id: "s2", attendeeId: "dung", supporters: [{ employeeId: "tung" }], trip: { id: "t1", visitDate: visit } })],
+      undefined,
+      [{ tripId: "t2", attendeeId: "tung" }]
+    );
+    expect(w(credits, "tung")).toBe(1);
+  });
+
+  it("chuyến trước 1/11/2026 giữ luật cũ: hỗ trợ 1 điểm dù có khách riêng", () => {
+    const old = { id: "t1", visitDate: new Date("2026-10-30T00:00:00+07:00") };
+    const credits = creditsOfStops([
+      stop({ id: "s1", attendeeId: "tung", trip: old }),
+      stop({ id: "s2", attendeeId: "dung", supporters: [{ employeeId: "tung" }], trip: old }),
+    ]);
+    expect(w(credits, "tung")).toBe(2);
+  });
+
+  it("lọc theo nhân viên không làm mất việc nhận ra khách riêng của người đó", () => {
+    const credits = creditsOfStops(
+      [
+        stop({ id: "s1", attendeeId: "tung" }),
+        stop({ id: "s2", attendeeId: "dung", supporters: [{ employeeId: "tung" }] }),
+      ],
+      ["tung"]
+    );
+    expect(w(credits, "tung")).toBe(1.5);
+  });
+});

@@ -409,7 +409,7 @@ export async function getKpiMonthlyReport(
   for (const v of supporterVisitCounts) {
     visitByEmployee.set(v.employeeId, (visitByEmployee.get(v.employeeId) ?? 0) + v.trip._count.stops);
   }
-  for (const c of stopCredits) visitByEmployee.set(c.employeeId, (visitByEmployee.get(c.employeeId) ?? 0) + 1);
+  for (const c of stopCredits) visitByEmployee.set(c.employeeId, (visitByEmployee.get(c.employeeId) ?? 0) + c.weight);
 
   const rows: KpiMonthlyReportRow[] = [];
 
