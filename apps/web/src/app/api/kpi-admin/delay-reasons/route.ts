@@ -28,14 +28,17 @@ export async function POST(req: NextRequest) {
     if (!line) return NextResponse.json({ error: "Không tìm thấy dòng PO" }, { status: 404 });
     // 00:00 giờ Việt Nam của ngày đã chọn (cùng quy ước với các hạn giao khác); lý do khác thì xoá ngày hẹn mới.
     const newDate = category === "KHACH_DOI_LICH" && newDeliveryDate ? new Date(`${newDeliveryDate}T00:00:00+07:00`) : null;
+    // "Khách đổi lịch" là việc admin làm trực tiếp với kho và giao hàng nên có hiệu lực NGAY, không chờ Trưởng phòng duyệt
+    // (anh Quân chốt 11/11/2026). Các lý do khác vẫn chờ duyệt như cũ. Trưởng phòng vẫn có thể bấm "Không duyệt" để thu hồi.
+    const autoApproved = category === "KHACH_DOI_LICH";
     const data = {
       category,
       note: note || null,
       newDeliveryDate: newDate,
-      status: "PENDING" as const,
+      status: autoApproved ? ("APPROVED" as const) : ("PENDING" as const),
       reviewedById: null,
-      reviewedAt: null,
-      reviewNote: null,
+      reviewedAt: autoApproved ? new Date() : null,
+      reviewNote: autoApproved ? "Khách đổi lịch — không cần duyệt" : null,
     };
     const reason = await prisma.deliveryDelayReason.upsert({
       where: { lineId },
