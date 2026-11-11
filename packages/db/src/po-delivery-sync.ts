@@ -5,6 +5,20 @@ export function normPoStatus(s: string | null | undefined): string {
   return (s ?? "").trim().toLowerCase();
 }
 
+/**
+ * Hạn giao hiệu lực của 1 dòng PO: nếu admin đã nhập lý do "Khách đổi lịch" kèm ngày khách hẹn mới và Trưởng phòng ĐÃ DUYỆT thì
+ * lấy ngày mới, ngược lại giữ hạn gốc trên AMIS. Lý do khác (sản xuất, kế hoạch, vận chuyển, admin...) KHÔNG đổi hạn — vẫn tính trễ.
+ */
+export function effectiveDeadline(
+  requested: Date | null,
+  reason: { category: string; status: string; newDeliveryDate: Date | null } | null | undefined
+): Date | null {
+  if (reason && reason.status === "APPROVED" && reason.category === "KHACH_DOI_LICH" && reason.newDeliveryDate) {
+    return reason.newDeliveryDate;
+  }
+  return requested;
+}
+
 export interface PoAggregate {
   poCode: string;
   salesEmployeeId: string | null;
@@ -38,6 +52,7 @@ export async function getPoAggregates(lineWhere: Record<string, unknown> = {}): 
       salesEmployee: { select: { id: true, name: true } },
       customerCode: true,
       requestedDeliveryDate: true,
+      delayReason: { select: { category: true, status: true, newDeliveryDate: true } },
       statusRaw: true,
       remainingValue: true,
       poValue: true,
@@ -72,11 +87,12 @@ export async function getPoAggregates(lineWhere: Record<string, unknown> = {}): 
       agg.manuallyClosedByName = l.manuallyClosedByUser?.name ?? null;
     }
 
+    const deadline = effectiveDeadline(l.requestedDeliveryDate, l.delayReason);
     const isLineOpen = normPoStatus(l.statusRaw) !== PO_CLOSED_STATUS;
     if (isLineOpen) {
       agg.isOpen = true;
-      if (l.requestedDeliveryDate && (!agg.earliestOpenDeadline || l.requestedDeliveryDate < agg.earliestOpenDeadline)) {
-        agg.earliestOpenDeadline = l.requestedDeliveryDate;
+      if (deadline && (!agg.earliestOpenDeadline || deadline < agg.earliestOpenDeadline)) {
+        agg.earliestOpenDeadline = deadline;
       }
       // Kẹp về 0 ở mức từng dòng — 1 số dòng "Kết thúc" có G.Trị còn lại âm trong file gốc (đã
       // giao vượt giá trị PO, do điều chỉnh/nhập bù), cộng thẳng sẽ kéo tổng cả PO xuống âm dù
@@ -84,8 +100,8 @@ export async function getPoAggregates(lineWhere: Record<string, unknown> = {}): 
       // cần giao tiếp dù chưa giao đủ số lượng, nên không tính vào "còn lại chưa giao".
       agg.remainingValue += Math.max(0, Number(l.remainingValue ?? 0));
     }
-    if (l.requestedDeliveryDate && (!agg.latestDeadlineAll || l.requestedDeliveryDate > agg.latestDeadlineAll)) {
-      agg.latestDeadlineAll = l.requestedDeliveryDate;
+    if (deadline && (!agg.latestDeadlineAll || deadline > agg.latestDeadlineAll)) {
+      agg.latestDeadlineAll = deadline;
     }
     const lastEvent = l.deliveryEvents[0]?.eventDate ?? null;
     if (lastEvent && (!agg.latestDeliveryDate || lastEvent > agg.latestDeliveryDate)) {

@@ -83,7 +83,14 @@ export interface LineIn {
   poQuantity: number;
   poValue: number;
   events: { eventDate: Date; quantity: number }[];
-  reason: { id: string; category: string; note: string | null; status: "PENDING" | "APPROVED" | "REJECTED"; reviewNote: string | null } | null;
+  reason: {
+    id: string;
+    category: string;
+    note: string | null;
+    status: "PENDING" | "APPROVED" | "REJECTED";
+    reviewNote: string | null;
+    newDeliveryDate?: Date | null;
+  } | null;
 }
 
 export function evalPayments(rows: PaymentIn[]) {
@@ -120,11 +127,16 @@ export function evalComplaints(rows: ComplaintIn[], now: Date, requireClose: boo
 
 export type LineVerdict = "ON_TIME" | "LATE" | "EXEMPT" | "NOT_DUE";
 export function lineVerdict(l: LineIn, now: Date): LineVerdict {
-  const dueEnd = vnDayStart(l.requestedDeliveryDate).getTime() + DAY;
+  // Khách đổi lịch + Trưởng phòng đã duyệt + có ngày mới -> tính hạn theo ngày mới (cùng quy tắc effectiveDeadline ở packages/db).
+  // Hạn mới mà vẫn giao trễ thì tính TRỄ thật, không được miễn nữa (miễn chỉ dành cho lý do không có ngày hẹn mới).
+  const rescheduled =
+    !!l.reason && l.reason.status === "APPROVED" && l.reason.category === "KHACH_DOI_LICH" && !!l.reason.newDeliveryDate;
+  const due = rescheduled ? (l.reason!.newDeliveryDate as Date) : l.requestedDeliveryDate;
+  const dueEnd = vnDayStart(due).getTime() + DAY;
   const deliveredByDue = l.events.filter((e) => e.eventDate.getTime() < dueEnd).reduce((s, e) => s + e.quantity, 0);
   if (deliveredByDue >= l.poQuantity - EPS) return "ON_TIME";
   if (now.getTime() < dueEnd) return "NOT_DUE";
-  if (l.reason && l.reason.status === "APPROVED" && l.reason.category !== "ADMIN") return "EXEMPT";
+  if (!rescheduled && l.reason && l.reason.status === "APPROVED" && l.reason.category !== "ADMIN") return "EXEMPT";
   return "LATE";
 }
 
@@ -184,7 +196,7 @@ async function loadPeriodData(start: Date, endExcl: Date, adminId: string, now: 
         poQuantity: true,
         poValue: true,
         deliveryEvents: { select: { eventDate: true, quantity: true } },
-        delayReason: { select: { id: true, category: true, note: true, status: true, reviewNote: true } },
+        delayReason: { select: { id: true, category: true, note: true, status: true, reviewNote: true, newDeliveryDate: true } },
       },
     }),
     prisma.defectReport.findMany({

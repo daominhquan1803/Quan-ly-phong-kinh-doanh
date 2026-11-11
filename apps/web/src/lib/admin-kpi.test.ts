@@ -91,4 +91,41 @@ describe("đánh giá dữ liệu", () => {
     expect(lineVerdict(line({ reason: { ...reason, status: "PENDING" } }), now)).toBe("LATE");
     expect(lineVerdict(line({ reason: { ...reason, category: "ADMIN" } }), now)).toBe("LATE");
   });
+
+  it("giao hàng: khách đổi lịch đã duyệt thì tính theo ngày hẹn mới", () => {
+    const now = vn("2026-10-17T12:00:00");
+    const line = (over: Partial<LineIn>): LineIn => ({
+      id: "l",
+      poCode: "PO1",
+      itemCode: null,
+      itemName: null,
+      customerCode: null,
+      requestedDeliveryDate: vn("2026-10-10T00:00:00"),
+      poQuantity: 100,
+      poValue: 1000,
+      events: [],
+      reason: null,
+      ...over,
+    });
+    const reason = {
+      id: "r",
+      category: "KHACH_DOI_LICH",
+      note: null,
+      status: "APPROVED" as const,
+      reviewNote: null,
+      newDeliveryDate: vn("2026-10-14T00:00:00"),
+    };
+    // giao ngày 13/10: quá hạn gốc (10/10) nhưng trước hạn mới (14/10) -> đúng hạn
+    const delivered13 = [{ eventDate: vn("2026-10-13T09:00:00"), quantity: 100 }];
+    expect(lineVerdict(line({ reason, events: delivered13 }), now)).toBe("ON_TIME");
+    // chưa duyệt thì vẫn theo hạn gốc
+    expect(lineVerdict(line({ reason: { ...reason, status: "PENDING" }, events: delivered13 }), now)).toBe("LATE");
+    // hạn mới còn ở tương lai -> chưa tới hạn, không tính trễ
+    expect(lineVerdict(line({ reason: { ...reason, newDeliveryDate: vn("2026-10-25T00:00:00") } }), now)).toBe("NOT_DUE");
+    // quá cả hạn mới mà chưa giao đủ -> TRỄ thật, không được miễn
+    expect(lineVerdict(line({ reason }), now)).toBe("LATE");
+    // lý do khác không đổi hạn dù có ngày mới: giao 13/10 vẫn trễ so với hạn gốc 10/10, KPI vẫn miễn như trước (EXEMPT)
+    expect(lineVerdict(line({ reason: { ...reason, category: "SAN_XUAT" }, events: delivered13 }), now)).toBe("EXEMPT");
+    expect(lineVerdict(line({ reason: { ...reason, category: "SAN_XUAT", status: "PENDING" }, events: delivered13 }), now)).toBe("LATE");
+  });
 });

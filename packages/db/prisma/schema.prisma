@@ -1634,6 +1634,9 @@ model DeliveryDelayReason {
   lineId       String            @unique
   line         PoTrackingLine    @relation(fields: [lineId], references: [id], onDelete: Cascade)
   category     String // SAN_XUAT | KE_HOACH | KHACH_DOI_LICH | VAN_CHUYEN | ADMIN | KHAC
+  // Ngày khách hẹn mới — chỉ có với category KHACH_DOI_LICH. Khi Trưởng phòng duyệt (APPROVED), dòng PO tính hạn giao theo
+  // ngày này thay cho requestedDeliveryDate (xem effectiveDeadline ở po-delivery-sync.ts và lineVerdict ở lib/admin-kpi.ts).
+  newDeliveryDate DateTime?
   note         String?
   status       DelayReasonStatus @default(PENDING)
   createdById  String

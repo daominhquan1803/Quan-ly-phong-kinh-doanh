@@ -36,7 +36,14 @@ interface Week {
   score: number;
   weekPoint: number;
 }
-interface Reason { id: string; category: string; note: string | null; status: "PENDING" | "APPROVED" | "REJECTED"; reviewNote: string | null }
+interface Reason {
+  id: string;
+  category: string;
+  note: string | null;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  reviewNote: string | null;
+  newDeliveryDate?: string | null; // ngày khách hẹn mới (chỉ có với "Khách đổi lịch")
+}
 interface LateLine {
   id: string;
   poCode: string;
@@ -355,6 +362,10 @@ function LateLineRow({ l, canEdit, isSystem, onSaved }: { l: LateLine; canEdit: 
   const [editing, setEditing] = useState(false);
   const [category, setCategory] = useState(l.reason?.category ?? "");
   const [note, setNote] = useState(l.reason?.note ?? "");
+  // yyyy-mm-dd theo giờ VN cho ô chọn ngày
+  const [newDate, setNewDate] = useState(
+    l.reason?.newDeliveryDate ? new Date(new Date(l.reason.newDeliveryDate).getTime() + 7 * 3600_000).toISOString().slice(0, 10) : ""
+  );
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const delivered = l.events.reduce((s, e) => s + Number(e.quantity), 0);
@@ -393,6 +404,7 @@ function LateLineRow({ l, canEdit, isSystem, onSaved }: { l: LateLine; canEdit: 
             <p>
               <b className="text-ink">{DELAY_CATEGORIES[l.reason.category] ?? l.reason.category}</b>
               {l.reason.note && <span className="text-muted2"> — {l.reason.note}</span>}
+              {l.reason.newDeliveryDate && <span className="text-muted2"> · khách hẹn mới {formatDateVN(l.reason.newDeliveryDate)}</span>}
             </p>
             <p
               className={cn(
@@ -417,10 +429,25 @@ function LateLineRow({ l, canEdit, isSystem, onSaved }: { l: LateLine; canEdit: 
                 </option>
               ))}
             </select>
+            {category === "KHACH_DOI_LICH" && (
+              <label className="flex items-center gap-1.5 text-xs text-muted2">
+                Khách hẹn mới
+                <input type="date" className={input} value={newDate} onChange={(e) => setNewDate(e.target.value)} />
+              </label>
+            )}
             <input className={cn(input, "flex-1 min-w-[140px]")} placeholder="Ghi chú" value={note} onChange={(e) => setNote(e.target.value)} />
             <button
               disabled={busy}
-              onClick={() => run(() => send("POST", "/api/kpi-admin/delay-reasons", { lineId: l.id, category, note: note || null }))}
+              onClick={() =>
+                run(() =>
+                  send("POST", "/api/kpi-admin/delay-reasons", {
+                    lineId: l.id,
+                    category,
+                    note: note || null,
+                    newDeliveryDate: category === "KHACH_DOI_LICH" ? newDate || null : null,
+                  })
+                )
+              }
               className="rounded-lg bg-amber-600 px-3 py-1 text-xs font-bold text-white disabled:opacity-50"
             >
               Lưu
