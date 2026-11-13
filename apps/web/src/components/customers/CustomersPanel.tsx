@@ -923,6 +923,13 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
                       >
                         {c.customerCode}
                       </span>
+                      <a
+                        href={`/reports?tab=sales&by=customer&q=${encodeURIComponent(c.customerCode)}`}
+                        className="mt-1 block text-[11px] text-info-500 hover:underline"
+                        title="Xem doanh số đơn hàng và đi hàng theo tháng của khách này"
+                      >
+                        Xem doanh số
+                      </a>
                     </td>
 
                     {/* Cột Email nhận thư nhắc công nợ (nhiều email cách nhau dấu phẩy) */}

@@ -170,7 +170,17 @@ export function ItemsPanel() {
                   onClick={() => setSelected(it)}
                   className="cursor-pointer hover:bg-white/[0.04]"
                 >
-                  <td className="px-3 py-2 font-mono text-ink">{it.itemCode ?? "—"}</td>
+                  <td className="px-3 py-2 font-mono text-ink">
+                    {it.itemCode ?? "—"}
+                    <a
+                      href={`/reports?tab=sales&by=item&q=${encodeURIComponent(it.itemCode ?? it.itemName)}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-0.5 block font-sans text-[11px] text-info-500 hover:underline"
+                      title="Xem doanh số đơn hàng và đi hàng theo tháng của mã hàng này"
+                    >
+                      Xem doanh số
+                    </a>
+                  </td>
                   <td className="px-3 py-2 text-ink">
                     <span className="flex items-center gap-1.5">
                       <Package className="h-3 w-3 shrink-0 text-muted-foreground" />

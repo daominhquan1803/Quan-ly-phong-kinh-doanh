@@ -13,6 +13,18 @@ import {
   type InvoicePayStatus,
   type PoRow,
 } from "./stats";
+import {
+  aggregateLookup,
+  monthKeys,
+  selectDetail,
+  type LookupBy,
+  type LookupDelivery,
+  type LookupDetailRow,
+  type LookupLine,
+  type LookupMeta,
+  type LookupMetric,
+  type LookupRow,
+} from "./sales-lookup";
 
 /** Phạm vi người xem: NVKD chỉ thấy khách/hoá đơn của mình; ADMIN thấy tất cả, có thể lọc theo 1 NVKD (employeeId). */
 export interface StatsScope {
@@ -257,4 +269,70 @@ export async function getInvoiceOptions(scope: StatsScope): Promise<InvoiceOptio
     customers: Array.from(byCustomer, ([key, v]) => ({ key, ...v })).sort((a, b) => a.name.localeCompare(b.name, "vi")),
     months: Array.from(months).sort().reverse(),
   };
+}
+
+// ---------------- Tra cứu doanh số khách / mã hàng theo tháng ----------------
+
+export interface SalesLookupQuery {
+  by: LookupBy;
+  from: string; // "YYYY-MM"
+  to: string; // "YYYY-MM"
+}
+
+async function loadSalesSource(from: string, to: string) {
+  const [fy, fm] = from.split("-").map(Number);
+  const [ty, tm] = to.split("-").map(Number);
+  const start = vnMidnight(fy, fm, 1);
+  const end = vnMidnight(ty, tm + 1, 1);
+  const [lines, events, dir, names] = await Promise.all([
+    prisma.poTrackingLine.findMany({
+      where: { poDate: { gte: start, lt: end }, customerCode: { not: null } },
+      select: { customerCode: true, poCode: true, poDate: true, itemCode: true, itemName: true, unit: true, poQuantity: true, poValue: true, salesEmployeeId: true },
+    }),
+    prisma.poDeliveryEvent.findMany({
+      where: { eventDate: { gte: start, lt: end }, line: { customerCode: { not: null } } },
+      select: {
+        eventDate: true,
+        quantity: true,
+        value: true,
+        sourceShipmentSlipId: true,
+        salesEmployeeId: true,
+        line: { select: { customerCode: true, poCode: true, itemCode: true, itemName: true, unit: true } },
+      },
+    }),
+    loadDirectory(),
+    userNames(),
+  ]);
+  const poLines: LookupLine[] = lines.flatMap((l) =>
+    l.poDate && l.customerCode
+      ? [{ customerCode: l.customerCode, poCode: l.poCode, poDate: l.poDate, itemCode: l.itemCode, itemName: l.itemName, unit: l.unit, qty: Number(l.poQuantity ?? 0), value: Number(l.poValue ?? 0), salesEmployeeId: l.salesEmployeeId }]
+      : []
+  );
+  const deliveries: LookupDelivery[] = events.flatMap((e) =>
+    e.line.customerCode
+      ? [{ customerCode: e.line.customerCode, poCode: e.line.poCode, itemCode: e.line.itemCode, itemName: e.line.itemName, unit: e.line.unit, eventDate: e.eventDate, qty: Number(e.quantity), value: Number(e.value), fromSlip: !!e.sourceShipmentSlipId, salesEmployeeId: e.salesEmployeeId }]
+      : []
+  );
+  const metaOf = (customerCode: string, lastOwnerId: string | null): LookupMeta => {
+    const m = resolveMeta(normCode(customerCode), customerCode, lastOwnerId, dir, names);
+    return { code: m.code, name: m.name, ownerId: m.ownerId, ownerName: m.ownerName };
+  };
+  return { poLines, deliveries, metaOf };
+}
+
+/** Bảng doanh số khách (hoặc mã hàng) × tháng. NVKD chỉ thấy khách của mình; ADMIN thấy tất cả và lọc theo NVKD. */
+export async function getSalesLookup(scope: StatsScope, q: SalesLookupQuery): Promise<{ months: string[]; rows: LookupRow[] }> {
+  const months = monthKeys(q.from, q.to);
+  if (months.length === 0) return { months, rows: [] };
+  const { poLines, deliveries, metaOf } = await loadSalesSource(q.from, q.to);
+  return { months, rows: aggregateLookup(q.by, months, poLines, deliveries, metaOf, ownerFilterId(scope)) };
+}
+
+/** Chi tiết 1 ô của bảng: các dòng PO (đơn hàng) hoặc đợt giao (đi hàng) của khách/mã hàng trong 1 tháng. */
+export async function getSalesDetail(
+  scope: StatsScope,
+  q: { by: LookupBy; key: string; month: string; metric: LookupMetric }
+): Promise<LookupDetailRow[]> {
+  const { poLines, deliveries, metaOf } = await loadSalesSource(q.month, q.month);
+  return selectDetail(q.by, q.key, q.month, q.metric, poLines, deliveries, metaOf, ownerFilterId(scope));
 }

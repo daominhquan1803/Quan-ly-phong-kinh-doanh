@@ -2,6 +2,7 @@ import ExcelJS from "exceljs";
 import { addCompanyHeaderLines, embedLogo, HEADER_FILL, NAVY, THIN_BOX } from "./excel-brand";
 import { BUCKET_LABEL, HISTORY_MONTHS, PAY_STATUS_LABEL, STATS_FROM, vnParts, type DormantBucket } from "./stats";
 import type { DormantCustomerView, DormantItemView, InvoiceRow } from "./stats-data";
+import type { LookupBy, LookupRow } from "./sales-lookup";
 
 const DATE_FMT = "dd/mm/yyyy";
 const NUM_FMT = "#,##0.##";
@@ -30,7 +31,7 @@ interface Col {
 }
 
 /** Dựng 1 sheet bảng: (logo + 4 dòng công ty ở sheet đầu) tiêu đề, dòng phụ, ghi chú, bảng có lọc + dòng tổng. */
-async function addTableSheet(
+export async function addTableSheet(
   wb: ExcelJS.Workbook,
   opts: { name: string; title: string; subtitle: string; notes?: string[]; cols: Col[]; rows: Cell[][]; withLogo?: boolean }
 ): Promise<ExcelJS.Worksheet> {
@@ -208,6 +209,36 @@ export async function buildDormantItemsWorkbook(rows: DormantItemView[], bucket:
     ],
     rows: lines.map(({ r, h }, i) => [i + 1, r.code, r.name, r.ownerName, r.itemCode, r.itemName, xlDate(h.poDate), h.poCode, h.unit, h.qty, h.value]),
   });
+  return wb;
+}
+
+/** Doanh số khách (hoặc mã hàng) × tháng: 2 sheet — doanh số đơn hàng (theo ngày PO) và doanh số đi hàng (theo ngày giao). */
+export async function buildSalesLookupWorkbook(by: LookupBy, months: string[], rows: LookupRow[], rangeLabel: string, ref: Date): Promise<ExcelJS.Workbook> {
+  const wb = new ExcelJS.Workbook();
+  const subject = by === "customer" ? "khách hàng" : "mã hàng";
+  const monthCols: Col[] = months.map((m) => ({ header: `T${m.slice(5)}/${m.slice(0, 4)}`, width: 14, fmt: MONEY_FMT, total: true }));
+  const sheet = async (name: string, title: string, note: string, pick: (r: LookupRow) => number[], withLogo: boolean) =>
+    addTableSheet(wb, {
+      name,
+      title,
+      subtitle: `Theo ${subject} — ${rangeLabel} — ${rows.length} dòng`,
+      notes: [note, `Tính đến ngày ${fmtDMY(ref)}. Số liệu từ ${fmtDMY(STATS_FROM)}.`],
+      withLogo,
+      cols: [
+        { header: "STT", width: 6, center: true },
+        { header: by === "customer" ? "Mã khách" : "Mã hàng", width: 20 },
+        { header: by === "customer" ? "Tên khách hàng" : "Tên sản phẩm", width: 40 },
+        { header: "NVKD", width: 18 },
+        ...monthCols,
+        { header: "Tổng", width: 16, fmt: MONEY_FMT, total: true },
+      ],
+      rows: rows.map((r, i) => {
+        const v = pick(r);
+        return [i + 1, r.code, r.name, r.ownerName, ...v, v.reduce((s, x) => s + x, 0)];
+      }),
+    });
+  await sheet("Doanh số đơn hàng", `DOANH SỐ ĐƠN HÀNG THEO THÁNG`, "Doanh số đơn hàng = Giá trị PO theo ngày PO.", (r) => r.orders, true);
+  await sheet("Doanh số đi hàng", `DOANH SỐ ĐI HÀNG THEO THÁNG`, "Doanh số đi hàng = giá trị các đợt giao theo ngày giao (file theo dõi PO của phòng và Phiếu đi hàng).", (r) => r.delivered, false);
   return wb;
 }
 
