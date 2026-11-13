@@ -104,6 +104,7 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
   const [recomputeMsg, setRecomputeMsg] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const [search, setSearch] = useState("");
   const [nvkdFilter, setNvkdFilter] = useState("");
   const [onlyWithTerms, setOnlyWithTerms] = useState<boolean | null>(null);
@@ -133,6 +134,18 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
     },
   });
   const assignableEmployees = (usersData?.users ?? []).filter((u) => u.active && u.amisEmployeeCode);
+
+  // Lần đồng bộ khách hàng từ AMIS gần nhất (hằng ngày 06:20 hoặc ADMIN bấm nút).
+  const { data: amisSyncData } = useQuery({
+    queryKey: ["customers-amis-sync"],
+    enabled: isAdmin,
+    queryFn: async () => {
+      const res = await fetch("/api/customers/amis-sync");
+      if (!res.ok) return { lastSync: null };
+      return res.json() as Promise<{ lastSync: { startedAt: string; status: string; message: string | null } | null }>;
+    },
+  });
+  const lastAmisSync = amisSyncData?.lastSync ?? null;
 
   // Thống kê nhanh KPI
   const stats = useMemo(() => {
@@ -248,6 +261,26 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
       setError(e instanceof Error ? e.message : "Có lỗi xảy ra");
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function handleAmisSync() {
+    setSyncing(true);
+    setError(null);
+    setImportMsg(null);
+    try {
+      const res = await fetch("/api/customers/amis-sync", { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Đồng bộ thất bại");
+      setImportMsg(json.message ?? "Đã đồng bộ khách hàng từ AMIS.");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["customers"] }),
+        queryClient.invalidateQueries({ queryKey: ["customers-amis-sync"] }),
+      ]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Có lỗi xảy ra");
+    } finally {
+      setSyncing(false);
     }
   }
 
@@ -821,6 +854,20 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
           >
             <UploadCloud className="h-4 w-4 text-info-500" />
             <span>{uploading ? "Đang nhập Excel..." : "Nhập file Excel"}</span>
+          </button>
+
+          <button
+            onClick={handleAmisSync}
+            disabled={syncing}
+            title={
+              lastAmisSync
+                ? `Lần đồng bộ gần nhất: ${new Date(lastAmisSync.startedAt).toLocaleString("vi-VN")}${lastAmisSync.status === "FAILED" ? " (lỗi)" : ""}. Tự chạy hằng ngày lúc 06:20.`
+                : "Lấy danh sách khách từ AMIS CRM. Tự chạy hằng ngày lúc 06:20."
+            }
+            className={`${isAdmin ? "flex" : "hidden"} items-center gap-2 rounded-xl border border-gray-200/90 bg-navy-50/70 px-4 py-2 text-sm font-medium text-ink transition-all hover:border-gray-300 hover:bg-navy-50 disabled:opacity-50 shadow-sm`}
+          >
+            <RefreshCw className={`h-4 w-4 text-info-500 ${syncing ? "animate-spin" : ""}`} />
+            <span>{syncing ? "Đang đồng bộ AMIS..." : "Đồng bộ AMIS"}</span>
           </button>
 
           <button

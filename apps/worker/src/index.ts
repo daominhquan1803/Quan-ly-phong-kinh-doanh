@@ -1,6 +1,7 @@
 import cron from "node-cron";
 import { buildServer } from "./server";
 import { runAmisOrderSync, runPurchaseHistoryBackfillIfNeeded } from "./sync/amis";
+import { runAmisCustomerSync } from "./sync/amisCustomers";
 import { runQuoteSync } from "./sync/quotes";
 import { runBaoGiaAppSync, isBaoGiaAppConfigured } from "./sync/baoGiaApp";
 import { runWeekPlanReminder } from "./notifications/weekPlanReminder";
@@ -46,6 +47,16 @@ async function main() {
       { timezone: AMIS_CRON_TIMEZONE }
     );
     logger.info(`Đã lên lịch đồng bộ đơn hàng AMIS: "${AMIS_CRON}" (múi giờ ${AMIS_CRON_TIMEZONE})`);
+
+    // 06:20 hằng ngày (sau đồng bộ đơn 06:00): đồng bộ danh sách khách hàng từ AMIS CRM — tạo khách mới của NVKD đang quản lý.
+    cron.schedule(
+      process.env.AMIS_CUSTOMER_SYNC_CRON || "20 6 * * *",
+      () => {
+        logger.info("Cron kích hoạt đồng bộ khách hàng AMIS");
+        runAmisCustomerSync("CRON").catch((err) => logger.error("Lỗi cron đồng bộ khách hàng AMIS:", err));
+      },
+      { timezone: AMIS_CRON_TIMEZONE }
+    );
   } else {
     logger.warn("Chưa cấu hình AMIS_APP_ID/AMIS_CLIENT_SECRET — bỏ qua lịch đồng bộ đơn hàng AMIS.");
   }

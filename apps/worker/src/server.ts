@@ -1,5 +1,6 @@
 import Fastify, { FastifyReply, FastifyRequest } from "fastify";
 import { runAmisOrderSync, runPurchaseHistoryBackfill } from "./sync/amis";
+import { runAmisCustomerSync } from "./sync/amisCustomers";
 import { runQuoteSync } from "./sync/quotes";
 import { runWeekPlanReminder } from "./notifications/weekPlanReminder";
 import { runKpiReminder } from "./notifications/kpiReminder";
@@ -38,6 +39,16 @@ export function buildServer() {
     const triggeredBy = (req.body as { triggeredBy?: string } | undefined)?.triggeredBy ?? "MANUAL";
     logger.info(`Nhận yêu cầu nạp lịch sử mua từ AMIS thủ công từ: ${triggeredBy}`);
     const outcome = await runPurchaseHistoryBackfill(triggeredBy);
+    if (outcome.status === "FAILED") reply.code(502);
+    return outcome;
+  });
+
+  // Đồng bộ danh sách khách hàng từ AMIS CRM (chỉ đọc) — nút "Đồng bộ AMIS" trên trang Khách hàng; hằng ngày 06:20 cron tự chạy.
+  app.post("/sync-amis-customers", async (req, reply) => {
+    if (!checkInternalToken(req, reply)) return;
+    const triggeredBy = (req.body as { triggeredBy?: string } | undefined)?.triggeredBy ?? "MANUAL";
+    logger.info(`Nhận yêu cầu đồng bộ khách hàng AMIS thủ công từ: ${triggeredBy}`);
+    const outcome = await runAmisCustomerSync(triggeredBy);
     if (outcome.status === "FAILED") reply.code(502);
     return outcome;
   });
