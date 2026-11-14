@@ -70,6 +70,7 @@ export async function GET(req: NextRequest) {
         customerCode: true,
         invoiceNumber: true,
         originalAmount: true,
+        paidAmount: true,
         expectedPaymentDate: true,
         dueDate: true,
         allocations: { select: { amount: true, payment: { select: { paymentDate: true } } } },
@@ -81,6 +82,7 @@ export async function GET(req: NextRequest) {
       planInvoices.map((inv) => ({
         id: inv.id,
         originalAmount: Number(inv.originalAmount),
+        paidAmount: Number(inv.paidAmount),
         expectedPaymentDate: inv.expectedPaymentDate,
         dueDate: inv.dueDate,
         allocations: inv.allocations.map((a) => ({ amount: Number(a.amount), paymentDate: a.payment.paymentDate })),

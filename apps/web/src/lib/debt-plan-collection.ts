@@ -1,6 +1,7 @@
 // Kế hoạch thu tuần + phân loại tiền về trong tháng (trang Công nợ > Kế hoạch thu).
 //
-// Mỗi hoá đơn thuộc kế hoạch có "tuần hẹn" P và số tiền A (originalAmount). Kế hoạch từng tuần được CUỐN CHIẾU (anh Quân chốt 14/11/2026):
+// Mỗi hoá đơn thuộc kế hoạch có "tuần hẹn" P và số tiền A = giá trị CÒN LẠI chưa thu tại đầu tháng (originalAmount trừ số đã thu trước tháng).
+// Kế hoạch từng tuần được CUỐN CHIẾU (anh Quân chốt 14/11/2026):
 //  - Tuần N < P : hoá đơn chưa vào kế hoạch tuần N. Tiền về ở tuần N là "VỀ SỚM": hiện ở ô tuần N (tuần tiền về).
 //  - Tuần N = P : kế hoạch = A trừ phần đã về sớm (tiền về trước tuần P).
 //  - Tuần N > P : kế hoạch = phần còn thiếu sau khi hết tuần N-1 (A trừ mọi khoản đã về đến hết tuần N-1) — khoản TRƯỢT được đẩy sang
@@ -25,6 +26,8 @@ export interface WeekBucket {
 export interface InvoiceForPlan {
   id?: string;
   originalAmount: number;
+  /** Tổng đã thu của hoá đơn (DebtInvoice.paidAmount). Phần đã thu TRƯỚC tháng = paidAmount trừ các khoản về từ đầu tháng; kế hoạch chỉ tính phần còn lại. */
+  paidAmount?: number;
   expectedPaymentDate: Date | null;
   dueDate: Date | null;
   allocations: { amount: number; paymentDate: Date | null }[];
@@ -59,6 +62,13 @@ export interface WeekPlanResult {
   /** Về sớm: tiền về tuần này của hoá đơn hẹn các tuần SAU. */
   early: number;
   outsidePlan: number;
+}
+
+/** Số đã thu của hoá đơn TRƯỚC `monthStart`: tổng đã thu trừ các khoản về từ đầu tháng trở đi (hoặc không rõ ngày); không có `paidAmount` thì coi là 0. */
+function paidBeforeMonth(inv: InvoiceForPlan, monthStart: Date): number {
+  if (!inv.paidAmount) return 0;
+  const sinceMonth = inv.allocations.reduce((s, a) => (!a.paymentDate || a.paymentDate >= monthStart ? s + a.amount : s), 0);
+  return Math.max(0, inv.paidAmount - sinceMonth);
 }
 
 export function buildWeekPlan(weeks: WeekBucket[], invoices: InvoiceForPlan[], asOf: Date = new Date()): WeekPlanResult[] {
@@ -101,7 +111,12 @@ export function buildWeekPlan(weeks: WeekBucket[], invoices: InvoiceForPlan[], a
     }
 
     const paidThrough = (w: number) => paid.reduce((s, a) => (a.pay <= w ? s + a.amount : s), 0);
-    const amount = inv.originalAmount;
+    // Chỉ tính giá trị CÒN LẠI chưa thu tại đầu tháng (anh Quân chốt 14/11/2026): hoá đơn đã thu 1 phần từ tháng trước thì kế hoạch chỉ là phần còn lại.
+    const amount = Math.max(0, inv.originalAmount - paidBeforeMonth(inv, first));
+    if (amount <= 0) {
+      for (const a of paid) out[a.pay].outsidePlan += a.amount; // đã thu đủ từ trước tháng: tiền về thêm không thuộc kế hoạch
+      continue;
+    }
 
     // Tuần hẹn: kế hoạch gốc trừ phần đã về sớm.
     const earlyBefore = Math.min(amount, paidThrough(planIdx - 1));

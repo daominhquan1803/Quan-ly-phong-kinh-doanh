@@ -100,6 +100,34 @@ describe("buildWeekPlan — bảng kê từng tuần cộng ra đúng kế hoạ
   });
 });
 
+describe("buildWeekPlan — chỉ tính giá trị còn lại chưa thu tại đầu tháng", () => {
+  it("hoá đơn đã thu 1 phần từ tháng trước: kế hoạch chỉ là phần còn lại", () => {
+    const i = { ...inv({ expected: "2026-11-12", amount: 100, pays: [[60, "2026-11-13"]] }), paidAmount: 100 }; // 40 đã thu từ trước + 60 thu tháng này
+    const r = buildWeekPlan(weeks, [i], END);
+    expect(r[1]).toMatchObject({ plannedOriginal: 60, planned: 60, collected: 60 });
+  });
+
+  it("đã thu trước tháng nhưng chưa thu tiếp: phần còn lại trượt sang tuần sau", () => {
+    const i = { ...inv({ expected: "2026-11-04", amount: 100 }), paidAmount: 40 };
+    const r = buildWeekPlan(weeks, [i], END);
+    expect(r[0].planned).toBe(60);
+    expect(r[1]).toMatchObject({ carried: 60, planned: 60 });
+  });
+
+  it("khoản về từ đầu tháng không bị tính là đã thu trước tháng (không trừ 2 lần)", () => {
+    const i = { ...inv({ expected: "2026-11-04", amount: 100, pays: [[30, "2026-11-03"]] }), paidAmount: 30 };
+    const r = buildWeekPlan(weeks, [i], END);
+    expect(r[0]).toMatchObject({ plannedOriginal: 100, collected: 30 });
+  });
+
+  it("hoá đơn đã thu đủ từ trước tháng không vào kế hoạch", () => {
+    const i = { ...inv({ expected: "2026-11-04", amount: 100, pays: [[5, "2026-11-10"]] }), paidAmount: 105 };
+    const r = buildWeekPlan(weeks, [i], END);
+    expect(r.reduce((s, w) => s + w.planned, 0)).toBe(0);
+    expect(r[1].outsidePlan).toBe(5);
+  });
+});
+
 describe("buildWeekPlan — hoá đơn chưa hẹn trong tháng", () => {
   it("hẹn tháng trước mà trượt, về tháng này -> vào kế hoạch đúng tuần tiền về", () => {
     const r = buildWeekPlan(weeks, [inv({ expected: "2026-10-31", due: "2026-11-14", pays: [[100, "2026-11-04"]] })], END);
