@@ -1716,3 +1716,109 @@ model AdminSatisfactionRating {
   @@unique([adminId, raterId, year, month])
   @@map("admin_satisfaction_ratings")
 }
+
+// ---------- Lead quét MXH / khách tiềm năng (đọc từ Google Sheet "Theo dõi khách tiềm năng - PKD1") ----------
+// Nhập bằng file Excel tải từ sheet (Quản trị hệ thống). Sheet là nguồn gốc: nhập lại thì cập nhật theo khoá `sourceKey`.
+// status: NEW (chưa giao) | ASSIGNED (đã giao, chưa liên hệ) | INCOMPLETE (có ghi liên hệ nhưng thiếu thông tin → KHÔNG ghi nhận) | CONTACTED (đủ thông tin → ghi nhận)
+// resultKind: REACHED (khách phản hồi/liên hệ được) | WAITING (đã nhắn/để lại thông tin, chờ) | NO_RESPONSE | OTHER
+
+/// Bài hỏi hàng quét trên Facebook (tab "Hỏi hàng MXH").
+model LeadScanItem {
+  id            String    @id @default(cuid())
+  sourceKey     String    @unique
+  scanDate      DateTime  @db.Date
+  postDate      DateTime? @db.Date
+  platform      String?
+  groupName     String?
+  poster        String?
+  product       String?
+  quantity      String?
+  area          String?
+  contactInPost String?
+  link          String?
+  contactDate   DateTime? @db.Date
+  assigneeName  String?
+  assigneeId    String?
+  result        String?
+  note          String?
+  status        String
+  resultKind    String?
+  missing       String?
+  importBatchId String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([scanDate])
+  @@index([contactDate])
+  @@index([assigneeId])
+  @@map("lead_scan_items")
+}
+
+/// Khách doanh nghiệp tiềm năng: origin SCAN (tab "Theo dõi", AI quét báo) hoặc SELF (tab "… tự tìm" của từng NVKD).
+model LeadProspect {
+  id            String    @id @default(cuid())
+  sourceKey     String    @unique
+  origin        String
+  foundDate     DateTime? @db.Date
+  rank          String?
+  score         Int?
+  companyName   String
+  taxCode       String?
+  industry      String?
+  area          String?
+  signal        String?
+  products      String?
+  contactPerson String?
+  phone         String?
+  email         String?
+  sourceNote    String?
+  assigneeName  String?
+  assigneeId    String?
+  contactDate   DateTime? @db.Date
+  channel       String?
+  result        String?
+  note          String?
+  nextStep      String?
+  nextDate      DateTime? @db.Date
+  status        String
+  resultKind    String?
+  missing       String?
+  importBatchId String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([origin])
+  @@index([contactDate])
+  @@index([assigneeId])
+  @@map("lead_prospects")
+}
+
+/// Nhật ký các lượt chạy quét (tab "Nhật ký quét").
+model LeadScanLog {
+  id        String   @id @default(cuid())
+  runDate   DateTime @db.Date
+  slot      String
+  status    String
+  groups    Int      @default(0)
+  postsRead Int      @default(0)
+  newPosts  Int      @default(0)
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([runDate, slot])
+  @@map("lead_scan_logs")
+}
+
+/// Chỉ tiêu Lead MXH theo tuần (riêng, không nằm trong 6 mục/trọng số 100 của Kế hoạch tuần).
+model LeadMxhTarget {
+  id          String   @id @default(cuid())
+  employeeId  String
+  weekStart   DateTime
+  targetValue Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([employeeId, weekStart])
+  @@map("lead_mxh_targets")
+}

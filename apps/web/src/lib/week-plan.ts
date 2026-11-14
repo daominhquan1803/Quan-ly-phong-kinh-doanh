@@ -250,7 +250,7 @@ export function weekGradeFromTotalPoints(totalPoints: number): 0 | 1 | 2 {
 
 // ---------- Danh sách nhân viên áp dụng (cùng quy ước với Kế hoạch kinh doanh/KPI) ----------
 
-async function getEligibleEmployees() {
+export async function getEligibleEmployees() {
   return prisma.user.findMany({
     where: { active: true, amisEmployeeCode: { not: null }, includeInSalesStats: true },
     select: { id: true, name: true, quoteAssigneeCode: true },

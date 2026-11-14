@@ -7,6 +7,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, Pencil, Plus, Trash2, UploadCloud, Info, Save, X } from "lucide-react";
 import { NATIONALITIES, SCALE_KEYS, SCALE_LABEL } from "@/lib/week-plan-entry";
 import { cn, formatDateVN } from "@/lib/utils";
+import { LeadMxhWeek, LeadScanReport } from "./LeadScanSection";
 
 type Metric = "NEW_CONTACT" | "NEW_MEETING" | "EXISTING_VISIT" | "NEW_CUSTOMER_SALE" | "NEW_QUOTE" | "BUSINESS_TRIP";
 const METRICS: Metric[] = ["NEW_CONTACT", "NEW_MEETING", "EXISTING_VISIT", "NEW_CUSTOMER_SALE", "NEW_QUOTE", "BUSINESS_TRIP"];
@@ -198,6 +199,9 @@ export function WeekPlanOverview({ isAdmin }: { isAdmin: boolean }) {
       )}
 
       <ProgressReport rows={summary?.rows ?? []} isLoading={summaryLoading} isAdmin={isAdmin} weekStartISO={weekStartISO} />
+
+      <LeadMxhWeek weekStartISO={weekStartISO} isAdmin={isAdmin} />
+      <LeadScanReport isAdmin={isAdmin} />
 
       <ResultEntrySection
         weekStart={weekStart}
