@@ -1,5 +1,5 @@
-import { prisma, getPoAggregates } from "@hoanggia/db";
-import { getOihLinesAsOf, monthRange } from "./dashboard-metrics";
+import { prisma } from "@hoanggia/db";
+import { getOihItemRows, monthRange } from "./dashboard-metrics";
 import { normCode } from "./stats";
 
 // Chi tiết theo KHÁCH của các số trên trang Kế hoạch kinh doanh: "Thực hiện (đã giao)" và OIH của 1 nhân viên trong 1 tháng,
@@ -70,7 +70,8 @@ async function customerNames(): Promise<Map<string, { code: string; name: string
 /**
  * Chi tiết theo khách của 1 nhân viên trong tháng.
  *  - delivered: các đợt giao (PoDeliveryEvent) trong tháng; `group` Sản xuất/Thương mại chỉ lấy dòng có mã hàng thuộc nhóm đó.
- *  - oih: PO còn mở. Tháng đã qua tính ngược về cuối tháng (getOihLinesAsOf), tháng đang chạy lấy số hiện tại (getPoAggregates) — như số OIH trên bảng.
+ *  - oih: PO còn mở theo từng dòng (getOihItemRows — tháng đã qua tính ngược về cuối tháng, tháng đang chạy lấy số hiện tại, như số OIH trên bảng);
+ *    `group` Sản xuất/Thương mại chỉ lấy dòng có mã hàng thuộc nhóm đó.
  */
 export async function getTargetBreakdown(q: {
   year: number;
@@ -90,12 +91,10 @@ export async function getTargetBreakdown(q: {
     items = events
       .filter((e) => q.group === "all" || groupOfItemCode(e.line.itemCode) === q.group)
       .map((e) => ({ customerCode: e.line.customerCode, poCode: e.line.poCode, value: Number(e.value) }));
-  } else if (end.getTime() <= Date.now()) {
-    items = (await getOihLinesAsOf(end, q.employeeId)).map((l) => ({ customerCode: l.customerCode, poCode: l.poCode, value: l.remaining }));
   } else {
-    items = (await getPoAggregates({ salesEmployeeId: q.employeeId }))
-      .filter((p) => p.isOpen && p.salesEmployeeId === q.employeeId && p.remainingValue > 0)
-      .map((p) => ({ customerCode: p.customerCode, poCode: p.poCode, value: p.remainingValue }));
+    items = (await getOihItemRows(end, q.employeeId))
+      .filter((r) => r.employeeId === q.employeeId && (q.group === "all" || groupOfItemCode(r.itemCode) === q.group))
+      .map((r) => ({ customerCode: r.customerCode, poCode: r.poCode, value: r.value }));
   }
 
   const rows = groupByCustomer(items, await customerNames());

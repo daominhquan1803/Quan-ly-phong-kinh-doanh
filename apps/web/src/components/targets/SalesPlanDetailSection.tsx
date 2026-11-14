@@ -18,6 +18,7 @@ interface PlanLine {
   targetQuantity: number | null;
   actualRevenue: number;
   actualQuantity: number | null;
+  oihValue: number;
   actualBasis: "PRODUCT" | "PRODUCT_GROUP" | "EMPLOYEE_TOTAL" | "UNRESOLVED";
   completionPct: number | null;
 }
@@ -27,7 +28,7 @@ export function SalesPlanDetailSection({ isAdmin }: { isAdmin: boolean }) {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [showWizard, setShowWizard] = useState(false);
-  const [selected, setSelected] = useState<{ employeeId: string; employeeName: string; group: "all" | "Sản xuất" | "Thương mại"; expected: number } | null>(null);
+  const [selected, setSelected] = useState<{ employeeId: string; employeeName: string; group: "all" | "Sản xuất" | "Thương mại"; expected: { delivered: number; oih: number } } | null>(null);
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -126,6 +127,12 @@ export function SalesPlanDetailSection({ isAdmin }: { isAdmin: boolean }) {
                 <span className="text-muted2">
                   Thực hiện: <span className="font-bold text-emerald-400">{formatCurrencyVND(group.actualRevenue)}</span>
                 </span>
+                <span className="text-muted2">
+                  Còn thiếu: <span className="font-bold text-alert">{formatCurrencyVND(group.shortfall)}</span>
+                </span>
+                <span className="text-muted2">
+                  OIH: <span className="font-bold text-ink">{formatCurrencyVND(group.oihValue)}</span>
+                </span>
                 <span
                   className={cn(
                     "px-2 py-0.5 rounded-full text-xs font-bold border",
@@ -148,6 +155,8 @@ export function SalesPlanDetailSection({ isAdmin }: { isAdmin: boolean }) {
                     <th className="text-right font-medium px-4 py-2.5">Chỉ tiêu</th>
                     <th className="text-right font-medium px-4 py-2.5">Thực hiện</th>
                     <th className="text-right font-medium px-4 py-2.5">% Đạt</th>
+                    <th className="text-right font-medium px-4 py-2.5">Giá trị còn thiếu</th>
+                    <th className="text-right font-medium px-4 py-2.5" title="Order In Hand — giá trị hàng chưa giao của các PO đang mở">OIH</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
@@ -164,11 +173,11 @@ export function SalesPlanDetailSection({ isAdmin }: { isAdmin: boolean }) {
                                 employeeId: r.employeeId,
                                 employeeName: r.employeeName,
                                 group: group.name === "Sản xuất" || group.name === "Thương mại" ? group.name : "all",
-                                expected: r.actualRevenue,
+                                expected: { delivered: r.actualRevenue, oih: r.oihValue },
                               }
                         );
                       }}
-                      title={r.employeeId ? "Bấm để xem thực hiện chi tiết theo khách" : undefined}
+                      title={r.employeeId ? "Bấm để xem thực hiện và OIH chi tiết theo khách" : undefined}
                       className={cn(
                         "transition-colors",
                         r.employeeId && "cursor-pointer",
@@ -203,6 +212,10 @@ export function SalesPlanDetailSection({ isAdmin }: { isAdmin: boolean }) {
                           "—"
                         )}
                       </td>
+                      <td className={cn("px-4 py-2.5 text-right font-mono", r.shortfall > 0 ? "text-alert font-bold" : "text-muted2")}>
+                        {r.shortfall > 0 ? formatCurrencyVND(r.shortfall) : "—"}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono text-muted2">{formatCurrencyVND(r.oihValue)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -231,6 +244,10 @@ export function SalesPlanDetailSection({ isAdmin }: { isAdmin: boolean }) {
                         "—"
                       )}
                     </td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-alert">
+                      {group.shortfall > 0 ? formatCurrencyVND(group.shortfall) : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-muted2">{formatCurrencyVND(group.oihValue)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -246,13 +263,13 @@ export function SalesPlanDetailSection({ isAdmin }: { isAdmin: boolean }) {
           employeeId={selected.employeeId}
           employeeName={selected.employeeName}
           group={selected.group}
-          metrics={["delivered"]}
-          expected={{ delivered: selected.expected }}
+          metrics={["delivered", "oih"]}
+          expected={selected.expected}
           onClose={() => setSelected(null)}
         />
       )}
       {!isLoading && (data?.lines.length ?? 0) > 0 && !selected && (
-        <p className="text-[11px] text-muted2">Bấm vào dòng nhân viên trong từng nhóm hàng để xem thực hiện chi tiết theo khách.</p>
+        <p className="text-[11px] text-muted2">Bấm vào dòng nhân viên trong từng nhóm hàng để xem thực hiện và OIH chi tiết theo khách.</p>
       )}
     </div>
   );
@@ -264,6 +281,8 @@ interface EmployeeRow {
   employeeName: string;
   targetRevenue: number;
   actualRevenue: number;
+  shortfall: number;
+  oihValue: number;
   completionPct: number | null;
   hasEmployeeTotalBasis: boolean;
 }
@@ -279,7 +298,16 @@ interface EmployeeRow {
 function aggregateByEmployee(lines: PlanLine[]): EmployeeRow[] {
   const buckets = new Map<
     string,
-    { employeeId: string | null; employeeName: string; targetRevenue: number; productActual: number; groupActual: number | null; hasEmployeeTotalFallback: boolean }
+    {
+      employeeId: string | null;
+      employeeName: string;
+      targetRevenue: number;
+      productActual: number;
+      groupActual: number | null;
+      productOih: number;
+      groupOih: number | null;
+      hasEmployeeTotalFallback: boolean;
+    }
   >();
   for (const l of lines) {
     const key = l.employeeName; // tên hiển thị đã là danh tính nhân viên duy nhất trong 1 tháng
@@ -290,6 +318,8 @@ function aggregateByEmployee(lines: PlanLine[]): EmployeeRow[] {
         targetRevenue: 0,
         productActual: 0,
         groupActual: null,
+        productOih: 0,
+        groupOih: null,
         hasEmployeeTotalFallback: false,
       });
     }
@@ -297,8 +327,10 @@ function aggregateByEmployee(lines: PlanLine[]): EmployeeRow[] {
     b.targetRevenue += l.targetRevenue;
     if (l.actualBasis === "PRODUCT") {
       b.productActual += l.actualRevenue; // theo đúng mã hàng — cộng dồn được
+      b.productOih += l.oihValue;
     } else if (l.actualBasis === "PRODUCT_GROUP" || l.actualBasis === "EMPLOYEE_TOTAL") {
       b.groupActual = l.actualRevenue; // cùng 1 giá trị lặp lại theo nhân viên trong nhóm này — lấy 1 lần
+      b.groupOih = l.oihValue; // OIH cũng cùng cơ sở: lặp lại theo nhân viên trong nhóm — lấy 1 lần
       if (l.actualBasis === "EMPLOYEE_TOTAL") b.hasEmployeeTotalFallback = true;
     }
   }
@@ -312,6 +344,8 @@ function aggregateByEmployee(lines: PlanLine[]): EmployeeRow[] {
         employeeName: b.employeeName,
         targetRevenue: b.targetRevenue,
         actualRevenue,
+        shortfall: Math.max(0, b.targetRevenue - actualRevenue),
+        oihValue: b.productOih + (b.groupOih ?? 0),
         completionPct: b.targetRevenue > 0 ? Math.round((actualRevenue / b.targetRevenue) * 100) : null,
         hasEmployeeTotalBasis: b.hasEmployeeTotalFallback,
       };
@@ -346,6 +380,8 @@ function groupLines(lines: PlanLine[]) {
       rows,
       targetRevenue,
       actualRevenue,
+      shortfall: rows.reduce((s, r) => s + r.shortfall, 0),
+      oihValue: rows.reduce((s, r) => s + r.oihValue, 0),
       completionPct: targetRevenue > 0 ? Math.round((actualRevenue / targetRevenue) * 100) : null,
     };
   });

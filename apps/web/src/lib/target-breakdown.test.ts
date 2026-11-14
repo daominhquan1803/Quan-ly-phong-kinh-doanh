@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 
-vi.mock("@hoanggia/db", () => ({ prisma: {}, getPoAggregates: vi.fn() }));
-vi.mock("./dashboard-metrics", () => ({ getOihLinesAsOf: vi.fn(), monthRange: vi.fn() }));
+vi.mock("@hoanggia/db", () => ({ prisma: {} }));
+vi.mock("./dashboard-metrics", () => ({ getOihItemRows: vi.fn(), monthRange: vi.fn() }));
 
 import { groupByCustomer, groupOfItemCode } from "./target-breakdown";
 

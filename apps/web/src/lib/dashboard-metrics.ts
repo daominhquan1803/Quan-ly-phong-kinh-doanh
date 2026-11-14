@@ -1,4 +1,4 @@
-import { prisma, getPoAggregates } from "@hoanggia/db";
+import { prisma, getPoAggregates, normPoStatus, PO_CLOSED_STATUS } from "@hoanggia/db";
 
 export function monthRange(year: number, month: number) {
   const start = new Date(year, month - 1, 1);
@@ -25,6 +25,7 @@ export async function getOihAsOf(asOfEnd: Date, onlyEmployeeId?: string): Promis
 export interface OihLine {
   salesEmployeeId: string;
   customerCode: string | null;
+  itemCode: string | null;
   poCode: string;
   remaining: number;
 }
@@ -36,6 +37,7 @@ export async function getOihLinesAsOf(asOfEnd: Date, onlyEmployeeId?: string): P
     select: {
       salesEmployeeId: true,
       customerCode: true,
+      itemCode: true,
       poCode: true,
       poValue: true,
       poDate: true,
@@ -54,9 +56,50 @@ export async function getOihLinesAsOf(asOfEnd: Date, onlyEmployeeId?: string): P
     if (closedNow && Number(l.deliveredValue) + 1 < poValue && !(l.manuallyClosedAt && l.manuallyClosedAt >= asOfEnd)) continue;
     const delivered = l.deliveryEvents.reduce((s, e) => (e.eventDate < asOfEnd ? s + Number(e.value) : s), 0);
     const remaining = Math.max(0, poValue - delivered);
-    if (remaining > 0) out.push({ salesEmployeeId: l.salesEmployeeId, customerCode: l.customerCode, poCode: l.poCode, remaining });
+    if (remaining > 0) out.push({ salesEmployeeId: l.salesEmployeeId, customerCode: l.customerCode, itemCode: l.itemCode, poCode: l.poCode, remaining });
   }
   return out;
+}
+
+export interface OihItemRow {
+  employeeId: string;
+  customerCode: string | null;
+  itemCode: string | null;
+  poCode: string;
+  value: number;
+}
+
+/**
+ * OIH theo từng dòng PO của tháng (`monthEnd` = đầu tháng sau), cùng luật số OIH ở bảng nhân viên: tháng đã qua tính ngược về cuối tháng
+ * (getOihLinesAsOf), tháng đang chạy lấy dòng PO còn mở hiện tại (G.Trị còn lại, kẹp ≥ 0, bỏ dòng "Kết thúc").
+ */
+export async function getOihItemRows(monthEnd: Date, onlyEmployeeId?: string): Promise<OihItemRow[]> {
+  if (monthEnd.getTime() <= Date.now()) {
+    return (await getOihLinesAsOf(monthEnd, onlyEmployeeId)).map((l) => ({
+      employeeId: l.salesEmployeeId,
+      customerCode: l.customerCode,
+      itemCode: l.itemCode,
+      poCode: l.poCode,
+      value: l.remaining,
+    }));
+  }
+  const lines = await prisma.poTrackingLine.findMany({
+    where: { salesEmployeeId: onlyEmployeeId ?? { not: null } },
+    select: { salesEmployeeId: true, customerCode: true, itemCode: true, poCode: true, statusRaw: true, remainingValue: true },
+  });
+  return lines.flatMap((l) =>
+    l.salesEmployeeId && normPoStatus(l.statusRaw) !== PO_CLOSED_STATUS
+      ? [
+          {
+            employeeId: l.salesEmployeeId,
+            customerCode: l.customerCode,
+            itemCode: l.itemCode,
+            poCode: l.poCode,
+            value: Math.max(0, Number(l.remainingValue ?? 0)),
+          },
+        ]
+      : []
+  );
 }
 
 export interface EmployeeTargetVsActual {
@@ -250,6 +293,10 @@ export interface SalesPlanLineWithActual {
   targetQuantity: number | null;
   actualRevenue: number;
   actualQuantity: number | null;
+  // OIH (hàng chưa giao) cùng cơ sở với actualRevenue: PRODUCT = OIH của đúng mã hàng; PRODUCT_GROUP = OIH của nhóm hàng (SI/SB = Sản xuất,
+  // còn lại = Thương mại; dòng không có mã hàng không xếp nhóm); EMPLOYEE_TOTAL = tổng OIH của nhân viên. Như actualRevenue, ở 2 basis sau
+  // cùng 1 con số lặp lại trên mọi dòng của nhân viên trong nhóm — chỉ được cộng 1 lần.
+  oihValue: number;
   // PRODUCT: khớp đúng theo mã hàng. PRODUCT_GROUP: dòng kế hoạch không có mã hàng cụ thể
   // nhưng có Nhóm hàng (Sản xuất/Thương mại) — thực hiện lấy theo đúng nhóm, phân loại từng
   // OrderItem theo tiền tố mã hàng thật (SI/SB = Sản xuất, còn lại = Thương mại). EMPLOYEE_TOTAL:
@@ -294,6 +341,22 @@ export async function getSalesPlanLinesWithActual(
       line: { select: { itemCode: true } },
     },
   });
+  const oihRows = await getOihItemRows(end, onlyEmployeeId);
+  const oihProductMap = new Map<string, number>();
+  const oihGroupMap = new Map<string, { production: number; trading: number }>();
+  const oihTotalMap = new Map<string, number>();
+  for (const r of oihRows) {
+    oihTotalMap.set(r.employeeId, (oihTotalMap.get(r.employeeId) ?? 0) + r.value);
+    if (!r.itemCode) continue;
+    const pk = `${r.employeeId}::${r.itemCode}`;
+    oihProductMap.set(pk, (oihProductMap.get(pk) ?? 0) + r.value);
+    const upper = r.itemCode.toUpperCase();
+    const g = oihGroupMap.get(r.employeeId) ?? { production: 0, trading: 0 };
+    if (upper.startsWith("SI") || upper.startsWith("SB")) g.production += r.value;
+    else g.trading += r.value;
+    oihGroupMap.set(r.employeeId, g);
+  }
+
   const productMap = new Map<string, { revenue: number; quantity: number }>();
   // Doanh số thực hiện theo nhân viên x Nhóm hàng, phân loại theo đúng quy tắc thật của công
   // ty: mã hàng bắt đầu bằng SI hoặc SB là hàng sản xuất, còn lại là hàng thương mại. Dòng
@@ -323,19 +386,24 @@ export async function getSalesPlanLinesWithActual(
     const targetRevenue = Number(l.targetRevenue);
     let actualRevenue = 0;
     let actualQuantity: number | null = null;
+    let oihValue = 0;
     let actualBasis: SalesPlanLineWithActual["actualBasis"] = "UNRESOLVED";
 
     if (l.employeeId && l.productCode) {
       const agg = productMap.get(`${l.employeeId}::${l.productCode}`);
       actualRevenue = agg?.revenue ?? 0;
       actualQuantity = agg?.quantity ?? 0;
+      oihValue = oihProductMap.get(`${l.employeeId}::${l.productCode}`) ?? 0;
       actualBasis = "PRODUCT";
     } else if (l.employeeId && (l.productGroup === "Sản xuất" || l.productGroup === "Thương mại")) {
       const g = employeeGroupMap.get(l.employeeId);
       actualRevenue = l.productGroup === "Sản xuất" ? g?.production ?? 0 : g?.trading ?? 0;
+      const og = oihGroupMap.get(l.employeeId);
+      oihValue = l.productGroup === "Sản xuất" ? og?.production ?? 0 : og?.trading ?? 0;
       actualBasis = "PRODUCT_GROUP";
     } else if (l.employeeId) {
       actualRevenue = employeeTotalMap.get(l.employeeId) ?? 0;
+      oihValue = oihTotalMap.get(l.employeeId) ?? 0;
       actualBasis = "EMPLOYEE_TOTAL";
     }
 
@@ -350,6 +418,7 @@ export async function getSalesPlanLinesWithActual(
       targetQuantity: l.targetQuantity ? Number(l.targetQuantity) : null,
       actualRevenue,
       actualQuantity,
+      oihValue,
       actualBasis,
       completionPct: targetRevenue > 0 ? Math.round((actualRevenue / targetRevenue) * 100) : null,
     };
