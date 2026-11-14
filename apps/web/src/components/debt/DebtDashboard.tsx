@@ -49,8 +49,20 @@ interface SummaryResponse {
   overdueRate: number;
   badDebtRate: number;
   perEmployee: { employeeId: string; employeeName: string; totalDebt: number; overdueDebt: number; badDebt: number }[] | null;
-  weeklyPlan: { weekIndex: number; start: string; end: string; planned: number; plannedOriginal: number; earlyDeducted: number; carried: number; collected: number; early: number; outsidePlan: number; rate: number | null }[];
+  weeklyPlan: { weekIndex: number; start: string; end: string; planned: number; plannedOriginal: number; earlyDeducted: number; carried: number; lines: WeekPlanLineView[]; collected: number; early: number; outsidePlan: number; rate: number | null }[];
   monthlyPlan: { planned: number; collected: number; early: number; outsidePlan: number; rate: number | null; totalReceived: number };
+}
+
+/** Một hoá đơn trong kế hoạch của 1 tuần (cộng các dòng = kế hoạch tuần trên thẻ). */
+interface WeekPlanLineView {
+  id?: string;
+  kind: "planned" | "carried";
+  fromWeek: number;
+  amount: number;
+  earlyDeducted: number;
+  customerCode?: string;
+  invoiceNumber?: string | null;
+  originalAmount?: number;
 }
 
 type SortField = "dueDate" | "remaining";
@@ -368,19 +380,15 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
     setPage(1);
   }, [status, nvkdFilter, invoiceMonthFilter, employeeId, filterCustomer, sort]);
 
-  const expandedWeekInvoices = useMemo(() => {
+  // Bảng kê của tuần đang mở: đúng các hoá đơn tạo nên "kế hoạch" trên thẻ (hẹn đúng tuần + khoản trượt từ tuần trước), nên cộng ra bằng số trên thẻ.
+  const expandedWeekLines = useMemo(() => {
     if (expandedWeek === null || !weekSummary) return [];
     const week = weekSummary.weeklyPlan.find((w) => w.weekIndex === expandedWeek);
     if (!week) return [];
-    const start = new Date(week.start).getTime();
-    const end = new Date(week.end).getTime();
-    return weekRows
-      .filter((r) => {
-        if (!r.expectedPaymentDate) return false;
-        const t = new Date(r.expectedPaymentDate).getTime();
-        return t >= start && t <= end;
-      })
-      .sort((a, b) => (a.debtStatus === "PAID" ? 1 : 0) - (b.debtStatus === "PAID" ? 1 : 0));
+    const byId = new Map(weekRows.map((r) => [r.id, r]));
+    return week.lines
+      .map((l) => ({ ...l, row: l.id ? byId.get(l.id) : undefined }))
+      .sort((a, b) => (a.kind === b.kind ? b.amount - a.amount : a.kind === "planned" ? -1 : 1));
   }, [expandedWeek, weekSummary, weekRows]);
 
   function handleSort(field: SortField) {
@@ -641,40 +649,70 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                   <tr>
                     <th className="text-left font-medium px-3.5 py-2.5">Khách hàng</th>
                     <th className="text-left font-medium px-3.5 py-2.5">Số hoá đơn</th>
-                    <th className="text-right font-medium px-3.5 py-2.5">Số tiền</th>
+                    <th className="text-left font-medium px-3.5 py-2.5">Loại</th>
+                    <th className="text-right font-medium px-3.5 py-2.5" title="Phần của hoá đơn nằm trong kế hoạch của tuần này">Số tiền trong kế hoạch tuần</th>
                     <th className="text-left font-medium px-3.5 py-2.5">Trạng thái</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {expandedWeekInvoices.length === 0 && (
+                  {expandedWeekLines.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="px-3.5 py-4 text-center text-muted-foreground">
-                        Không có khoản nào dự kiến thu tuần này.
+                      <td colSpan={5} className="px-3.5 py-4 text-center text-muted-foreground">
+                        Không có khoản nào trong kế hoạch thu tuần này.
                       </td>
                     </tr>
                   )}
-                  {expandedWeekInvoices.map((r) => (
-                    <tr key={r.id} className="hover:bg-white/[0.02]">
-                      <td className="px-3.5 py-2 text-ink font-medium whitespace-nowrap" title={r.customerName}>{r.customerCode}</td>
-                      <td className="px-3.5 py-2 font-mono text-amber-300/90">{r.invoiceNumber ?? "—"}</td>
-                      <td className="px-3.5 py-2 text-right font-mono font-semibold text-ink">{formatCurrencyVND(Number(r.originalAmount))}</td>
-                      <td className="px-3.5 py-2">
-                        {r.debtStatus === "PAID" ? (
-                          <span className="text-emerald-400 font-medium inline-flex items-center gap-1">
-                            <CheckCircle2 className="h-3.5 w-3.5" /> Đã về{r.lastPaymentDate ? ` ngày ${formatDateVN(r.lastPaymentDate)}` : ""}
-                          </span>
-                        ) : Number(r.paidAmount) > 0 ? (
-                          <span className="text-emerald-400 font-medium whitespace-pre-wrap font-mono">
-                            Đã về {formatCurrencyVND(Number(r.paidAmount))}
-                            {r.lastPaymentDate ? ` ngày ${formatDateVN(r.lastPaymentDate)}` : ""}
-                          </span>
-                        ) : (
-                          <span className="text-alert font-medium">Chưa về</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                  {expandedWeekLines.map((l, i) => {
+                    const r = l.row;
+                    return (
+                      <tr key={`${l.id ?? i}-${l.kind}`} className="hover:bg-white/[0.02]">
+                        <td className="px-3.5 py-2 text-ink font-medium whitespace-nowrap" title={r?.customerName}>{r?.customerCode ?? l.customerCode ?? "—"}</td>
+                        <td className="px-3.5 py-2 font-mono text-amber-300/90">{r?.invoiceNumber ?? l.invoiceNumber ?? "—"}</td>
+                        <td className="px-3.5 py-2 whitespace-nowrap">
+                          {l.kind === "carried" ? (
+                            <span className="text-alert font-medium">Trượt từ tuần {l.fromWeek}</span>
+                          ) : l.earlyDeducted > 0 ? (
+                            <span className="text-muted2" title={`Hoá đơn ${formatCurrencyVND(l.originalAmount ?? 0)}, đã về sớm ${formatCurrencyVND(l.earlyDeducted)} ở các tuần trước (đã trừ)`}>
+                              Hẹn tuần này · đã trừ về sớm {formatCurrencyVND(l.earlyDeducted)}
+                            </span>
+                          ) : (
+                            <span className="text-muted2">Hẹn tuần này</span>
+                          )}
+                        </td>
+                        <td className="px-3.5 py-2 text-right font-mono font-semibold text-ink">{formatCurrencyVND(l.amount)}</td>
+                        <td className="px-3.5 py-2">
+                          {!r ? (
+                            <span className="text-muted2">—</span>
+                          ) : r.debtStatus === "PAID" ? (
+                            <span className="text-emerald-400 font-medium inline-flex items-center gap-1">
+                              <CheckCircle2 className="h-3.5 w-3.5" /> Đã về{r.lastPaymentDate ? ` ngày ${formatDateVN(r.lastPaymentDate)}` : ""}
+                            </span>
+                          ) : Number(r.paidAmount) > 0 ? (
+                            <span className="text-emerald-400 font-medium whitespace-pre-wrap font-mono">
+                              Đã về {formatCurrencyVND(Number(r.paidAmount))}
+                              {r.lastPaymentDate ? ` ngày ${formatDateVN(r.lastPaymentDate)}` : ""}
+                            </span>
+                          ) : (
+                            <span className="text-alert font-medium">Chưa về</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
+                {expandedWeekLines.length > 0 && (
+                  <tfoot className="border-t-2 border-white/10 bg-white/[0.03]">
+                    <tr>
+                      <td colSpan={3} className="px-3.5 py-2.5 font-semibold text-ink">
+                        Tổng kế hoạch tuần {expandedWeek} ({expandedWeekLines.length} dòng)
+                      </td>
+                      <td className="px-3.5 py-2.5 text-right font-mono font-bold text-ink">
+                        {formatCurrencyVND(expandedWeekLines.reduce((s, l) => s + l.amount, 0))}
+                      </td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           )}

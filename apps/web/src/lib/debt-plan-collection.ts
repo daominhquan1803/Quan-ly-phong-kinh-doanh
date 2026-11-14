@@ -23,14 +23,29 @@ export interface WeekBucket {
 }
 
 export interface InvoiceForPlan {
+  id?: string;
   originalAmount: number;
   expectedPaymentDate: Date | null;
   dueDate: Date | null;
   allocations: { amount: number; paymentDate: Date | null }[];
 }
 
+/** Một hoá đơn nằm trong kế hoạch của 1 tuần — tổng `amount` của các dòng = `planned` của tuần (để bảng kê cộng ra đúng số trên thẻ). */
+export interface WeekPlanLine {
+  id: string | undefined;
+  /** planned = hẹn đúng tuần này; carried = trượt từ tuần trước đẩy sang. */
+  kind: "planned" | "carried";
+  /** Số tuần (1-5) mà hoá đơn được hẹn. */
+  fromWeek: number;
+  /** Phần của hoá đơn nằm trong kế hoạch tuần này (đã trừ phần về sớm với dòng planned). */
+  amount: number;
+  /** Chỉ dòng planned: phần đã về sớm ở các tuần trước (đã trừ khỏi amount). */
+  earlyDeducted: number;
+}
+
 export interface WeekPlanResult {
   weekIndex: number;
+  lines: WeekPlanLine[];
   /** Kế hoạch thu của tuần sau khi cuốn chiếu = plannedOriginal − earlyDeducted + carried. */
   planned: number;
   /** Kế hoạch gốc: các hoá đơn hẹn thu đúng tuần này. */
@@ -49,6 +64,7 @@ export interface WeekPlanResult {
 export function buildWeekPlan(weeks: WeekBucket[], invoices: InvoiceForPlan[], asOf: Date = new Date()): WeekPlanResult[] {
   const out: WeekPlanResult[] = weeks.map((w) => ({
     weekIndex: w.weekIndex,
+    lines: [],
     planned: 0,
     plannedOriginal: 0,
     earlyDeducted: 0,
@@ -92,6 +108,7 @@ export function buildWeekPlan(weeks: WeekBucket[], invoices: InvoiceForPlan[], a
     out[planIdx].plannedOriginal += amount;
     out[planIdx].earlyDeducted += earlyBefore;
     out[planIdx].planned += amount - earlyBefore;
+    out[planIdx].lines.push({ id: inv.id, kind: "planned", fromWeek: weeks[planIdx].weekIndex, amount: amount - earlyBefore, earlyDeducted: earlyBefore });
 
     // Các tuần sau (đã bắt đầu): khoản còn thiếu sau tuần trước được đẩy sang.
     for (let n = planIdx + 1; n < weeks.length; n++) {
@@ -99,6 +116,7 @@ export function buildWeekPlan(weeks: WeekBucket[], invoices: InvoiceForPlan[], a
       const outstanding = Math.max(0, amount - paidThrough(n - 1));
       out[n].carried += outstanding;
       out[n].planned += outstanding;
+      if (outstanding > 0) out[n].lines.push({ id: inv.id, kind: "carried", fromWeek: weeks[planIdx].weekIndex, amount: outstanding, earlyDeducted: 0 });
     }
 
     for (const a of paid) {

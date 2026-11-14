@@ -82,6 +82,24 @@ describe("buildWeekPlan — đúng hẹn, về sớm, trượt", () => {
   });
 });
 
+describe("buildWeekPlan — bảng kê từng tuần cộng ra đúng kế hoạch của tuần", () => {
+  it("các dòng (hẹn đúng tuần + trượt từ tuần trước) cộng bằng planned; dòng trượt ghi tuần hẹn gốc", () => {
+    const invoices = [
+      { ...inv({ expected: "2026-11-04", amount: 100, pays: [[30, "2026-11-03"]] }), id: "a" }, // trượt 70 sang tuần 2 trở đi
+      { ...inv({ expected: "2026-11-12", amount: 200, pays: [[50, "2026-11-03"]] }), id: "b" }, // về sớm 50 ở tuần 1
+      { ...inv({ expected: "2026-11-13", amount: 40 }), id: "c" },
+    ];
+    const r = buildWeekPlan(weeks, invoices, END);
+    for (const w of r) expect(w.lines.reduce((s, l) => s + l.amount, 0)).toBe(w.planned);
+    expect(r[1].lines.map((l) => [l.id, l.kind, l.fromWeek, l.amount])).toEqual([
+      ["a", "carried", 1, 70],
+      ["b", "planned", 2, 150],
+      ["c", "planned", 2, 40],
+    ]);
+    expect(r[1].lines.find((l) => l.id === "b")?.earlyDeducted).toBe(50);
+  });
+});
+
 describe("buildWeekPlan — hoá đơn chưa hẹn trong tháng", () => {
   it("hẹn tháng trước mà trượt, về tháng này -> vào kế hoạch đúng tuần tiền về", () => {
     const r = buildWeekPlan(weeks, [inv({ expected: "2026-10-31", due: "2026-11-14", pays: [[100, "2026-11-04"]] })], END);

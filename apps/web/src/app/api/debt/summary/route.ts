@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma } from "@hoanggia/db";
 import { requireSession, scopeByOwner, UnauthorizedError } from "@/lib/rbac";
 import { monthWeekBuckets } from "@/lib/debt-status";
-import { buildWeekPlan } from "@/lib/debt-plan-collection";
+import { buildWeekPlan, type WeekPlanLine } from "@/lib/debt-plan-collection";
 import { getDebtSnapshot } from "@/lib/debt-snapshot";
 
 export const dynamic = "force-dynamic";
@@ -58,6 +58,7 @@ export async function GET(req: NextRequest) {
       collected: 0,
       early: 0,
       outsidePlan: 0,
+      lines: [] as WeekPlanLine[],
     }));
     // Chỉ tính các khoản Tiền về đã khớp được vào đúng hoá đơn nằm trong phạm vi đang xem (cùng `where`) — khoản "Chưa khớp"
     // (không rõ hoá đơn/nhân viên nào) không tính vào đây vì không biết thuộc kế hoạch của ai.
@@ -65,15 +66,20 @@ export async function GET(req: NextRequest) {
     const planInvoices = await prisma.debtInvoice.findMany({
       where,
       select: {
+        id: true,
+        customerCode: true,
+        invoiceNumber: true,
         originalAmount: true,
         expectedPaymentDate: true,
         dueDate: true,
         allocations: { select: { amount: true, payment: { select: { paymentDate: true } } } },
       },
     });
+    const invoiceInfo = new Map(planInvoices.map((i) => [i.id, { customerCode: i.customerCode, invoiceNumber: i.invoiceNumber, originalAmount: Number(i.originalAmount) }]));
     const planResult = buildWeekPlan(
       weeks,
       planInvoices.map((inv) => ({
+        id: inv.id,
         originalAmount: Number(inv.originalAmount),
         expectedPaymentDate: inv.expectedPaymentDate,
         dueDate: inv.dueDate,
@@ -88,6 +94,7 @@ export async function GET(req: NextRequest) {
       w.collected = planResult[i].collected;
       w.early = planResult[i].early;
       w.outsidePlan = planResult[i].outsidePlan;
+      w.lines = planResult[i].lines;
     });
     // Số CẢ THÁNG không cuốn chiếu: kế hoạch = tổng kế hoạch gốc; đã thu = thực hiện + về sớm của mọi tuần.
     const monthlyPlanned = weeks.reduce((s, w) => s + w.plannedOriginal, 0);
@@ -125,6 +132,8 @@ export async function GET(req: NextRequest) {
         plannedOriginal: w.plannedOriginal,
         earlyDeducted: w.earlyDeducted,
         carried: w.carried,
+        // Các hoá đơn tạo nên kế hoạch của tuần (cộng lại = planned) — bảng kê khi bấm vào thẻ tuần.
+        lines: w.lines.map((l) => ({ ...l, ...(l.id ? invoiceInfo.get(l.id) : undefined) })),
         collected: w.collected,
         early: w.early,
         outsidePlan: w.outsidePlan,
