@@ -15,10 +15,28 @@ export function monthRange(year: number, month: number) {
  * Giới hạn: không có lịch sử trạng thái nên huỷ qua file Excel không biết ngày — coi như đã đóng từ trước mốc.
  */
 export async function getOihAsOf(asOfEnd: Date, onlyEmployeeId?: string): Promise<Map<string, number>> {
+  const oih = new Map<string, number>();
+  for (const l of await getOihLinesAsOf(asOfEnd, onlyEmployeeId)) {
+    oih.set(l.salesEmployeeId, (oih.get(l.salesEmployeeId) ?? 0) + l.remaining);
+  }
+  return oih;
+}
+
+export interface OihLine {
+  salesEmployeeId: string;
+  customerCode: string | null;
+  poCode: string;
+  remaining: number;
+}
+
+/** Từng dòng PO còn mở tại mốc `asOfEnd` (cùng luật với getOihAsOf — hàm này chỉ tách ra theo dòng để xem chi tiết theo khách). */
+export async function getOihLinesAsOf(asOfEnd: Date, onlyEmployeeId?: string): Promise<OihLine[]> {
   const lines = await prisma.poTrackingLine.findMany({
     where: { salesEmployeeId: onlyEmployeeId ?? { not: null } },
     select: {
       salesEmployeeId: true,
+      customerCode: true,
+      poCode: true,
       poValue: true,
       poDate: true,
       deliveredValue: true,
@@ -27,7 +45,7 @@ export async function getOihAsOf(asOfEnd: Date, onlyEmployeeId?: string): Promis
       deliveryEvents: { select: { value: true, eventDate: true } },
     },
   });
-  const oih = new Map<string, number>();
+  const out: OihLine[] = [];
   for (const l of lines) {
     if (!l.salesEmployeeId) continue;
     if (l.poDate && l.poDate >= asOfEnd) continue;
@@ -36,9 +54,9 @@ export async function getOihAsOf(asOfEnd: Date, onlyEmployeeId?: string): Promis
     if (closedNow && Number(l.deliveredValue) + 1 < poValue && !(l.manuallyClosedAt && l.manuallyClosedAt >= asOfEnd)) continue;
     const delivered = l.deliveryEvents.reduce((s, e) => (e.eventDate < asOfEnd ? s + Number(e.value) : s), 0);
     const remaining = Math.max(0, poValue - delivered);
-    if (remaining > 0) oih.set(l.salesEmployeeId, (oih.get(l.salesEmployeeId) ?? 0) + remaining);
+    if (remaining > 0) out.push({ salesEmployeeId: l.salesEmployeeId, customerCode: l.customerCode, poCode: l.poCode, remaining });
   }
-  return oih;
+  return out;
 }
 
 export interface EmployeeTargetVsActual {

@@ -5,9 +5,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatCurrencyVND, cn } from "@/lib/utils";
 import { Upload } from "lucide-react";
 import { SalesPlanImportWizard } from "./SalesPlanImportWizard";
+import { TargetCustomerBreakdown } from "./TargetCustomerBreakdown";
 
 interface PlanLine {
   id: string;
+  employeeId: string | null;
   employeeName: string;
   productCode: string | null;
   productName: string | null;
@@ -25,6 +27,7 @@ export function SalesPlanDetailSection({ isAdmin }: { isAdmin: boolean }) {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [showWizard, setShowWizard] = useState(false);
+  const [selected, setSelected] = useState<{ employeeId: string; employeeName: string; group: "all" | "Sản xuất" | "Thương mại"; expected: number } | null>(null);
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -49,7 +52,10 @@ export function SalesPlanDetailSection({ isAdmin }: { isAdmin: boolean }) {
         <div className="flex items-center gap-2.5">
           <select
             value={month}
-            onChange={(e) => setMonth(Number(e.target.value))}
+            onChange={(e) => {
+              setMonth(Number(e.target.value));
+              setSelected(null);
+            }}
             className="text-xs font-medium bg-card text-ink rounded-xl border border-white/10 py-2 px-3 focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-sm"
           >
             {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
@@ -60,7 +66,10 @@ export function SalesPlanDetailSection({ isAdmin }: { isAdmin: boolean }) {
           </select>
           <select
             value={year}
-            onChange={(e) => setYear(Number(e.target.value))}
+            onChange={(e) => {
+              setYear(Number(e.target.value));
+              setSelected(null);
+            }}
             className="text-xs font-medium bg-card text-ink rounded-xl border border-white/10 py-2 px-3 focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-sm"
           >
             {[year - 1, year, year + 1].map((y) => (
@@ -143,7 +152,31 @@ export function SalesPlanDetailSection({ isAdmin }: { isAdmin: boolean }) {
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {group.rows.map((r) => (
-                    <tr key={r.key} className="hover:bg-white/[0.02] transition-colors">
+                    <tr
+                      key={r.key}
+                      onClick={() => {
+                        if (!r.employeeId) return;
+                        const same = selected?.employeeId === r.employeeId && selected.group === (group.name === "Sản xuất" || group.name === "Thương mại" ? group.name : "all");
+                        setSelected(
+                          same
+                            ? null
+                            : {
+                                employeeId: r.employeeId,
+                                employeeName: r.employeeName,
+                                group: group.name === "Sản xuất" || group.name === "Thương mại" ? group.name : "all",
+                                expected: r.actualRevenue,
+                              }
+                        );
+                      }}
+                      title={r.employeeId ? "Bấm để xem thực hiện chi tiết theo khách" : undefined}
+                      className={cn(
+                        "transition-colors",
+                        r.employeeId && "cursor-pointer",
+                        selected?.employeeId === r.employeeId && selected.group === (group.name === "Sản xuất" || group.name === "Thương mại" ? group.name : "all")
+                          ? "bg-amber-500/10"
+                          : "hover:bg-white/[0.04]"
+                      )}
+                    >
                       <td className="px-4 py-2.5 font-medium text-ink">
                         {r.employeeName}
                         {r.hasEmployeeTotalBasis && (
@@ -204,12 +237,30 @@ export function SalesPlanDetailSection({ isAdmin }: { isAdmin: boolean }) {
             </div>
           </div>
         ))}
+
+      {selected && (
+        <TargetCustomerBreakdown
+          key={`${selected.employeeId}-${selected.group}-${year}-${month}`}
+          year={year}
+          month={month}
+          employeeId={selected.employeeId}
+          employeeName={selected.employeeName}
+          group={selected.group}
+          metrics={["delivered"]}
+          expected={{ delivered: selected.expected }}
+          onClose={() => setSelected(null)}
+        />
+      )}
+      {!isLoading && (data?.lines.length ?? 0) > 0 && !selected && (
+        <p className="text-[11px] text-muted2">Bấm vào dòng nhân viên trong từng nhóm hàng để xem thực hiện chi tiết theo khách.</p>
+      )}
     </div>
   );
 }
 
 interface EmployeeRow {
   key: string;
+  employeeId: string | null;
   employeeName: string;
   targetRevenue: number;
   actualRevenue: number;
@@ -228,12 +279,13 @@ interface EmployeeRow {
 function aggregateByEmployee(lines: PlanLine[]): EmployeeRow[] {
   const buckets = new Map<
     string,
-    { employeeName: string; targetRevenue: number; productActual: number; groupActual: number | null; hasEmployeeTotalFallback: boolean }
+    { employeeId: string | null; employeeName: string; targetRevenue: number; productActual: number; groupActual: number | null; hasEmployeeTotalFallback: boolean }
   >();
   for (const l of lines) {
     const key = l.employeeName; // tên hiển thị đã là danh tính nhân viên duy nhất trong 1 tháng
     if (!buckets.has(key)) {
       buckets.set(key, {
+        employeeId: l.employeeId,
         employeeName: l.employeeName,
         targetRevenue: 0,
         productActual: 0,
@@ -256,6 +308,7 @@ function aggregateByEmployee(lines: PlanLine[]): EmployeeRow[] {
       const actualRevenue = b.productActual + (b.groupActual ?? 0);
       return {
         key,
+        employeeId: b.employeeId,
         employeeName: b.employeeName,
         targetRevenue: b.targetRevenue,
         actualRevenue,

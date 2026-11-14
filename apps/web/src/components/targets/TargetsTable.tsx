@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { formatCurrencyVND } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { TargetCustomerBreakdown } from "./TargetCustomerBreakdown";
 
 interface TargetRow {
   employeeId: string;
@@ -21,6 +22,7 @@ export function TargetsTable() {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["targets", year, month],
@@ -87,7 +89,12 @@ export function TargetsTable() {
               {data?.rows.map((r) => {
                 const shortfall = Math.max(0, r.targetRevenue - r.actualRevenue);
                 return (
-                  <tr key={r.employeeId} className="hover:bg-white/[0.02] transition-colors">
+                  <tr
+                    key={r.employeeId}
+                    onClick={() => setOpenId((cur) => (cur === r.employeeId ? null : r.employeeId))}
+                    title="Bấm để xem thực hiện và OIH chi tiết theo khách"
+                    className={cn("cursor-pointer transition-colors", openId === r.employeeId ? "bg-amber-500/10" : "hover:bg-white/[0.04]")}
+                  >
                     <td className="px-4 py-2.5 font-medium text-ink">{r.employeeName}</td>
                     <td className="px-4 py-2.5 text-right font-mono text-ink">{formatCurrencyVND(r.targetRevenue)}</td>
                     <td className="px-4 py-2.5 text-right font-mono font-semibold text-emerald-400">{formatCurrencyVND(r.actualRevenue)}</td>
@@ -158,6 +165,24 @@ export function TargetsTable() {
           </table>
         </div>
       </div>
+
+      {(() => {
+        const open = data?.rows.find((r) => r.employeeId === openId);
+        return open ? (
+          <TargetCustomerBreakdown
+            key={`${open.employeeId}-${year}-${month}`}
+            year={year}
+            month={month}
+            employeeId={open.employeeId}
+            employeeName={open.employeeName}
+            metrics={["delivered", "oih"]}
+            expected={{ delivered: open.actualRevenue, oih: open.oihValue }}
+            onClose={() => setOpenId(null)}
+          />
+        ) : (
+          <p className="text-[11px] text-muted2">Bấm vào tên nhân viên để xem thực hiện và OIH chi tiết theo khách.</p>
+        );
+      })()}
     </div>
   );
 }
