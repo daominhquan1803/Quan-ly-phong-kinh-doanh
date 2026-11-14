@@ -49,7 +49,16 @@ export async function GET(req: NextRequest) {
     // "Tuần 1-5" như file Công nợ gốc anh Quân gửi).
     const monthStart = new Date(year, month - 1, 1);
     const monthEnd = new Date(year, month, 0);
-    const weeks = monthWeekBuckets(year, month).map((b) => ({ ...b, planned: 0, collected: 0, early: 0, outsidePlan: 0 }));
+    const weeks = monthWeekBuckets(year, month).map((b) => ({
+      ...b,
+      planned: 0,
+      plannedOriginal: 0,
+      earlyDeducted: 0,
+      carried: 0,
+      collected: 0,
+      early: 0,
+      outsidePlan: 0,
+    }));
     // Chỉ tính các khoản Tiền về đã khớp được vào đúng hoá đơn nằm trong phạm vi đang xem (cùng `where`) — khoản "Chưa khớp"
     // (không rõ hoá đơn/nhân viên nào) không tính vào đây vì không biết thuộc kế hoạch của ai.
     // Luật kế hoạch / thực hiện / về sớm / ngoài kế hoạch: xem debt-plan-collection.ts.
@@ -73,12 +82,16 @@ export async function GET(req: NextRequest) {
     );
     weeks.forEach((w, i) => {
       w.planned = planResult[i].planned;
+      w.plannedOriginal = planResult[i].plannedOriginal;
+      w.earlyDeducted = planResult[i].earlyDeducted;
+      w.carried = planResult[i].carried;
       w.collected = planResult[i].collected;
       w.early = planResult[i].early;
       w.outsidePlan = planResult[i].outsidePlan;
     });
-    const monthlyPlanned = weeks.reduce((s, w) => s + w.planned, 0);
-    const monthlyCollected = weeks.reduce((s, w) => s + w.collected, 0);
+    // Số CẢ THÁNG không cuốn chiếu: kế hoạch = tổng kế hoạch gốc; đã thu = thực hiện + về sớm của mọi tuần.
+    const monthlyPlanned = weeks.reduce((s, w) => s + w.plannedOriginal, 0);
+    const monthlyCollected = weeks.reduce((s, w) => s + w.collected + w.early, 0);
     const monthlyEarly = weeks.reduce((s, w) => s + w.early, 0);
     const monthlyOutsidePlan = weeks.reduce((s, w) => s + w.outsidePlan, 0);
 
@@ -109,10 +122,14 @@ export async function GET(req: NextRequest) {
         start: w.start,
         end: w.end,
         planned: w.planned,
+        plannedOriginal: w.plannedOriginal,
+        earlyDeducted: w.earlyDeducted,
+        carried: w.carried,
         collected: w.collected,
         early: w.early,
         outsidePlan: w.outsidePlan,
-        rate: w.planned > 0 ? w.collected / w.planned : null,
+        // Kế hoạch tuần đã trừ hết nhờ về sớm (planned = 0 nhưng kế hoạch gốc > 0) coi như hoàn thành 100%.
+        rate: w.planned > 0 ? w.collected / w.planned : w.plannedOriginal > 0 ? 1 : null,
       })),
       monthlyPlan: {
         planned: monthlyPlanned,

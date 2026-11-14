@@ -49,7 +49,7 @@ interface SummaryResponse {
   overdueRate: number;
   badDebtRate: number;
   perEmployee: { employeeId: string; employeeName: string; totalDebt: number; overdueDebt: number; badDebt: number }[] | null;
-  weeklyPlan: { weekIndex: number; start: string; end: string; planned: number; collected: number; early: number; outsidePlan: number; rate: number | null }[];
+  weeklyPlan: { weekIndex: number; start: string; end: string; planned: number; plannedOriginal: number; earlyDeducted: number; carried: number; collected: number; early: number; outsidePlan: number; rate: number | null }[];
   monthlyPlan: { planned: number; collected: number; early: number; outsidePlan: number; rate: number | null; totalReceived: number };
 }
 
@@ -599,7 +599,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                 </div>
                 <p
                   className={cn("text-2xl font-bold font-mono mt-2", w.rate === null ? "text-muted2" : w.rate >= 1 ? "text-emerald-400" : "text-alert")}
-                  title="% thực hiện = tiền đã về của các hoá đơn hẹn thu tuần này (kể cả về sớm) / kế hoạch thu tuần"
+                  title="% thực hiện = tiền về trong tuần của các hoá đơn hẹn thu tuần này và khoản trượt các tuần trước / kế hoạch thu tuần (đã trừ khoản về sớm, đã cộng khoản trượt)"
                 >
                   {w.rate === null ? "—" : pct(w.rate)}
                 </p>
@@ -609,7 +609,19 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                   <span className="text-muted2"> / {formatCurrencyVND(w.planned)}</span>
                 </p>
                 <div className="mt-2 space-y-0.5 border-t border-white/5 pt-1.5 text-[11px] text-muted2">
-                  <p className="flex justify-between gap-2" title="Phần đã tính trong % thực hiện: hoá đơn hẹn thu tuần này nhưng khách trả trước tuần này">
+                  {w.earlyDeducted > 0 && (
+                    <p className="flex justify-between gap-2" title="Khách đã trả trước ở các tuần trước cho hoá đơn hẹn thu tuần này — đã trừ khỏi kế hoạch tuần này">
+                      <span>Đã trừ về sớm</span>
+                      <span className="font-mono text-ink">−{formatCurrencyVND(w.earlyDeducted)}</span>
+                    </p>
+                  )}
+                  {w.carried > 0 && (
+                    <p className="flex justify-between gap-2" title="Hoá đơn hẹn thu các tuần trước mà chưa thu xong — đẩy sang kế hoạch tuần này">
+                      <span>Trượt từ tuần trước</span>
+                      <span className="font-mono text-alert">+{formatCurrencyVND(w.carried)}</span>
+                    </p>
+                  )}
+                  <p className="flex justify-between gap-2" title="Tiền về trong tuần này của hoá đơn hẹn thu các tuần SAU — đã trừ khỏi kế hoạch của tuần đó">
                     <span>Về sớm</span>
                     <span className="font-mono text-ink">{formatCurrencyVND(w.early)}</span>
                   </p>
