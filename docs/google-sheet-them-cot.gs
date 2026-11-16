@@ -128,5 +128,7 @@ function themCotKhachMoiLienHe() {
     var added = tcThemCot_(sh, k.row, TC_SPEC[k.kind]);
     report.push(sh.getName() + ': ' + (added.length ? 'thêm ' + added.join(', ') : 'đã đủ cột'));
   });
-  SpreadsheetApp.getUi().alert('Kết quả', report.length ? report.join('\n') : 'Không nhận ra tab nào cần thêm cột.', SpreadsheetApp.getUi().ButtonSet.OK);
+  var msg = report.length ? report.join('\n') : 'Không nhận ra tab nào cần thêm cột.';
+  Logger.log(msg); // xem ở "Nhật ký thực thi"
+  try { ss.toast(msg, 'Kết quả thêm cột', 30); } catch (e) {} // hiện góc dưới sheet nếu chạy từ trong sheet
 }
