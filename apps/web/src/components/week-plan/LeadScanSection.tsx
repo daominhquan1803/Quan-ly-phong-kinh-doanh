@@ -258,13 +258,18 @@ export function LeadScanReport({ isAdmin }: { isAdmin: boolean }) {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [imp, setImp] = useState<{ ok: boolean; text: string; summary?: LeadImportSummary } | null>(null);
-  async function upload() {
-    if (!file) return;
+  async function upload(fromSheet = false) {
+    if (!fromSheet && !file) return;
     setUploading(true);
     setImp(null);
-    const fd = new FormData();
-    fd.append("file", file);
-    const res = await fetch("/api/lead-scan/import", { method: "POST", body: fd });
+    let res: Response;
+    if (fromSheet) {
+      res = await fetch("/api/lead-scan/sync", { method: "POST" });
+    } else {
+      const fd = new FormData();
+      fd.append("file", file!);
+      res = await fetch("/api/lead-scan/import", { method: "POST", body: fd });
+    }
     const json = await res.json().catch(() => ({}));
     setUploading(false);
     if (res.ok) {
@@ -287,14 +292,18 @@ export function LeadScanReport({ isAdmin }: { isAdmin: boolean }) {
           {isAdmin && (
             <div className="rounded-md border border-gray-200 bg-gray-50 p-3 space-y-2">
               <p className="text-xs text-muted-foreground">
-                Cập nhật số liệu: trên Google Sheet chọn <b>Tệp → Tải xuống → Microsoft Excel (.xlsx)</b> rồi tải lên đây. Nhập lại nhiều lần thoải mái — dòng cũ được cập nhật, không bị trùng. Dữ liệu hiện tại:{" "}
+                App tự đọc Google Sheet mỗi giờ trong giờ làm việc (thứ Hai–thứ Bảy, 8h–18h); bấm “Đồng bộ ngay” để đọc lập tức. Sheet cần bật chia sẻ “Bất kỳ ai có link đều xem được”. Dòng cũ được cập nhật, không bị trùng. Dữ liệu hiện tại:{" "}
                 <span className="text-ink">{fmtDT(data?.lastImportAt ?? null)}</span>.
               </p>
               <div className="flex items-center gap-2 flex-wrap">
-                <input type="file" accept=".xlsx,.xls" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-xs text-muted-foreground" />
-                <button onClick={upload} disabled={!file || uploading} className="flex items-center gap-1 rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-amber-foreground hover:bg-amber-400 disabled:opacity-50">
+                <button onClick={() => upload(true)} disabled={uploading} className="flex items-center gap-1 rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-amber-foreground hover:bg-amber-400 disabled:opacity-50">
                   <UploadCloud className="h-3.5 w-3.5" />
-                  {uploading ? "Đang nhập..." : "Nhập file sheet"}
+                  {uploading ? "Đang đồng bộ..." : "Đồng bộ ngay từ Google Sheet"}
+                </button>
+                <span className="text-xs text-muted2">hoặc tải file .xlsx:</span>
+                <input type="file" accept=".xlsx,.xls" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-xs text-muted-foreground" />
+                <button onClick={() => upload()} disabled={!file || uploading} className="rounded-md border border-amber-500/50 px-3 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-500/10 disabled:opacity-50">
+                  Nhập file
                 </button>
               </div>
               {imp && (

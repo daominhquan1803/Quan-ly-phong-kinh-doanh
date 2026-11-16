@@ -124,6 +124,19 @@ export async function importLeadWorkbook(buffer: Buffer): Promise<LeadImportSumm
   };
 }
 
+/** Sheet "Theo dõi khách tiềm năng - PKD1 Hoàng Gia". Đọc qua link xuất xlsx như sheet Báo giá (cần bật chia sẻ "Bất kỳ ai có link đều xem được"). */
+const LEAD_SHEET_ID = process.env.LEAD_SHEET_ID || "1h08GeQqVJInBD5niuHffTgb3BkxV6cDMmxKscBiLlUE";
+
+/** Kéo sheet từ Google và nhập (cập nhật theo khoá nguồn). Ném Error có thông báo tiếng Việt nếu không tải được. */
+export async function syncLeadSheet(): Promise<LeadImportSummary> {
+  const res = await fetch(`https://docs.google.com/spreadsheets/d/${LEAD_SHEET_ID}/export?format=xlsx`, { signal: AbortSignal.timeout(120_000), redirect: "follow" });
+  const type = res.headers.get("content-type") ?? "";
+  if (!res.ok || type.includes("text/html")) {
+    throw new Error(`Không đọc được Google Sheet (HTTP ${res.status}) — sheet cần bật chia sẻ "Bất kỳ ai có link đều xem được" (quyền Người xem).`);
+  }
+  return importLeadWorkbook(Buffer.from(await res.arrayBuffer()));
+}
+
 export interface IncompleteRow {
   kind: "FB" | "SCAN" | "SELF";
   title: string;

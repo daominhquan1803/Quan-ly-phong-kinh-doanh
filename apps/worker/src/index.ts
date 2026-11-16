@@ -15,6 +15,7 @@ import { runAdminKpiDigest } from "./notifications/adminKpiDigest";
 import { runCustomerAlerts } from "./notifications/customerAlerts";
 import { runCareDaily, runCareEscalations } from "./notifications/carePlan";
 import { runWeekPlanFollowup } from "./notifications/weekPlanFollowup";
+import { runLeadSheetSync } from "./sync/leadSheet";
 import { runCarePhotoCleanup } from "./notifications/carePhotoCleanup";
 import { runCustomerReportSnapshot } from "./notifications/customerReportSnapshot";
 import { isZaloConfigured } from "./zalo";
@@ -74,6 +75,15 @@ async function main() {
   } else {
     logger.warn("Chưa cấu hình GOOGLE_SHEETS_QUOTE_ID — bỏ qua lịch đồng bộ Báo giá.");
   }
+
+  // Google Sheet khách tiềm năng (quét FB/báo, khách tự tìm): kéo mỗi giờ trong giờ làm việc, thứ Hai–thứ Bảy — NVKD cập nhật sheet là báo cáo trong app cập nhật theo.
+  cron.schedule(
+    process.env.LEAD_SHEET_SYNC_CRON || "5 8-18 * * 1-6",
+    () => {
+      runLeadSheetSync().catch((err) => logger.warn(`Đồng bộ Google Sheet khách tiềm năng lỗi: ${err instanceof Error ? err.message : err}`));
+    },
+    { timezone: process.env.LEAD_SHEET_SYNC_CRON_TIMEZONE || "Asia/Ho_Chi_Minh" }
+  );
 
   // App báo giá (từ 10/10/2026): đọc file dữ liệu chỉ-đọc, 10 phút/lần — lần nào không có thay đổi thì không ghi log.
   if (isBaoGiaAppConfigured()) {
