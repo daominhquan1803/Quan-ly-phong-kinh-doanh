@@ -149,6 +149,8 @@ function gradeBadge(g: 0 | 1 | 2): { label: string; cls: string } {
   return { label: "Chưa đạt", cls: "bg-brandRed-500/25 text-alert border border-brandRed-500/40 shadow-[0_0_8px_rgba(200,16,46,0.3)] font-bold" };
 }
 
+type PageTab = "progress" | "entry" | "lead" | "targets";
+
 export function WeekPlanOverview({ isAdmin }: { isAdmin: boolean }) {
   const { data: session } = useSession();
   const currentUserId = session?.user?.id;
@@ -156,6 +158,7 @@ export function WeekPlanOverview({ isAdmin }: { isAdmin: boolean }) {
 
   const [weekStart, setWeekStart] = useState(() => startOfCurrentMonthWeek(new Date()));
   const weekStartISO = weekStart.toISOString();
+  const [tab, setTab] = useState<PageTab>("progress");
 
   const { data: employeesData } = useQuery({
     queryKey: ["employees"],
@@ -185,11 +188,35 @@ export function WeekPlanOverview({ isAdmin }: { isAdmin: boolean }) {
     }
   }, [isAdmin, currentUserId, summary, entryEmployeeId]);
 
+  const tabs: { key: PageTab; label: string }[] = [
+    { key: "progress", label: "Tiến độ tuần" },
+    { key: "entry", label: "Nhập kết quả" },
+    { key: "lead", label: "Lead MXH" },
+    ...(isAdmin ? [{ key: "targets" as PageTab, label: "Giao chỉ tiêu" }] : []),
+  ];
+
   return (
     <div className="space-y-6">
+      <div role="tablist" className="flex items-center gap-1 border-b border-white/10 overflow-x-auto">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            role="tab"
+            aria-selected={tab === t.key}
+            onClick={() => setTab(t.key)}
+            className={cn(
+              "px-4 py-2.5 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors",
+              tab === t.key ? "border-amber-400 text-amber-300 font-semibold" : "border-transparent text-muted-foreground hover:text-ink"
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       <WeekNav weekStart={weekStart} onChange={setWeekStart} />
 
-      {isAdmin && (
+      {tab === "targets" && isAdmin && (
         <TargetGrid
           weekStartISO={weekStartISO}
           rows={summary?.rows ?? []}
@@ -198,21 +225,27 @@ export function WeekPlanOverview({ isAdmin }: { isAdmin: boolean }) {
         />
       )}
 
-      <ProgressReport rows={summary?.rows ?? []} isLoading={summaryLoading} isAdmin={isAdmin} weekStartISO={weekStartISO} />
+      {tab === "progress" && <ProgressReport rows={summary?.rows ?? []} isLoading={summaryLoading} isAdmin={isAdmin} weekStartISO={weekStartISO} />}
 
-      <LeadMxhWeek weekStartISO={weekStartISO} isAdmin={isAdmin} />
-      <LeadScanReport isAdmin={isAdmin} />
+      {tab === "lead" && (
+        <>
+          <LeadMxhWeek weekStartISO={weekStartISO} isAdmin={isAdmin} />
+          <LeadScanReport isAdmin={isAdmin} />
+        </>
+      )}
 
-      <ResultEntrySection
-        weekStart={weekStart}
-        weekStartISO={weekStartISO}
-        isAdmin={isAdmin}
-        entryLock={summary?.entryLock}
-        employees={employeesData?.users ?? []}
-        entryEmployeeId={entryEmployeeId}
-        onEmployeeChange={setEntryEmployeeId}
-        onChanged={() => queryClient.invalidateQueries({ queryKey: ["week-plan-summary"] })}
-      />
+      {tab === "entry" && (
+        <ResultEntrySection
+          weekStart={weekStart}
+          weekStartISO={weekStartISO}
+          isAdmin={isAdmin}
+          entryLock={summary?.entryLock}
+          employees={employeesData?.users ?? []}
+          entryEmployeeId={entryEmployeeId}
+          onEmployeeChange={setEntryEmployeeId}
+          onChanged={() => queryClient.invalidateQueries({ queryKey: ["week-plan-summary"] })}
+        />
+      )}
     </div>
   );
 }
