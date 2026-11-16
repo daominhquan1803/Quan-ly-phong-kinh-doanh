@@ -12,12 +12,15 @@
  *  - FB     : đủ = Ngày liên hệ + NVKD nhận (khớp nhân viên trong app) + Kết quả hoặc Ghi chú.
  *  - SCAN   : đủ = Ngày NVKD liên hệ + NVKD phụ trách + Kênh liên hệ + Kết quả liên hệ.
  *  - SELF   : đủ = Người liên hệ hoặc Điện thoại + Ghi chú (kết quả gọi); ngày liên hệ lấy theo "Ngày tìm".
+ * Đủ 10 mục của "KH mới liên hệ" (công ty, địa chỉ, quốc tịch, quy mô, người liên hệ, SĐT, nhu cầu, việc đã làm, hành động tiếp theo, ngày hẹn nhắc)
+ * thì dòng khách quét báo / tự tìm / Facebook tự thành dòng NEW_CONTACT của Kế hoạch tuần (EntryCandidate -> lead-scan-data.ts).
  * "Liên hệ được" (REACHED) = khách có phản hồi/trao đổi — phân loại tự động theo từ khoá trong Kết quả + Ghi chú (classifyResult);
  * đã nhắn/để lại thông tin chờ khách là WAITING, chưa tính là liên hệ được.
  */
 import * as XLSX from "xlsx";
 import { normalizeVN } from "./text-normalize";
 import { findMonthWeekForDate } from "./week-plan";
+import { missingFields, NATIONALITIES, SCALE_KEYS, SCALE_LABEL, type EntryFields } from "./week-plan-entry";
 
 export type LeadStatus = "NEW" | "ASSIGNED" | "INCOMPLETE" | "CONTACTED";
 export type ResultKind = "REACHED" | "WAITING" | "NO_RESPONSE" | "OTHER";
@@ -73,6 +76,130 @@ export function classifyResult(text: string | null | undefined): ResultKind | nu
 
 /** "Chưa liên hệ" trong cột kết quả nghĩa là chưa làm gì — không coi là có ghi liên hệ. */
 const isNotYet = (s: string) => normalizeVN(s) === "chua lien he";
+
+// ---------------------------------------------------------------- dòng "KH mới liên hệ" tạo từ sheet
+
+/** Dòng NEW_CONTACT sẽ được tạo từ sheet (đủ 10 mục). Ngày dạng YYYY-MM-DD. */
+export interface EntryCandidate {
+  sheetKey: string;
+  employeeId: string;
+  entryDate: string;
+  customerName: string;
+  address: string;
+  nationality: string;
+  /** Khoá quy mô (LT50 | 50_200 | 200_1000 | GT1000). */
+  scale: string;
+  contactName: string;
+  contactPhone: string;
+  need: string;
+  workDone: string;
+  nextAction: string;
+  nextActionAt: string;
+  content: string | null;
+  productInterest: string | null;
+}
+
+const NATIONALITY_RULES: [RegExp, (typeof NATIONALITIES)[number]][] = [
+  [/^(vn|viet ?nam|viet)\b/, "Việt Nam"],
+  [/han|korea|^kr$/, "Hàn Quốc"],
+  [/nhat|japan|^jp$/, "Nhật Bản"],
+  [/dai ?loan|taiwan|^tw$/, "Đài Loan"],
+  [/trung|china|^cn$/, "Trung Quốc"],
+  [/^khac|other/, "Khác"],
+];
+
+/** "viet nam", "VN", "Hàn", "Korea"… -> nhãn chuẩn của app; không nhận ra -> null. */
+export function normalizeNationality(v: string | null): string | null {
+  const t = normalizeVN(cleanCell(v));
+  if (!t) return null;
+  const exact = NATIONALITIES.find((n) => normalizeVN(n) === t);
+  if (exact) return exact;
+  return NATIONALITY_RULES.find(([re]) => re.test(t))?.[1] ?? null;
+}
+
+/** "50–200 người", "<50", "trên 1000", "LT50"… -> khoá quy mô; không nhận ra -> null. */
+export function normalizeScale(v: string | null): string | null {
+  const t = normalizeVN(cleanCell(v)).replace(/[–—]/g, "-");
+  if (!t) return null;
+  const key = SCALE_KEYS.find((k) => k.toLowerCase() === t || normalizeVN(SCALE_LABEL[k]).replace(/[–—]/g, "-") === t);
+  if (key) return key;
+  if (/duoi 50|^<\s*50|lt50/.test(t)) return "LT50";
+  if (/tren 1000|^>\s*1000|gt1000|1000\s*\+/.test(t)) return "GT1000";
+  if (/^50\s*-\s*200|50_200/.test(t)) return "50_200";
+  if (/^200\s*-\s*1000|200_1000/.test(t)) return "200_1000";
+  return null;
+}
+
+const localDate = (iso: string) => new Date(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10));
+
+interface RawContact {
+  customerName: string | null;
+  address: string | null;
+  nationality: string | null;
+  scale: string | null;
+  contactName: string | null;
+  contactPhone: string | null;
+  need: string | null;
+  workDone: string | null;
+  nextAction: string | null;
+  nextActionAt: string | null;
+}
+
+/**
+ * Xét 1 dòng đã ĐỦ mức liên hệ (CONTACTED) có đủ 10 mục để thành dòng KH mới liên hệ không.
+ * `intent` = NVKD đã bắt đầu điền các mục mới (khách quét báo/tự tìm luôn coi là có ý định; Facebook chỉ khi đã điền gì đó) —
+ * dòng Facebook thường không có 10 mục nên không báo thiếu khi chưa điền.
+ */
+function entryFrom(
+  sheetKey: string,
+  common: Common,
+  contactDate: string | null,
+  raw: RawContact,
+  extra: { content: string | null; productInterest: string | null },
+  alwaysIntent: boolean
+): { entry: EntryCandidate | null; entryMissing: string | null } {
+  const none = { entry: null, entryMissing: null };
+  if (common.status !== "CONTACTED" || !common.assigneeId || !contactDate) return none;
+  const intent = alwaysIntent || !!(raw.nationality || raw.scale || raw.need || raw.workDone || raw.nextAction || raw.customerName);
+  if (!intent) return none;
+  const nationality = normalizeNationality(raw.nationality);
+  const scale = normalizeScale(raw.scale);
+  const fields: EntryFields = {
+    entryDate: localDate(contactDate),
+    customerName: raw.customerName ?? "",
+    address: raw.address,
+    nationality,
+    scale,
+    contactName: raw.contactName,
+    contactPhone: raw.contactPhone,
+    need: raw.need,
+    workDone: raw.workDone,
+    nextAction: raw.nextAction,
+    nextActionAt: raw.nextActionAt ? localDate(raw.nextActionAt) : null,
+  };
+  const miss = missingFields(fields).map((m) => (m === "quốc tịch" && raw.nationality ? "quốc tịch (chọn Việt Nam/Hàn Quốc/Nhật Bản/Đài Loan/Trung Quốc/Khác)" : m === "quy mô" && raw.scale ? "quy mô (chọn Dưới 50/50–200/200–1000/Trên 1000 người)" : m));
+  if (miss.length === 0 && fields.nextActionAt! < new Date(fields.entryDate.getFullYear(), fields.entryDate.getMonth(), fields.entryDate.getDate())) miss.push("ngày hẹn nhắc không được trước ngày liên hệ");
+  if (miss.length) return { entry: null, entryMissing: miss.join(", ") };
+  return {
+    entry: {
+      sheetKey,
+      employeeId: common.assigneeId,
+      entryDate: contactDate,
+      customerName: raw.customerName!,
+      address: raw.address!,
+      nationality: nationality!,
+      scale: scale!,
+      contactName: raw.contactName!,
+      contactPhone: raw.contactPhone!,
+      need: raw.need!,
+      workDone: raw.workDone!,
+      nextAction: raw.nextAction!,
+      nextActionAt: raw.nextActionAt!,
+      ...extra,
+    },
+    entryMissing: null,
+  };
+}
 
 // ---------------------------------------------------------------- nhân viên
 
@@ -135,6 +262,9 @@ interface Common {
   resultKind: ResultKind | null;
   /** Các mục còn thiếu (chỉ khi INCOMPLETE). */
   missing: string | null;
+  /** Dòng KH mới liên hệ tạo được từ sheet (đủ 10 mục), hoặc các mục còn thiếu để tạo (đã ghi nhận liên hệ nhưng chưa đủ 10 mục). */
+  entry?: EntryCandidate | null;
+  entryMissing?: string | null;
 }
 export interface ParsedFbItem extends Common {
   sourceKey: string;
@@ -211,6 +341,9 @@ export function parseFacebookRows(rows: Rows, resolve: EmployeeResolver, default
     stt: /^stt$/, scanDate: /^ngay quet/, postDate: /^ngay dang/, platform: /^nen tang/, groupName: /^nhom/, poster: /^nguoi dang/,
     product: /^san pham can/, quantity: /^so luong/, area: /^khu vuc/, contactInPost: /^lien he trong bai/, link: /^link/,
     contactDate: /^ngay lien he/, assignee: /^nvkd nhan/, result: /^ket qua/, note: /^ghi chu/,
+    // Cột nhập đủ thông tin "KH mới liên hệ" (thêm ở cuối sheet 16/11/2026)
+    company: /^ten (cong ty|khach)/, address: /^dia chi/, nationality: /^quoc tich/, scale: /^quy mo/, contactName: /^nguoi lien he/,
+    phone: /^(so )?dien thoai|^sdt/, need: /^nhu cau/, workDone: /^viec da lam/, nextAction: /^hanh dong tiep theo/, nextActionAt: /^ngay hen nhac/,
   });
   const out: ParsedFbItem[] = [];
   for (const row of rows.slice(hi + 1)) {
@@ -229,8 +362,24 @@ export function parseFacebookRows(rows: Rows, resolve: EmployeeResolver, default
     if (!assigneeName) missing.push("NVKD nhận");
     else if (!assigneeId) missing.push("NVKD nhận (tên không khớp nhân viên)");
     if (!result && !note) missing.push("kết quả");
+    const common = judge({ assigneeName, assigneeId, signal: !!(contactDate || result), missing, resultText: `${result ?? ""} ${note ?? ""}` });
+    const sourceKey = link ?? `fb|${scanDate}|${stt ?? out.length}`;
+    const nextActionAt = parseSheetDate(c.nextActionAt >= 0 ? row[c.nextActionAt] : null, defaultYear);
+    const product = val(row, c.product);
+    const ent = entryFrom(
+      `fb|${sourceKey}`,
+      common,
+      contactDate,
+      {
+        customerName: val(row, c.company), address: val(row, c.address), nationality: val(row, c.nationality), scale: val(row, c.scale),
+        contactName: val(row, c.contactName), contactPhone: val(row, c.phone), need: val(row, c.need), workDone: val(row, c.workDone),
+        nextAction: val(row, c.nextAction), nextActionAt,
+      },
+      { content: result ?? note, productInterest: product },
+      false
+    );
     out.push({
-      sourceKey: link ?? `fb|${scanDate}|${stt ?? out.length}`,
+      sourceKey,
       scanDate,
       postDate: parseSheetDate(c.postDate >= 0 ? row[c.postDate] : null, defaultYear),
       platform: val(row, c.platform),
@@ -244,7 +393,9 @@ export function parseFacebookRows(rows: Rows, resolve: EmployeeResolver, default
       contactDate,
       result,
       note,
-      ...judge({ assigneeName, assigneeId, signal: !!(contactDate || result), missing, resultText: `${result ?? ""} ${note ?? ""}` }),
+      ...common,
+      entry: ent.entry,
+      entryMissing: ent.entryMissing,
     });
   }
   return out;
@@ -258,6 +409,8 @@ export function parseScanProspectRows(rows: Rows, resolve: EmployeeResolver, def
     signal: /^tin hieu/, products: /^san pham nen chao/, contactPerson: /^nguoi lien he/, phone: /^dien thoai/, email: /^email/, sourceNote: /^nguon/,
     assignee: /^nvkd phu trach/, contactDate: /^ngay nvkd lien he/, channel: /^kenh lien he/, result: /^ket qua lien he/, note: /^ghi chu/,
     nextStep: /^buoc tiep theo/, nextDate: /^ngay hen tiep/,
+    // Cột nhập đủ thông tin "KH mới liên hệ" (thêm ở cuối sheet 16/11/2026)
+    nationality: /^quoc tich/, scale: /^quy mo/, need: /^nhu cau/, workDone: /^viec da lam/,
   });
   const out: ParsedProspect[] = [];
   for (const row of rows.slice(hi + 1)) {
@@ -278,8 +431,23 @@ export function parseScanProspectRows(rows: Rows, resolve: EmployeeResolver, def
     if (!channel) missing.push("kênh liên hệ");
     if (!result) missing.push("kết quả liên hệ");
     const score = num(row, c.score);
+    const common = judge({ assigneeName, assigneeId, signal: !!(contactDate || channel || result), missing, resultText: `${result ?? ""} ${note ?? ""}` });
+    const sourceKey = `SCAN|${taxCode ?? normalizeVN(companyName)}`;
+    const nextDate = parseSheetDate(c.nextDate >= 0 ? row[c.nextDate] : null, defaultYear);
+    const ent = entryFrom(
+      sourceKey,
+      common,
+      contactDate,
+      {
+        customerName: companyName, address: val(row, c.area), nationality: val(row, c.nationality), scale: val(row, c.scale),
+        contactName: val(row, c.contactPerson), contactPhone: val(row, c.phone), need: val(row, c.need), workDone: val(row, c.workDone),
+        nextAction: val(row, c.nextStep), nextActionAt: nextDate,
+      },
+      { content: result ?? note, productInterest: val(row, c.products) },
+      true
+    );
     out.push({
-      sourceKey: `SCAN|${taxCode ?? normalizeVN(companyName)}`,
+      sourceKey,
       origin: "SCAN",
       foundDate: parseSheetDate(c.foundDate >= 0 ? row[c.foundDate] : null, defaultYear),
       rank: val(row, c.rank),
@@ -299,8 +467,10 @@ export function parseScanProspectRows(rows: Rows, resolve: EmployeeResolver, def
       result,
       note,
       nextStep: val(row, c.nextStep),
-      nextDate: parseSheetDate(c.nextDate >= 0 ? row[c.nextDate] : null, defaultYear),
-      ...judge({ assigneeName, assigneeId, signal: !!(contactDate || channel || result), missing, resultText: `${result ?? ""} ${note ?? ""}` }),
+      nextDate,
+      ...common,
+      entry: ent.entry,
+      entryMissing: ent.entryMissing,
     });
   }
   return out;
@@ -314,6 +484,9 @@ export function parseSelfRows(rows: Rows, sheetName: string, resolve: EmployeeRe
   const c = colMap(rows[hi], {
     foundDate: /^ngay tim/, company: /^ten cong ty/, taxCode: /^mst/, industry: /^nganh/, area: /^khu vuc/,
     contactPerson: /^nguoi lien he/, phone: /^dien thoai/, note: /^ghi chu/,
+    // Cột thêm ngày 16/11/2026 để đủ 10 mục "KH mới liên hệ"
+    contactDate: /^ngay lien he/, channel: /^kenh lien he/, result: /^ket qua lien he/, nationality: /^quoc tich/, scale: /^quy mo/,
+    need: /^nhu cau/, workDone: /^viec da lam/, nextAction: /^hanh dong tiep theo/, nextActionAt: /^ngay hen nhac/,
   });
   const out: ParsedProspect[] = [];
   for (const row of rows.slice(hi + 1)) {
@@ -323,13 +496,32 @@ export function parseSelfRows(rows: Rows, sheetName: string, resolve: EmployeeRe
     const contactPerson = val(row, c.contactPerson);
     const phone = val(row, c.phone);
     const note = val(row, c.note);
+    const result = val(row, c.result);
+    const channel = val(row, c.channel);
     const foundDate = parseSheetDate(c.foundDate >= 0 ? row[c.foundDate] : null, defaultYear);
+    // Chưa có cột "Ngày liên hệ" (hoặc để trống) thì lấy ngày tìm làm ngày liên hệ.
+    const contactDate = parseSheetDate(c.contactDate >= 0 ? row[c.contactDate] : null, defaultYear) ?? foundDate;
     const missing: string[] = [];
     if (!ownerId) missing.push("NVKD (tên tab không khớp nhân viên)");
     if (!contactPerson && !phone) missing.push("người liên hệ / điện thoại");
     if (!foundDate) missing.push("ngày");
+    const common = judge({ assigneeName: owner || null, assigneeId: ownerId, signal: !!(note || result), missing, resultText: `${result ?? ""} ${note ?? ""}` });
+    const sourceKey = `SELF|${owner}|${taxCode ?? normalizeVN(companyName)}`;
+    const nextActionAt = parseSheetDate(c.nextActionAt >= 0 ? row[c.nextActionAt] : null, defaultYear);
+    const ent = entryFrom(
+      sourceKey,
+      common,
+      contactDate,
+      {
+        customerName: companyName, address: val(row, c.area), nationality: val(row, c.nationality), scale: val(row, c.scale),
+        contactName: contactPerson, contactPhone: phone, need: val(row, c.need), workDone: val(row, c.workDone),
+        nextAction: val(row, c.nextAction), nextActionAt,
+      },
+      { content: result ?? note, productInterest: null },
+      true
+    );
     out.push({
-      sourceKey: `SELF|${owner}|${taxCode ?? normalizeVN(companyName)}`,
+      sourceKey,
       origin: "SELF",
       foundDate,
       rank: null,
@@ -344,13 +536,15 @@ export function parseSelfRows(rows: Rows, sheetName: string, resolve: EmployeeRe
       phone,
       email: null,
       sourceNote: null,
-      contactDate: foundDate,
-      channel: null,
-      result: null,
+      contactDate,
+      channel,
+      result,
       note,
-      nextStep: null,
-      nextDate: null,
-      ...judge({ assigneeName: owner || null, assigneeId: ownerId, signal: !!note, missing, resultText: note ?? "" }),
+      nextStep: val(row, c.nextAction),
+      nextDate: nextActionAt,
+      ...common,
+      entry: ent.entry,
+      entryMissing: ent.entryMissing,
     });
   }
   return out;

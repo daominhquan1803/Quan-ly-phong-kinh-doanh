@@ -13,7 +13,9 @@ import {
   type ParsedLog,
   type ParsedProspect,
 } from "./lead-scan";
-import { getEligibleEmployees, weekRange } from "./week-plan";
+import { getEligibleEmployees, isWeekEntryLocked, snapToWeekStart, weekRange } from "./week-plan";
+import { contactInfoOf } from "./week-plan-entry";
+import type { EntryCandidate } from "./lead-scan";
 
 const toDate = (iso: string | null) => (iso ? new Date(`${iso}T00:00:00.000Z`) : null);
 const toISO = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null);
@@ -44,6 +46,7 @@ const fbData = (i: ParsedFbItem, batch: string) => ({
   status: i.status,
   resultKind: i.resultKind,
   missing: i.missing,
+  entryMissing: i.entryMissing ?? null,
   importBatchId: batch,
 });
 
@@ -73,12 +76,83 @@ const prospectData = (p: ParsedProspect, batch: string) => ({
   status: p.status,
   resultKind: p.resultKind,
   missing: p.missing,
+  entryMissing: p.entryMissing ?? null,
   importBatchId: batch,
 });
 
 const logData = (l: ParsedLog) => ({ status: l.status, groups: l.groups, postsRead: l.postsRead, newPosts: l.newPosts, note: l.note });
 
+const localDate = (iso: string) => new Date(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10));
+
+export interface EntrySyncSummary {
+  created: number;
+  updated: number;
+  /** Dòng đã tạo từ sheet nhưng sheet không còn đủ 10 mục nữa -> xoá. */
+  removed: number;
+  /** Tuần đã khoá nhập liệu: không tạo/sửa (chỉ Quản trị viên nhập bổ sung được). */
+  lockedSkipped: number;
+}
+
+/**
+ * Khách quét báo / tự tìm / Facebook đủ 10 mục trên sheet -> dòng NEW_CONTACT của Kế hoạch tuần (khoá `sheetKey`, sheet là nguồn gốc).
+ * Đếm vào chỉ tiêu theo đúng luật có sẵn (classifyEntries: chống trùng khách trong tháng, loại khách cũ). Tuần đã khoá thì không đụng tới.
+ */
+async function syncEntries(cands: EntryCandidate[]): Promise<EntrySyncSummary> {
+  const out: EntrySyncSummary = { created: 0, updated: 0, removed: 0, lockedSkipped: 0 };
+  const existing = await prisma.weekPlanResultEntry.findMany({ where: { sheetKey: { not: null } }, select: { id: true, sheetKey: true, weekStart: true, nextActionAt: true } });
+  const exByKey = new Map(existing.map((e) => [e.sheetKey!, e]));
+  const wanted = new Set(cands.map((c) => c.sheetKey));
+
+  for (const c of cands) {
+    const entryDate = localDate(c.entryDate);
+    const weekStart = snapToWeekStart(entryDate);
+    if (isWeekEntryLocked(weekStart)) {
+      out.lockedSkipped++;
+      continue;
+    }
+    const nextActionAt = localDate(c.nextActionAt);
+    const data = {
+      employeeId: c.employeeId,
+      weekStart,
+      metric: "NEW_CONTACT" as const,
+      entryDate,
+      customerName: c.customerName,
+      address: c.address,
+      content: c.content,
+      productInterest: c.productInterest,
+      contactInfo: contactInfoOf(c.contactName, c.contactPhone),
+      nationality: c.nationality,
+      scale: c.scale,
+      contactName: c.contactName,
+      contactPhone: c.contactPhone,
+      need: c.need,
+      workDone: c.workDone,
+      nextAction: c.nextAction,
+      nextActionAt,
+    };
+    const ex = exByKey.get(c.sheetKey);
+    if (ex) {
+      // Đổi ngày hẹn nhắc thì cho nhắc lại.
+      const dateChanged = ex.nextActionAt?.getTime() !== nextActionAt.getTime();
+      await prisma.weekPlanResultEntry.update({ where: { id: ex.id }, data: { ...data, ...(dateChanged ? { followUpNotifiedAt: null } : {}) } });
+      out.updated++;
+    } else {
+      await prisma.weekPlanResultEntry.create({ data: { ...data, sheetKey: c.sheetKey, createdById: c.employeeId } });
+      out.created++;
+    }
+  }
+  for (const e of existing) {
+    if (wanted.has(e.sheetKey!) || isWeekEntryLocked(e.weekStart)) continue;
+    await prisma.weekPlanResultEntry.delete({ where: { id: e.id } });
+    out.removed++;
+  }
+  return out;
+}
+
 export interface LeadImportSummary {
+  entries: EntrySyncSummary;
+  /** Dòng đã ghi nhận liên hệ nhưng chưa đủ 10 mục để tính KH mới liên hệ. */
+  entryPending: number;
   sheets: { name: string; kind: string; rows: number }[];
   fb: { total: number; byStatus: Record<string, number> };
   prospects: { total: number; byStatus: Record<string, number> };
@@ -115,7 +189,11 @@ export async function importLeadWorkbook(buffer: Buffer): Promise<LeadImportSumm
 
   const unmatched = new Set<string>();
   for (const r of [...parsed.items, ...parsed.prospects]) if (r.assigneeName && !r.assigneeId) unmatched.add(r.assigneeName);
+  const all = [...parsed.items, ...parsed.prospects];
+  const entries = await syncEntries(all.flatMap((r) => (r.entry ? [r.entry] : [])));
   return {
+    entries,
+    entryPending: all.filter((r) => r.entryMissing).length,
     sheets: parsed.sheets,
     fb: { total: parsed.items.length, byStatus: countBy(parsed.items) },
     prospects: { total: parsed.prospects.length, byStatus: countBy(parsed.prospects) },
@@ -148,8 +226,8 @@ export interface IncompleteRow {
 
 export async function getLeadReport(from: string, to: string): Promise<{ report: LeadReport; incomplete: IncompleteRow[]; lastImportAt: string | null; names: Record<string, string> }> {
   const [items, prospects, logs, users, last] = await Promise.all([
-    prisma.leadScanItem.findMany({ select: { scanDate: true, contactDate: true, assigneeId: true, assigneeName: true, status: true, resultKind: true, missing: true, product: true, groupName: true, link: true } }),
-    prisma.leadProspect.findMany({ select: { origin: true, foundDate: true, contactDate: true, assigneeId: true, assigneeName: true, status: true, resultKind: true, missing: true, companyName: true } }),
+    prisma.leadScanItem.findMany({ select: { scanDate: true, contactDate: true, assigneeId: true, assigneeName: true, status: true, resultKind: true, missing: true, entryMissing: true, product: true, groupName: true, link: true } }),
+    prisma.leadProspect.findMany({ select: { origin: true, foundDate: true, contactDate: true, assigneeId: true, assigneeName: true, status: true, resultKind: true, missing: true, entryMissing: true, companyName: true } }),
     prisma.leadScanLog.findMany({ select: { runDate: true, status: true, groups: true, postsRead: true, newPosts: true } }),
     prisma.user.findMany({ select: { id: true, name: true } }),
     prisma.leadScanItem.aggregate({ _max: { updatedAt: true } }),
@@ -164,9 +242,11 @@ export async function getLeadReport(from: string, to: string): Promise<{ report:
     names,
   });
   const who = (id: string | null, name: string | null) => (id && names.get(id)) || name || "Chưa giao";
+  // Hai loại: chưa đủ mức liên hệ (INCOMPLETE) và đã ghi nhận liên hệ nhưng chưa đủ 10 mục để tính "KH mới liên hệ" (entryMissing).
+  const entryMiss = (m: string | null) => `KH mới liên hệ — thiếu: ${m}`;
   const incomplete: IncompleteRow[] = [
-    ...items.filter((i) => i.status === "INCOMPLETE").map((i): IncompleteRow => ({ kind: "FB", title: i.product || i.groupName || "Bài quét FB", employee: who(i.assigneeId, i.assigneeName), date: toISO(i.contactDate) ?? toISO(i.scanDate), missing: i.missing ?? "", link: i.link })),
-    ...prospects.filter((p) => p.status === "INCOMPLETE").map((p): IncompleteRow => ({ kind: p.origin === "SELF" ? "SELF" : "SCAN", title: p.companyName, employee: who(p.assigneeId, p.assigneeName), date: toISO(p.contactDate) ?? toISO(p.foundDate), missing: p.missing ?? "", link: null })),
+    ...items.filter((i) => i.status === "INCOMPLETE" || (i.status === "CONTACTED" && i.entryMissing)).map((i): IncompleteRow => ({ kind: "FB", title: i.product || i.groupName || "Bài quét FB", employee: who(i.assigneeId, i.assigneeName), date: toISO(i.contactDate) ?? toISO(i.scanDate), missing: i.status === "INCOMPLETE" ? i.missing ?? "" : entryMiss(i.entryMissing), link: i.link })),
+    ...prospects.filter((p) => p.status === "INCOMPLETE" || (p.status === "CONTACTED" && p.entryMissing)).map((p): IncompleteRow => ({ kind: p.origin === "SELF" ? "SELF" : "SCAN", title: p.companyName, employee: who(p.assigneeId, p.assigneeName), date: toISO(p.contactDate) ?? toISO(p.foundDate), missing: p.status === "INCOMPLETE" ? p.missing ?? "" : entryMiss(p.entryMissing), link: null })),
   ]
     .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))
     .slice(0, 300);

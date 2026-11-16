@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import * as XLSX from "xlsx";
 import {
+  normalizeNationality,
+  normalizeScale,
   parseLeadWorkbook,
   buildEmployeeResolver,
   buildLeadReport,
@@ -154,6 +156,63 @@ describe("parseSelfRows — khách NVKD tự tìm", () => {
     expect(out[0]).toMatchObject({ status: "CONTACTED", assigneeId: "u-dung", contactDate: "2026-11-14", origin: "SELF", resultKind: "REACHED" });
     expect(out[1].status).toBe("ASSIGNED");
     expect(out[2]).toMatchObject({ status: "INCOMPLETE", missing: "người liên hệ / điện thoại" });
+  });
+});
+
+describe("normalizeNationality / normalizeScale", () => {
+  it("nhận nhiều cách viết", () => {
+    expect(normalizeNationality("viet nam")).toBe("Việt Nam");
+    expect(normalizeNationality("VN")).toBe("Việt Nam");
+    expect(normalizeNationality("Hàn")).toBe("Hàn Quốc");
+    expect(normalizeNationality("Korea")).toBe("Hàn Quốc");
+    expect(normalizeNationality("Trung Quốc")).toBe("Trung Quốc");
+    expect(normalizeNationality("Mỹ")).toBeNull();
+    expect(normalizeScale("50–200 người")).toBe("50_200");
+    expect(normalizeScale("50-200")).toBe("50_200");
+    expect(normalizeScale("Dưới 50 người")).toBe("LT50");
+    expect(normalizeScale("< 50")).toBe("LT50");
+    expect(normalizeScale("200–1000 người")).toBe("200_1000");
+    expect(normalizeScale("Trên 1000 người")).toBe("GT1000");
+    expect(normalizeScale("lớn")).toBeNull();
+  });
+});
+
+describe("dòng KH mới liên hệ tạo từ sheet (đủ 10 mục)", () => {
+  const head = ["STT", "Ngày tìm", "Hạng", "Điểm", "Tên công ty", "", "MST", "Ngành", "Khu vực / địa chỉ", "Tín hiệu mua hàng", "Sản phẩm nên chào", "Người liên hệ", "Điện thoại", "Email", "Nguồn", "NVKD phụ trách", "Ngày NVKD liên hệ", "Kênh liên hệ", "Kết quả liên hệ", "Ghi chú / khó khăn", "Bước tiếp theo", "Ngày hẹn tiếp", "Quốc tịch", "Quy mô", "Nhu cầu", "Việc đã làm"];
+  const row = (o: { mst: string; qt?: string; qm?: string; nc?: string; vdl?: string; hen?: string }) =>
+    [1, "02/11/2026", "A", 90, `Cty ${o.mst}`, "", o.mst, "SX", "KCN Hải Phòng", "NM mới", "carton", "Ông X", "0900123456", "", "báo", "Tùng", "03/11/2026", "Điện thoại", "Quan tâm, hẹn gọi lại", "", "Gửi báo giá", o.hen ?? "10/11/2026", o.qt ?? "Hàn Quốc", o.qm ?? "200–1000 người", o.nc ?? "Thùng carton 5 lớp", o.vdl ?? "Gọi điện giới thiệu"];
+  const out = parseScanProspectRows([head, row({ mst: "1" }), row({ mst: "2", qt: "" }), row({ mst: "3", qm: "to", nc: "" }), row({ mst: "4", hen: "01/11/2026" })], resolve, 2026);
+
+  it("đủ 10 mục -> tạo dòng NEW_CONTACT với quốc tịch/quy mô đã chuẩn hoá", () => {
+    expect(out[0].entry).toMatchObject({
+      sheetKey: "SCAN|1", employeeId: "u-tung", entryDate: "2026-11-03", customerName: "Cty 1", address: "KCN Hải Phòng", nationality: "Hàn Quốc", scale: "200_1000",
+      contactName: "Ông X", contactPhone: "0900123456", need: "Thùng carton 5 lớp", workDone: "Gọi điện giới thiệu", nextAction: "Gửi báo giá", nextActionAt: "2026-11-10",
+    });
+    expect(out[0].entryMissing).toBeNull();
+  });
+  it("thiếu mục -> không tạo dòng, ghi rõ mục thiếu", () => {
+    expect(out[1].entry).toBeNull();
+    expect(out[1].entryMissing).toBe("quốc tịch");
+    expect(out[2].entryMissing).toBe("quy mô (chọn Dưới 50/50–200/200–1000/Trên 1000 người), nhu cầu");
+  });
+  it("ngày hẹn nhắc không được trước ngày liên hệ", () => {
+    expect(out[3].entry).toBeNull();
+    expect(out[3].entryMissing).toBe("ngày hẹn nhắc không được trước ngày liên hệ");
+  });
+  it("Facebook: chưa điền mục mới thì không báo thiếu; điền dở thì báo; đủ thì tạo dòng", () => {
+    const h = [...FB_HEAD, "Tên công ty / khách", "Địa chỉ", "Quốc tịch", "Quy mô", "Người liên hệ", "Số điện thoại", "Nhu cầu", "Việc đã làm", "Hành động tiếp theo", "Ngày hẹn nhắc", "Kênh liên hệ"];
+    const base = (n: number) => fbRow({ stt: n, nv: "Dung", contact: "10/11/2026", kq: "Đã gửi báo giá" });
+    const r = parseFacebookRows([h, [...base(1)], [...base(2), "Công ty A"], [...base(3), "Công ty B", "Hà Nội", "Việt Nam", "Dưới 50", "Chị Lan", "0912345678", "Cần thùng", "Đã nhắn Zalo", "Gửi mẫu", "12/11/2026", "Zalo"]], resolve, 2026);
+    expect(r[0]).toMatchObject({ entry: null, entryMissing: null });
+    expect(r[1].entry).toBeNull();
+    expect(r[1].entryMissing).toContain("địa chỉ");
+    expect(r[2].entry).toMatchObject({ sheetKey: "fb|https://fb/3", customerName: "Công ty B", scale: "LT50", nationality: "Việt Nam", employeeId: "u-dung" });
+  });
+  it("khách tự tìm: dùng ngày liên hệ nếu có, không thì ngày tìm", () => {
+    const h = ["STT", "Ngày tìm", "Tên công ty", "MST", "Ngành", "Khu vực / địa chỉ", "Người liên hệ", "Điện thoại", "Ghi chú", "Ngày liên hệ", "Kênh liên hệ", "Kết quả liên hệ", "Quốc tịch", "Quy mô", "Nhu cầu", "Việc đã làm", "Hành động tiếp theo", "Ngày hẹn nhắc"];
+    const r = parseSelfRows([h, [1, "12/11", "CÔNG TY A", "111", "", "Bắc Ninh", "Ms Hương", "02439820808", "Đã gọi", "", "Điện thoại", "Quan tâm", "Hàn Quốc", "50–200 người", "Bao bì", "Gọi", "Gọi lại", "16/11/2026"]], "PT.DUNG", resolve, 2026);
+    expect(r[0].contactDate).toBe("2026-11-12");
+    expect(r[0].entry).toMatchObject({ employeeId: "u-dung", entryDate: "2026-11-12", address: "Bắc Ninh", scale: "50_200" });
   });
 });
 

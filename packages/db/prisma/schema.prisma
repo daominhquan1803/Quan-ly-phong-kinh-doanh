@@ -1456,6 +1456,8 @@ model WeekPlanResultEntry {
   nextActionAt       DateTime?
   // Đã nhắc NVKD về hành động tiếp theo (worker 8h ngày hẹn).
   followUpNotifiedAt DateTime?
+  // Dòng tạo tự động từ Google Sheet khách tiềm năng (lead-scan-data.ts): khoá nguồn để cập nhật/xoá theo sheet. Dòng nhập tay = null.
+  sheetKey           String?                    @unique
   importBatchId      String?
   importBatch        WeekPlanResultImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
   createdById        String
@@ -1744,6 +1746,7 @@ model LeadScanItem {
   status        String
   resultKind    String?
   missing       String?
+  entryMissing  String?
   importBatchId String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -1783,6 +1786,7 @@ model LeadProspect {
   status        String
   resultKind    String?
   missing       String?
+  entryMissing  String?
   importBatchId String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt

@@ -317,6 +317,12 @@ export function LeadScanReport({ isAdmin }: { isAdmin: boolean }) {
                       <li>
                         Khách tiềm năng: {imp.summary.prospects.total} ({Object.entries(imp.summary.prospects.byStatus).map(([k, v]) => `${k} ${v}`).join(", ")}) · nhật ký quét: {imp.summary.logs} lượt
                       </li>
+                      <li>
+                        KH mới liên hệ (Kế hoạch tuần) từ sheet: thêm {imp.summary.entries.created}, cập nhật {imp.summary.entries.updated}
+                        {imp.summary.entries.removed > 0 && `, gỡ ${imp.summary.entries.removed} (sheet không còn đủ 10 mục)`}
+                        {imp.summary.entries.lockedSkipped > 0 && `, bỏ qua ${imp.summary.entries.lockedSkipped} dòng thuộc tuần đã khoá`}
+                        {imp.summary.entryPending > 0 && ` · ${imp.summary.entryPending} dòng đã liên hệ nhưng chưa đủ 10 mục`}
+                      </li>
                       {imp.summary.unmatchedNames.length > 0 && <li className="text-amber-400">Tên NVKD chưa khớp nhân viên nào: {imp.summary.unmatchedNames.join(", ")} — sửa tên trong sheet hoặc thêm bí danh.</li>}
                     </ul>
                   )}
@@ -396,7 +402,10 @@ export function LeadScanReport({ isAdmin }: { isAdmin: boolean }) {
 
               <section className="space-y-2">
                 <h3 className="text-sm font-semibold text-ink">Dòng chưa đủ thông tin — chưa được ghi nhận ({data?.incomplete.length ?? 0})</h3>
-                <p className="text-xs text-muted2">Bổ sung đúng mục còn thiếu trên Google Sheet, lần cập nhật sau dòng sẽ được tính.</p>
+                <p className="text-xs text-muted2">
+                  Bổ sung đúng mục còn thiếu trên Google Sheet, lần cập nhật sau dòng sẽ được tính. Khách quét báo / tự tìm / Facebook điền đủ 10 mục (công ty, địa chỉ, quốc tịch, quy mô, người liên hệ, SĐT, nhu cầu, việc đã làm, hành động tiếp theo, ngày
+                  hẹn nhắc) thì tự thành dòng “KH mới liên hệ” trong Kế hoạch tuần.
+                </p>
                 {(data?.incomplete.length ?? 0) === 0 ? (
                   <p className="text-sm text-muted-foreground">Không có.</p>
                 ) : (
