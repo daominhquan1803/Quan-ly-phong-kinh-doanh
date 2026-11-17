@@ -1,5 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { formatDateVN, toDateInputValueVN } from "./utils";
+import { formatCompactVND, formatDateVN, toDateInputValueVN } from "./utils";
+
+describe("formatCompactVND", () => {
+  it("tỷ, triệu, nhỏ", () => {
+    expect(formatCompactVND(3_942_739_767)).toBe("3,942 tỷ");
+    expect(formatCompactVND(1_749_760_690)).toBe("1,749 tỷ");
+    expect(formatCompactVND(512_345_000)).toBe("512,3 tr");
+    expect(formatCompactVND(0)).toContain("0");
+  });
+});
 
 // Cả 2 hàm dưới đây PHẢI ép cứng múi giờ Việt Nam (Asia/Ho_Chi_Minh) khi đọc ra ngày dương lịch
 // từ 1 thời điểm ISO — vì app luôn lưu ngày dạng "nửa đêm giờ VN quy đổi UTC" (vd 30/08 lưu

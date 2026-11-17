@@ -10,6 +10,20 @@ export function formatCurrencyVND(value: number | string): string {
   return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(n);
 }
 
+/** Rút gọn tiền cho thẻ KPI hẹp: ≥ 1 tỷ -> "3,942 tỷ", ≥ 1 triệu -> "512,3 tr", nhỏ hơn giữ số đầy đủ.
+ *  Cắt bớt (không làm tròn lên) để không báo cao hơn thực tế. Số đầy đủ cho vào title (rê chuột). */
+export function formatCompactVND(value: number | string): string {
+  const n = typeof value === "string" ? Number(value) : value;
+  const abs = Math.abs(n);
+  const num = (v: number, digits: number) =>
+    new Intl.NumberFormat("vi-VN", { maximumFractionDigits: digits }).format(
+      Math.trunc(v * 10 ** digits) / 10 ** digits,
+    );
+  if (abs >= 1e9) return `${num(n / 1e9, 3)} tỷ`;
+  if (abs >= 1e6) return `${num(n / 1e6, 1)} tr`;
+  return formatCurrencyVND(n);
+}
+
 export function formatDateVN(date: Date | string | null | undefined): string {
   if (!date) return "—";
   const d = typeof date === "string" ? new Date(date) : date;

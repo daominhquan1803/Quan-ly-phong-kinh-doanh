@@ -17,7 +17,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatCurrencyVND, formatDateVN } from "@/lib/utils";
+import { formatCompactVND, formatCurrencyVND, formatDateVN } from "@/lib/utils";
 import {
   AlertTriangle,
   Lightbulb,
@@ -224,8 +224,11 @@ export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
             </div>
           </div>
           <div className="mt-3">
-            <p className="font-mono text-2xl font-bold tracking-tight text-ink tabular-nums">
-              {isLoading ? "—" : formatCurrencyVND(data?.totalActual ?? 0)}
+            <p
+              className="font-mono text-2xl font-bold tracking-tight text-ink tabular-nums"
+              title={isLoading ? undefined : formatCurrencyVND(data?.totalActual ?? 0)}
+            >
+              {isLoading ? "—" : formatCompactVND(data?.totalActual ?? 0)}
             </p>
             <p className="text-[11px] text-muted-foreground mt-1">Theo giá trị đã giao trong tháng</p>
             <TrendLine delta={data?.actualTrendPct ?? null} unit="%" />
@@ -243,8 +246,11 @@ export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
             </div>
           </div>
           <div className="mt-3">
-            <p className="font-mono text-2xl font-bold tracking-tight text-ink tabular-nums">
-              {isLoading ? "—" : formatCurrencyVND(data?.totalPoValue ?? 0)}
+            <p
+              className="font-mono text-2xl font-bold tracking-tight text-ink tabular-nums"
+              title={isLoading ? undefined : formatCurrencyVND(data?.totalPoValue ?? 0)}
+            >
+              {isLoading ? "—" : formatCompactVND(data?.totalPoValue ?? 0)}
             </p>
             <p className="text-[11px] text-muted-foreground mt-1">Theo ngày đặt hàng trong tháng</p>
             <TrendLine delta={data?.poTrendPct ?? null} unit="%" />
@@ -343,8 +349,9 @@ export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
                   "font-mono text-2xl font-bold tracking-tight tabular-nums",
                   data && (data.debtOverdue ?? 0) > 0 ? "text-alert" : "text-ink"
                 )}
+                title={isLoading ? undefined : formatCurrencyVND(data?.debtOverdue ?? 0)}
               >
-                {isLoading ? "—" : formatCurrencyVND(data?.debtOverdue ?? 0)}
+                {isLoading ? "—" : formatCompactVND(data?.debtOverdue ?? 0)}
               </p>
               <p className="text-[11px] text-muted-foreground mt-1">Hoá đơn đã vượt thời hạn thanh toán</p>
             </div>
