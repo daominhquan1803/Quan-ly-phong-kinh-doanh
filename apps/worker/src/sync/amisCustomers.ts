@@ -24,6 +24,9 @@ export interface ExistingCustomer {
   salesEmployeeId: string | null;
   address: string | null;
   contactPhone: string | null;
+  /** Chỉ cần để ghép khách tiềm năng từ Google Sheet (leadKey có giá trị, mã tạm KHM-…) với khách AMIS cùng tên. */
+  customerName?: string;
+  leadKey?: string | null;
 }
 
 export interface CustomerCreate {
@@ -42,6 +45,8 @@ export interface CustomerUpdate {
 export interface CustomerSyncPlan {
   creates: CustomerCreate[];
   updates: CustomerUpdate[];
+  /** Khách tiềm năng từ Google Sheet (mã tạm KHM-…) vừa có trên AMIS cùng tên -> đổi sang mã AMIS (giữ hồ sơ + lịch sử chăm sóc), không tạo bản thứ hai. */
+  rekeys: { fromCode: string; toCode: string; data: { address?: string; contactPhone?: string } }[];
   /** Khách AMIS chưa có trong app mà người phụ trách không phải NVKD đang quản lý -> không tạo. */
   skippedNotManaged: number;
   /** Nhãn người phụ trách chưa ghép được -> số khách (để anh biết cần gán mã AMIS cho ai). */
@@ -64,6 +69,19 @@ function clean(v: string | null | undefined): string | null {
   return s || null;
 }
 
+/** Khoá ghép tên công ty (cùng quy tắc với apps/web/src/lib/lead-care.ts companyKey): bỏ dấu, bỏ từ loại hình, chỉ so BẰNG nhau. */
+export function companyKey(name: string | null | undefined): string {
+  return (name ?? "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/đ/gi, "d")
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\b(cong ty|tnhh|co phan|cp|mtv|tm|dv|jsc|ltd|co|company|limited|corporation|corp|inc)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /**
  * Thuần: từ danh sách khách AMIS + khách đã có trong app + NVKD đang quản lý, lập kế hoạch tạo/cập nhật.
  *  - Khách chưa có trong app: tạo nếu người phụ trách là NVKD đang quản lý (ghép theo mã AMIS trong ngoặc); bỏ khách rác và khách ngừng.
@@ -75,7 +93,13 @@ export function planCustomerSync(rows: AmisCustomer[], existing: ExistingCustome
   const byCode = new Map(users.map((u) => [u.amisEmployeeCode.trim().toUpperCase(), u.id]));
   const existingByCode = new Map(existing.map((c) => [normalizeCustomerCode(c.customerCode), c]));
   const seen = new Set<string>();
-  const plan: CustomerSyncPlan = { creates: [], updates: [], skippedNotManaged: 0, unmappedOwners: {} };
+  const plan: CustomerSyncPlan = { creates: [], updates: [], rekeys: [], skippedNotManaged: 0, unmappedOwners: {} };
+  // Khách tiềm năng từ sheet chưa có mã AMIS, gom theo tên; chỉ ghép khi đúng 1 hồ sơ cùng tên (nhiều hơn thì để nguyên cho người xử lý).
+  const leadByName = new Map<string, ExistingCustomer[]>();
+  for (const c of existing) {
+    const k = c.leadKey && c.customerName ? companyKey(c.customerName) : "";
+    if (k && c.customerCode.startsWith("KHM-")) leadByName.set(k, [...(leadByName.get(k) ?? []), c]);
+  }
 
   for (const r of rows) {
     const rawCode = (r.account_number ?? "").trim();
@@ -105,6 +129,15 @@ export function planCustomerSync(rows: AmisCustomer[], existing: ExistingCustome
         const label = clean(r.owner_name) ?? "(chưa có người phụ trách)";
         plan.unmappedOwners[label] = (plan.unmappedOwners[label] ?? 0) + 1;
       }
+      continue;
+    }
+    const lead = leadByName.get(companyKey(customerName));
+    if (lead?.length === 1) {
+      const data: { address?: string; contactPhone?: string } = {};
+      if (!lead[0].address && address) data.address = address;
+      if (!lead[0].contactPhone && contactPhone) data.contactPhone = contactPhone;
+      plan.rekeys.push({ fromCode: lead[0].customerCode, toCode: customerCode, data });
+      leadByName.delete(companyKey(customerName));
       continue;
     }
     plan.creates.push({ customerCode, customerName, salesEmployeeId, address, contactPhone });
@@ -151,10 +184,11 @@ export async function runAmisCustomerSync(triggeredBy: string): Promise<SyncOutc
       await new Promise((r) => setTimeout(r, 300)); // nhẹ tay với AMIS
     }
 
-    const existing = await prisma.customer.findMany({ select: { customerCode: true, salesEmployeeId: true, address: true, contactPhone: true } });
+    const existing = await prisma.customer.findMany({ select: { customerCode: true, salesEmployeeId: true, address: true, contactPhone: true, customerName: true, leadKey: true } });
     const plan = planCustomerSync(rows, existing, users);
 
     const assigned = new Map<string, string>(); // khách vừa có NVKD -> gán cho hoá đơn công nợ đang trống NVKD
+    for (const r of plan.rekeys) await prisma.customer.update({ where: { customerCode: r.fromCode }, data: { customerCode: r.toCode, ...r.data } });
     for (const c of plan.creates) {
       await prisma.customer.create({ data: c });
       assigned.set(c.customerCode, c.salesEmployeeId);
@@ -175,7 +209,7 @@ export async function runAmisCustomerSync(triggeredBy: string): Promise<SyncOutc
       .map(([label, n]) => `${label}: ${n}`)
       .join("; ");
     const message =
-      `Khách AMIS: rà ${rows.length}, tạo mới ${plan.creates.length}, điền chỗ trống ${plan.updates.length} khách, ` +
+      `Khách AMIS: rà ${rows.length}, tạo mới ${plan.creates.length}, đổi mã khách tiềm năng sang mã AMIS ${plan.rekeys.length}, điền chỗ trống ${plan.updates.length} khách, ` +
       `gán NVKD cho ${invoicesAssigned} hoá đơn, bỏ qua ${plan.skippedNotManaged} khách chưa thuộc NVKD đang quản lý` +
       (topUnmapped ? ` (người phụ trách chưa ghép: ${topUnmapped})` : "");
     await prisma.syncLog.update({

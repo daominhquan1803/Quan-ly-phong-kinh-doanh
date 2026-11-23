@@ -37,6 +37,8 @@ interface CustomerRow {
   paymentTermType: PaymentTermType | null;
   paymentTermDays: number | null;
   paymentTermMonthOffset: number | null;
+  /** "SHEET_LEAD" = khách tiềm năng tạo từ Google Sheet (mã tạm KHM-…); khách AMIS/nhập tay = null. */
+  source?: string | null;
 }
 
 interface EmployeeOption {
@@ -923,6 +925,14 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
                       >
                         {c.customerCode}
                       </span>
+                      {c.source === "SHEET_LEAD" && (
+                        <span
+                          className="mt-1 block text-[11px] font-semibold text-amber-400"
+                          title="Khách tiềm năng tạo từ Google Sheet — mã tạm, tự đổi sang mã AMIS khi khách có trên AMIS"
+                        >
+                          Khách tiềm năng
+                        </span>
+                      )}
                       <a
                         href={`/reports?tab=sales&by=customer&q=${encodeURIComponent(c.customerCode)}`}
                         className="mt-1 block text-[11px] text-info-500 hover:underline"

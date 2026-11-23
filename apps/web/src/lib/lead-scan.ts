@@ -97,6 +97,10 @@ export interface EntryCandidate {
   nextActionAt: string;
   content: string | null;
   productInterest: string | null;
+  /** Kênh liên hệ + kết quả (chữ tự do trên sheet) — dùng tạo lịch sử chăm sóc trong hồ sơ khách (lead-care.ts). */
+  channel: string | null;
+  result: string | null;
+  resultKind: ResultKind | null;
 }
 
 const NATIONALITY_RULES: [RegExp, (typeof NATIONALITIES)[number]][] = [
@@ -155,7 +159,7 @@ function entryFrom(
   common: Common,
   contactDate: string | null,
   raw: RawContact,
-  extra: { content: string | null; productInterest: string | null },
+  extra: { content: string | null; productInterest: string | null; channel: string | null; result: string | null },
   alwaysIntent: boolean
 ): { entry: EntryCandidate | null; entryMissing: string | null } {
   const none = { entry: null, entryMissing: null };
@@ -196,6 +200,7 @@ function entryFrom(
       nextAction: raw.nextAction!,
       nextActionAt: raw.nextActionAt!,
       ...extra,
+      resultKind: common.resultKind,
     },
     entryMissing: null,
   };
@@ -340,7 +345,7 @@ export function parseFacebookRows(rows: Rows, resolve: EmployeeResolver, default
   const c = colMap(rows[hi], {
     stt: /^stt$/, scanDate: /^ngay quet/, postDate: /^ngay dang/, platform: /^nen tang/, groupName: /^nhom/, poster: /^nguoi dang/,
     product: /^san pham can/, quantity: /^so luong/, area: /^khu vuc/, contactInPost: /^lien he trong bai/, link: /^link/,
-    contactDate: /^ngay lien he/, assignee: /^nvkd nhan/, result: /^ket qua/, note: /^ghi chu/,
+    contactDate: /^ngay lien he/, assignee: /^nvkd nhan/, result: /^ket qua/, note: /^ghi chu/, channel: /^kenh lien he/,
     // Cột nhập đủ thông tin "KH mới liên hệ" (thêm ở cuối sheet 16/11/2026)
     company: /^ten (cong ty|khach)/, address: /^dia chi/, nationality: /^quoc tich/, scale: /^quy mo/, contactName: /^nguoi lien he/,
     phone: /^(so )?dien thoai|^sdt/, need: /^nhu cau/, workDone: /^viec da lam/, nextAction: /^hanh dong tiep theo/, nextActionAt: /^ngay hen nhac/,
@@ -375,7 +380,7 @@ export function parseFacebookRows(rows: Rows, resolve: EmployeeResolver, default
         contactName: val(row, c.contactName), contactPhone: val(row, c.phone), need: val(row, c.need), workDone: val(row, c.workDone),
         nextAction: val(row, c.nextAction), nextActionAt,
       },
-      { content: result ?? note, productInterest: product },
+      { content: result ?? note, productInterest: product, channel: val(row, c.channel), result: result ?? note },
       false
     );
     out.push({
@@ -443,7 +448,7 @@ export function parseScanProspectRows(rows: Rows, resolve: EmployeeResolver, def
         contactName: val(row, c.contactPerson), contactPhone: val(row, c.phone), need: val(row, c.need), workDone: val(row, c.workDone),
         nextAction: val(row, c.nextStep), nextActionAt: nextDate,
       },
-      { content: result ?? note, productInterest: val(row, c.products) },
+      { content: result ?? note, productInterest: val(row, c.products), channel, result: result ?? note },
       true
     );
     out.push({
@@ -517,7 +522,7 @@ export function parseSelfRows(rows: Rows, sheetName: string, resolve: EmployeeRe
         contactName: contactPerson, contactPhone: phone, need: val(row, c.need), workDone: val(row, c.workDone),
         nextAction: val(row, c.nextAction), nextActionAt,
       },
-      { content: result ?? note, productInterest: null },
+      { content: result ?? note, productInterest: null, channel, result: result ?? note },
       true
     );
     out.push({

@@ -270,6 +270,8 @@ model CustomerCareLog {
   // Hẹn chăm sóc lại — app nhắc đúng ngày
   followUpAt    DateTime?
   createdAt     DateTime       @default(now())
+  // Lần chăm sóc tạo tự động từ Google Sheet: "<khoá dòng>|<ngày liên hệ>" (cập nhật tại chỗ khi sheet đổi, không nhân đôi). Ghi tay = null.
+  sheetKey      String?        @unique
   spotCheck     CareSpotCheck?
   photos        CareLogPhoto[]
 
@@ -628,6 +630,10 @@ model Customer {
   stageUpdatedAt   DateTime?
   profileUpdatedAt DateTime?
   stageHistory     CustomerStageHistory[]
+
+  // Khách tạo tự động từ Google Sheet khách tiềm năng (lead-care.ts): source = "SHEET_LEAD", leadKey = khoá dòng sheet. Khách AMIS/tay = null.
+  source  String?
+  leadKey String? @unique
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

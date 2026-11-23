@@ -323,6 +323,17 @@ export function LeadScanReport({ isAdmin }: { isAdmin: boolean }) {
                         {imp.summary.entries.lockedSkipped > 0 && `, bỏ qua ${imp.summary.entries.lockedSkipped} dòng thuộc tuần đã khoá`}
                         {imp.summary.entryPending > 0 && ` · ${imp.summary.entryPending} dòng đã liên hệ nhưng chưa đủ 10 mục`}
                       </li>
+                      {imp.summary.customers && (
+                        <li>
+                          Hồ sơ khách: tạo mới {imp.summary.customers.created}, gắn vào khách đã có {imp.summary.customers.linked} · lịch sử chăm sóc thêm {imp.summary.customers.logsCreated}, cập nhật {imp.summary.customers.logsUpdated}
+                        </li>
+                      )}
+                      {imp.summary.customers && imp.summary.customers.conflicts.length > 0 && (
+                        <li className="text-amber-400">
+                          Trùng khách, chưa ghi vào hồ sơ ({imp.summary.customers.conflicts.length}): {imp.summary.customers.conflicts.slice(0, 8).join("; ")}
+                          {imp.summary.customers.conflicts.length > 8 && "…"}
+                        </li>
+                      )}
                       {imp.summary.unmatchedNames.length > 0 && <li className="text-amber-400">Tên NVKD chưa khớp nhân viên nào: {imp.summary.unmatchedNames.join(", ")} — sửa tên trong sheet hoặc thêm bí danh.</li>}
                     </ul>
                   )}

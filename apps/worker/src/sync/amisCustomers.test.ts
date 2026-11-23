@@ -46,6 +46,21 @@ describe("planCustomerSync", () => {
     expect(p.creates).toHaveLength(0);
   });
 
+  it("khách tiềm năng từ Google Sheet (mã tạm KHM-…) cùng tên với khách AMIS mới: đổi mã, không tạo bản thứ hai", () => {
+    const lead = ours({ customerCode: "KHM-ABC123", customerName: "Legend Bright", leadKey: "SCAN|x" });
+    const p = planCustomerSync([amis({ billing_address: "Bắc Ninh" })], [lead], users);
+    expect(p.creates).toHaveLength(0);
+    expect(p.rekeys).toEqual([{ fromCode: "KHM-ABC123", toCode: "LEGEND BRIGHT", data: { address: "Bắc Ninh" } }]);
+  });
+
+  it("trùng tên với 2 khách tiềm năng: không tự ghép, vẫn tạo khách mới", () => {
+    const a = ours({ customerCode: "KHM-AAAAAA", customerName: "Legend Bright", leadKey: "k1" });
+    const b = ours({ customerCode: "KHM-BBBBBB", customerName: "CÔNG TY LEGEND BRIGHT", leadKey: "k2" });
+    const p = planCustomerSync([amis({})], [a, b], users);
+    expect(p.rekeys).toHaveLength(0);
+    expect(p.creates).toHaveLength(1);
+  });
+
   it("khách của người không thuộc NVKD quản lý (hoặc không có chủ): không tạo, ghi vào danh sách chưa ghép", () => {
     const p = planCustomerSync(
       [
