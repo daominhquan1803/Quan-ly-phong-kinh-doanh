@@ -40,13 +40,26 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const parsed = updateSchema.safeParse(body);
     if (!parsed.success) return NextResponse.json({ error: "Dữ liệu không hợp lệ" }, { status: 400 });
 
+    const nextExpectedPaymentDate = parsed.data.expectedPaymentDate
+      ? parseDateOnlyLocal(parsed.data.expectedPaymentDate)
+      : null;
+    // NVKD chỉ được điền ngày dự kiến LẦN ĐẦU; sau đó chỉ ADMIN sửa được, tránh tự đổi ngày để né
+    // trượt kế hoạch thu. Gửi lại đúng ngày đang có thì cho qua để không báo lỗi oan khi blur.
+    if (
+      !isAdmin &&
+      invoice.expectedPaymentDate &&
+      nextExpectedPaymentDate?.getTime() !== invoice.expectedPaymentDate.getTime()
+    ) {
+      throw new ForbiddenError("Chỉ quản trị viên được đổi ngày dự kiến thanh toán đã điền");
+    }
+
     const data: {
       expectedPaymentDate: Date | null;
       dueDate?: Date | null;
       note?: string | null;
       salesEmployeeId?: string | null;
     } = {
-      expectedPaymentDate: parsed.data.expectedPaymentDate ? parseDateOnlyLocal(parsed.data.expectedPaymentDate) : null,
+      expectedPaymentDate: nextExpectedPaymentDate,
     };
     if (isAdmin && parsed.data.dueDate !== undefined) {
       data.dueDate = parsed.data.dueDate ? parseDateOnlyLocal(parsed.data.dueDate) : null;

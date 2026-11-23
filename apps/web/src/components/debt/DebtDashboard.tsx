@@ -974,12 +974,18 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                       <span className="text-xs font-mono text-emerald-400 font-medium">{formatDateVN(r.lastPaymentDate)}</span>
                     ) : (
                       <div className="flex flex-col items-start gap-1">
-                        <input
-                          type="date"
-                          defaultValue={toDateInputValueVN(r.expectedPaymentDate)}
-                          onBlur={(e) => handleExpectedDateChange(r.id, e.target.value)}
-                          className="input !py-1 !text-xs !bg-black/40 !border-white/10 w-36 rounded-lg font-mono"
-                        />
+                        {!isAdmin && r.expectedPaymentDate ? (
+                          <span className="font-mono text-xs text-ink" title="Đã điền ngày dự kiến — chỉ quản trị viên được sửa">
+                            {formatDateVN(r.expectedPaymentDate)}
+                          </span>
+                        ) : (
+                          <input
+                            type="date"
+                            defaultValue={toDateInputValueVN(r.expectedPaymentDate)}
+                            onBlur={(e) => handleExpectedDateChange(r.id, e.target.value)}
+                            className="input !py-1 !text-xs !bg-black/40 !border-white/10 w-36 rounded-lg font-mono"
+                          />
+                        )}
                         {r.slippedWeeks > 0 && (
                           <span
                             className={cn(
