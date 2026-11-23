@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { cn, formatDateVN } from "@/lib/utils";
 import { normalizeVN } from "@/lib/text-normalize";
 import { FilterInput, SortableTh, toggleSort, type SortState } from "@/components/shared/SortableFilterableTable";
-import { RefreshCw, CheckCircle2, XCircle, AlertTriangle, X } from "lucide-react";
+import { RefreshCw, CheckCircle2, XCircle, AlertTriangle, X, Sparkles } from "lucide-react";
 import { CHART_TOOLTIP_STYLE } from "@/components/dashboard/chart-theme";
+import { QuoteAnalysisPanel, type QuoteAnalysis } from "./QuoteAnalysisPanel";
 
 type QuoteStatus = "WON" | "NEGOTIATING" | "LOST" | "NOT_QUOTED";
 
@@ -53,6 +54,7 @@ interface QuoteRow {
   pricingStaff: string | null;
   note: string | null;
   status: QuoteStatus;
+  analysis: QuoteAnalysis | null; // gợi ý AI về khách (Perplexity), null = chưa phân tích
 }
 interface SyncLog {
   status: "RUNNING" | "SUCCESS" | "FAILED";
@@ -97,6 +99,7 @@ export function QuoteOverview() {
   const [sort, setSort] = useState<SortState<SortField>>({ field: "requestDay", dir: "desc" });
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null); // báo giá đang mở gợi ý AI
   const queryClient = useQueryClient();
 
   const { data: summary, isLoading: summaryLoading } = useQuery({
@@ -489,10 +492,25 @@ export function QuoteOverview() {
                 </tr>
               )}
               {visibleRows.map((r) => (
-                <tr key={r.id} className="hover:bg-white/[0.02] transition-colors">
+                <Fragment key={r.id}>
+                <tr className="hover:bg-white/[0.02] transition-colors">
                   <td className="px-4 py-2.5 font-mono text-muted2 whitespace-nowrap">{r.requestDay ?? "—"}</td>
                   <td className="px-4 py-2.5 font-medium text-ink">{r.assigneeRaw ?? "—"}</td>
-                  <td className="px-4 py-2.5 font-medium text-ink">{r.customerName}</td>
+                  <td className="px-4 py-2.5 font-medium text-ink">
+                    {r.customerName}
+                    {r.analysis && (
+                      <button
+                        onClick={() => setExpandedId((prev) => (prev === r.id ? null : r.id))}
+                        title="Xem gợi ý AI về khách này"
+                        className={cn(
+                          "ml-2 inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold align-middle transition-colors",
+                          expandedId === r.id ? "border-amber-500/50 bg-amber-500/20 text-amber-300" : "border-white/10 text-muted2 hover:text-amber-300 hover:border-amber-500/30"
+                        )}
+                      >
+                        <Sparkles className="h-3 w-3" /> AI
+                      </button>
+                    )}
+                  </td>
                   <td className="px-4 py-2.5 text-muted-foreground max-w-xs truncate" title={r.productInterest ?? undefined}>
                     {r.productInterest ?? "—"}
                   </td>
@@ -506,6 +524,14 @@ export function QuoteOverview() {
                     </span>
                   </td>
                 </tr>
+                {r.analysis && expandedId === r.id && (
+                  <tr>
+                    <td colSpan={7} className="p-0">
+                      <QuoteAnalysisPanel a={r.analysis} />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
             </tbody>
           </table>

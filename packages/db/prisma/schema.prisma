@@ -867,6 +867,33 @@ model QuoteRequest {
   @@map("quote_requests")
 }
 
+// Phân tích khách hỏi giá bằng Perplexity (worker/src/sync/customerAnalysis.ts, anh Quân chốt 23/11/2026). Khoá theo tên công ty
+// đã chuẩn hoá (companyKey) nên 1 công ty chỉ tốn tiền 1 lần, mọi báo giá của công ty đó dùng chung. Đây là GỢI Ý của AI, KHÔNG tự ghi
+// vào hồ sơ khách (hồ sơ đủ/thiếu đang tính KPI) — chỉ hiện trên trang Báo giá kèm nguồn để NVKD/ADMIN tham khảo.
+model CustomerAnalysis {
+  id            String   @id @default(cuid())
+  companyKey    String   @unique
+  customerName  String
+  status        String   @default("OK") // OK | FAILED
+  attempts      Int      @default(0)
+  error         String?
+  industry      String? // mã ngành INDUSTRIES (lib/customer-profile.ts)
+  ownership     String? // FDI | VN
+  companyType   String? // loại hình pháp lý: TNHH, cổ phần...
+  staffSize     String? // LT50 | 50_200 | 200_1000 | GT1000
+  business      String? // khách làm gì (1-2 câu)
+  makes         String[] @default([]) // sản phẩm khách sản xuất / kinh doanh
+  opportunities Json? // [{ product, reason }] sản phẩm của mình có thể bán thêm
+  confidence    String? // HIGH | MEDIUM | LOW
+  sources       Json? // [{ title, url }] lấy từ kết quả tìm kiếm, không lấy từ JSON do mô hình viết
+  costUsd       Decimal? @db.Decimal(10, 5)
+  analyzedAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("customer_analyses")
+}
+
 // ---------- Kế hoạch kinh doanh ----------
 
 model SalesTarget {

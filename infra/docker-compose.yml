@@ -83,6 +83,8 @@ services:
       GOOGLE_SHEETS_QUOTE_ID: ${GOOGLE_SHEETS_QUOTE_ID}
       # Đường dẫn file SQLite của app báo giá bên trong container (mount chỉ-đọc ở docker-compose.override.yml của server).
       BAO_GIA_DB_PATH: ${BAO_GIA_DB_PATH:-}
+      # Phân tích khách hỏi giá bằng Perplexity (customerAnalysis.ts) — không đặt key = tắt tính năng.
+      PERPLEXITY_API_KEY: ${PERPLEXITY_API_KEY:-}
       QUOTE_SYNC_CRON: ${QUOTE_SYNC_CRON:-15 6 * * *}
       QUOTE_SYNC_CRON_TIMEZONE: ${QUOTE_SYNC_CRON_TIMEZONE:-Asia/Ho_Chi_Minh}
       # Thông báo nhắc việc (Kế hoạch tuần sắp hết hạn + KPI tháng chậm tiến độ) — worker gọi

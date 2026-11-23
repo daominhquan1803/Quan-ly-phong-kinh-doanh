@@ -4,6 +4,7 @@ import { runAmisOrderSync, runPurchaseHistoryBackfillIfNeeded } from "./sync/ami
 import { runAmisCustomerSync } from "./sync/amisCustomers";
 import { runQuoteSync } from "./sync/quotes";
 import { runBaoGiaAppSync, isBaoGiaAppConfigured } from "./sync/baoGiaApp";
+import { runCustomerAnalysis } from "./sync/customerAnalysis";
 import { runWeekPlanReminder } from "./notifications/weekPlanReminder";
 import { runKpiReminder } from "./notifications/kpiReminder";
 import { runDebtDueReminder } from "./notifications/debtDueReminder";
@@ -91,13 +92,18 @@ async function main() {
     cron.schedule(
       BAO_GIA_CRON,
       () => {
-        runBaoGiaAppSync("CRON").catch((err) => logger.error("Lỗi cron đồng bộ app báo giá:", err));
+        // Sau khi đồng bộ xong, phân tích khách MỚI hỏi giá bằng Perplexity (tự bỏ qua nếu chưa có PERPLEXITY_API_KEY).
+        runBaoGiaAppSync("CRON")
+          .then(() => runCustomerAnalysis())
+          .catch((err) => logger.error("Lỗi cron đồng bộ app báo giá / phân tích khách:", err));
       },
       { timezone: QUOTE_CRON_TIMEZONE }
     );
     logger.info(`Đã lên lịch đồng bộ từ app báo giá: "${BAO_GIA_CRON}"`);
     // Chạy 1 lần ngay khi worker khởi động để dữ liệu có sẵn, không phải đợi tới mốc 10 phút đầu tiên.
-    runBaoGiaAppSync("CRON").catch((err) => logger.error("Lỗi đồng bộ app báo giá khi khởi động:", err));
+    runBaoGiaAppSync("CRON")
+      .then(() => runCustomerAnalysis())
+      .catch((err) => logger.error("Lỗi đồng bộ app báo giá / phân tích khách khi khởi động:", err));
   } else {
     logger.warn("Chưa cấu hình BAO_GIA_DB_PATH — bỏ qua đồng bộ báo giá từ app báo giá.");
   }

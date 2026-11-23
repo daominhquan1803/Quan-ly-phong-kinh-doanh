@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma, QuoteStatus } from "@hoanggia/db";
 import { requireSession, ForbiddenError, UnauthorizedError } from "@/lib/rbac";
+import { companyKey } from "@/lib/lead-care";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,19 @@ export async function GET(req: NextRequest) {
       take: 2000,
     });
 
-    return NextResponse.json({ rows });
+    // Gợi ý AI về khách (worker/src/sync/customerAnalysis.ts), ghép theo tên công ty đã chuẩn hoá. Chỉ trả phần hiển thị, bỏ FAILED.
+    const keys = [...new Set(rows.map((r) => companyKey(r.customerName)).filter(Boolean))];
+    const analyses = keys.length
+      ? await prisma.customerAnalysis.findMany({
+          where: { companyKey: { in: keys }, status: { in: ["OK", "NOT_FOUND"] } },
+          select: {
+            companyKey: true, status: true, industry: true, ownership: true, companyType: true, staffSize: true,
+            business: true, makes: true, opportunities: true, confidence: true, sources: true, analyzedAt: true,
+          },
+        })
+      : [];
+    const byKey = new Map(analyses.map((a) => [a.companyKey, a]));
+    return NextResponse.json({ rows: rows.map((r) => ({ ...r, analysis: byKey.get(companyKey(r.customerName)) ?? null })) });
   } catch (err) {
     if (err instanceof UnauthorizedError) return NextResponse.json({ error: err.message }, { status: 401 });
     if (err instanceof ForbiddenError) return NextResponse.json({ error: err.message }, { status: 403 });
