@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useState } from "react";
+import { confirmDialog } from "@/components/ux/confirm";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, ChevronDown, ChevronUp, Search, Lock, LockOpen, Pencil, Trash2 } from "lucide-react";
 import { cn, formatDateVN } from "@/lib/utils";
@@ -484,8 +485,8 @@ function DefectDetail({ d, canEdit, canManage, onEdit, onChanged }: { d: DefectR
         {canManage && (
           <button
             disabled={busy}
-            onClick={() => {
-              if (confirm(`Xoá biên bản ${d.reportNumber}? Không khôi phục được.`)) call("DELETE", `/api/defects/${d.id}`);
+            onClick={async () => {
+              if (await confirmDialog(`Xoá biên bản ${d.reportNumber}? Không khôi phục được.`, { danger: true })) call("DELETE", `/api/defects/${d.id}`);
             }}
             className="flex items-center gap-1.5 rounded-xl border border-red-500/30 px-3 py-1.5 text-xs text-red-300 hover:bg-red-500/10"
           >

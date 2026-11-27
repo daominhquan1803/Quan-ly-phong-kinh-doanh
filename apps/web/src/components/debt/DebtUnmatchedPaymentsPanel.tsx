@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { confirmDialog } from "@/components/ux/confirm";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatCurrencyVND, formatDateVN } from "@/lib/utils";
 import { AlertTriangle, Link2, Trash2 } from "lucide-react";
@@ -31,13 +32,11 @@ export function DebtUnmatchedPaymentsPanel() {
 
   async function handleIgnore(p: UnmatchedPayment) {
     const label = `${p.customerName ?? p.customerCode ?? "khoản này"} — ${formatCurrencyVND(p.unallocatedAmount)}`;
-    if (
-      !window.confirm(
-        `Xoá khoản tiền về chưa khớp: ${label}?\n\nKhoản này sẽ không còn hiện ở đây và không được tính vào công nợ. Upload lại file Tiền về cũng không làm nó hiện lại.`
-      )
-    ) {
-      return;
-    }
+    const ok = await confirmDialog(
+      `Xoá khoản tiền về chưa khớp: ${label}?\n\nKhoản này sẽ không còn hiện ở đây và không được tính vào công nợ. Upload lại file Tiền về cũng không làm nó hiện lại.`,
+      { danger: true }
+    );
+    if (!ok) return;
     setError(null);
     setBusyId(p.id);
     try {

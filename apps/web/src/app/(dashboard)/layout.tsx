@@ -1,6 +1,8 @@
 import { auth } from "@/lib/auth";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
+import { Toaster } from "@/components/ux/toast";
+import { ConfirmHost } from "@/components/ux/confirm";
 
 export default async function DashboardLayout({
   children,
@@ -16,6 +18,8 @@ export default async function DashboardLayout({
         <Header userName={session?.user?.name ?? undefined} role={session?.user?.role} accessLevel={session?.user?.accessLevel} />
         <main className="flex-1 p-3 overflow-x-auto sm:p-6">{children}</main>
       </div>
+      <Toaster />
+      <ConfirmHost />
     </div>
   );
 }

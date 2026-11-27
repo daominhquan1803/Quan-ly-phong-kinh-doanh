@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSession } from "next-auth/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Skeleton, EmptyState } from "@/components/ux/states";
 import { ChevronLeft, ChevronRight, Pencil, Plus, Trash2, UploadCloud, Info, Save, X } from "lucide-react";
 import { NATIONALITIES, SCALE_KEYS, SCALE_LABEL } from "@/lib/week-plan-entry";
 import { cn, formatDateVN } from "@/lib/utils";
@@ -376,9 +377,9 @@ function TargetGrid({
       </p>
       {savedMsg && <p className="text-xs text-amber-500 mb-3">{savedMsg}</p>}
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Đang tải...</p>
+        <Skeleton rows={4} />
       ) : rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Chưa có nhân viên nào đủ điều kiện (cần gán Mã AMIS ở trang Nhân viên).</p>
+        <EmptyState title="Chưa có nhân viên nào đủ điều kiện (cần gán Mã AMIS ở trang Nhân viên)" />
       ) : (
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">

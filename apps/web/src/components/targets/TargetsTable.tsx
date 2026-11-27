@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Skeleton } from "@/components/ux/states";
 import { formatCurrencyVND } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { TargetCustomerBreakdown } from "./TargetCustomerBreakdown";
@@ -80,8 +81,7 @@ export function TargetsTable() {
                 <tr>
                   <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
                     <div className="inline-flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-amber-400 animate-ping" />
-                      Đang tải kế hoạch kinh doanh...
+                      <Skeleton label="Đang tải kế hoạch kinh doanh..." rows={4} />
                     </div>
                   </td>
                 </tr>

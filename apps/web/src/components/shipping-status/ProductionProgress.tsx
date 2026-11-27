@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Skeleton, EmptyState } from "@/components/ux/states";
 import { cn } from "@/lib/utils";
 import type { ProductionAlert, ProductionStatus } from "@/lib/production-match";
 
@@ -68,7 +69,7 @@ export function ProductionProgress({ isAdmin }: { isAdmin: boolean }) {
     },
   });
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Đang tải tiến độ sản xuất...</p>;
+  if (isLoading) return <Skeleton label="Đang tải tiến độ sản xuất..." rows={6} />;
   if (isError || !data) return <p className="text-sm text-alert">Không tải được tiến độ sản xuất.</p>;
   if (!data.syncedAt) return <p className="text-sm text-muted-foreground">Chưa có dữ liệu từ trang sản xuất.</p>;
 
@@ -132,7 +133,7 @@ export function ProductionProgress({ isAdmin }: { isAdmin: boolean }) {
             ))}
           </tbody>
         </table>
-        {shown.length === 0 && <p className="py-3 text-xs text-muted-foreground">Không có dòng nào.</p>}
+        {shown.length === 0 && <EmptyState title="Không có dòng nào" />}
       </div>
       {isAdmin && data.unmatchedLsx.length > 0 && (
         <details>

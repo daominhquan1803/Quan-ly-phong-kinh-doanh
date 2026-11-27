@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { cn } from "@/lib/utils";
+import { UxTabs } from "@/components/ux/UxTabs";
 import { CarePanel } from "./CarePanel";
 import { CareTeam } from "./CareTeam";
 
@@ -22,23 +22,7 @@ export function CareTabs({ defaultTab, canVerify }: { defaultTab: Tab; canVerify
 
   return (
     <div className="space-y-6">
-      <div className="flex gap-2">
-        {([
-          ["log", "Ghi chăm sóc"],
-          ["team", "Thống kê phòng"],
-        ] as const).map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={cn(
-              "rounded-full border px-4 py-1.5 text-sm transition-colors",
-              tab === key ? "border-amber-400 bg-amber-500/15 font-semibold text-amber-400" : "border-gray-200/40 text-ink2 hover:bg-white/5"
-            )}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <UxTabs<Tab> label="Khu chăm sóc khách" value={tab} onChange={setTab} tabs={[["log", "Ghi chăm sóc"], ["team", "Thống kê phòng"]]} />
       {tab === "log" ? <CarePanel key={customer} /> : <CareTeam onOpenCustomer={openCustomer} canVerify={canVerify} />}
     </div>
   );

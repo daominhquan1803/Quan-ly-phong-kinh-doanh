@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { confirmDialog } from "@/components/ux/confirm";
+import { toast } from "@/components/ux/toast";
+import { Skeleton } from "@/components/ux/states";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn, formatDateVN } from "@/lib/utils";
 
@@ -251,12 +254,12 @@ function AdminKpiView({ month, adminId, canEdit, isSystem }: { month: string; ad
                   <button
                     className="ml-2 rounded-lg border border-red-500/30 px-2 py-0.5 text-[11px] text-red-300 hover:bg-red-500/10"
                     onClick={async () => {
-                      if (!confirm(`Thu hồi đánh giá của ${r.rater} tháng ${k.month}/${k.year}? NVKD này sẽ chấm lại được.`)) return;
+                      if (!(await confirmDialog(`Thu hồi đánh giá của ${r.rater} tháng ${k.month}/${k.year}? NVKD này sẽ chấm lại được.`, { okLabel: "Thu hồi" }))) return;
                       try {
                         await send("DELETE", "/api/kpi-admin/ratings", { adminId: targetAdmin, month, raterId: r.raterId });
                         refresh();
                       } catch (e) {
-                        alert(e instanceof Error ? e.message : "Không thu hồi được");
+                        toast(e instanceof Error ? e.message : "Không thu hồi được", "error");
                       }
                     }}
                   >
@@ -595,7 +598,7 @@ function RatingPanel({ month }: { month: string }) {
       return res.json() as Promise<{ admins: { id: string; name: string }[]; mine: { adminId: string; score: number; comment: string | null }[] }>;
     },
   });
-  if (isLoading || !data) return <p className="text-sm text-muted2">Đang tải...</p>;
+  if (isLoading || !data) return <Skeleton rows={5} />;
   if (data.admins.length === 0) return <p className="text-sm text-muted2">Chưa có Admin kinh doanh để chấm.</p>;
   return (
     <div className="space-y-3">
@@ -641,7 +644,7 @@ function RatingCard({
     }
   }
   async function revoke() {
-    if (!confirm("Thu hồi đánh giá đã gửi cho tháng này?")) return;
+    if (!(await confirmDialog("Thu hồi đánh giá đã gửi cho tháng này?", { okLabel: "Thu hồi" }))) return;
     setBusy(true);
     setMsg(null);
     try {

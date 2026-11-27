@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { confirmDialog } from "@/components/ux/confirm";
+import { toast } from "@/components/ux/toast";
+import { Skeleton, EmptyState } from "@/components/ux/states";
 
 interface DupRow {
   id: string;
@@ -25,7 +28,7 @@ function Group({ rows, canManage, onDone }: { rows: DupRow[]; canManage: boolean
 
   async function merge() {
     const codes = secondaries.map((r) => r.customerCode).join(", ");
-    if (!confirm(`Gộp ${codes} vào ${primary.customerCode}?\n\nLịch sử chăm sóc chuyển sang ${primary.customerCode}. Hoá đơn và đơn hàng giữ nguyên mã.`)) return;
+    if (!(await confirmDialog(`Gộp ${codes} vào ${primary.customerCode}?\n\nLịch sử chăm sóc chuyển sang ${primary.customerCode}. Hoá đơn và đơn hàng giữ nguyên mã.`, { okLabel: "Gộp" }))) return;
     setBusy(true);
     try {
       const res = await fetch("/api/customers/merge", {
@@ -115,9 +118,9 @@ export function DuplicateCustomers({ canManage, onDone }: { canManage: boolean; 
     },
   });
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Đang tìm khách trùng...</p>;
+  if (isLoading) return <Skeleton label="Đang tìm khách trùng..." />;
   if (isError || !data) return <p className="text-sm text-alert">Không tải được danh sách khách trùng.</p>;
-  if (data.groups.length === 0) return <p className="text-sm text-muted-foreground">Không còn khách trùng tên.</p>;
+  if (data.groups.length === 0) return <EmptyState title="Không còn khách trùng tên" />;
 
   return (
     <div className="space-y-3 rounded-2xl border border-amber-500/30 bg-navy-900/60 p-4">
@@ -130,6 +133,7 @@ export function DuplicateCustomers({ canManage, onDone }: { canManage: boolean; 
           rows={g}
           canManage={canManage}
           onDone={(message, ok) => {
+            toast(message, ok ? "success" : "error");
             onDone(message, ok);
             if (ok) queryClient.invalidateQueries({ queryKey: ["customers"] });
           }}

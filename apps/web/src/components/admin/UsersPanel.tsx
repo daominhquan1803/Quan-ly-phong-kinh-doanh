@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { confirmDialog } from "@/components/ux/confirm";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, KeyRound, Trash2 } from "lucide-react";
 
@@ -100,7 +101,7 @@ export function UsersPanel() {
   }
 
   async function handleDeleteUser(userId: string, name: string) {
-    if (!confirm(`Xoá tài khoản "${name}"? Không thể hoàn tác.`)) return;
+    if (!(await confirmDialog(`Xoá tài khoản "${name}"? Không thể hoàn tác.`, { danger: true }))) return;
     setRowBusy(userId);
     setError(null);
     try {

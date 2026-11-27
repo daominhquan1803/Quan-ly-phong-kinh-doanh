@@ -15,6 +15,10 @@ import { TripPendingBanner } from "./TripPendingBanner";
 import { TripBanner } from "./TripBanner";
 import { ProvincePicker } from "./ProvincePicker";
 import { todayVN, visitDay, type PrefillStop, type TripRow } from "./types";
+import { UxTabs } from "@/components/ux/UxTabs";
+import { confirmDialog } from "@/components/ux/confirm";
+import { toast } from "@/components/ux/toast";
+import { Skeleton, EmptyState } from "@/components/ux/states";
 
 const STATUS_STYLE: Record<TripRow["status"], string> = {
   PENDING: "bg-sky-500/15 text-sky-300 border border-sky-500/30",
@@ -60,7 +64,7 @@ export function BusinessTripsPanel({ isAdmin, canApprove = isAdmin }: { isAdmin:
       rejectReason = window.prompt("Cần bổ sung gì? (bắt buộc, nhân viên sẽ thấy nội dung này):")?.trim() || undefined;
       if (!rejectReason) return;
     } else if (action === "cancel") {
-      if (!window.confirm("Huỷ đăng ký này?")) return;
+      if (!(await confirmDialog("Huỷ đăng ký này?", { danger: true, title: "Huỷ đăng ký", okLabel: "Huỷ đăng ký" }))) return;
     }
     const res = await fetch(`/api/business-trips/${id}`, {
       method: "PATCH",
@@ -70,7 +74,7 @@ export function BusinessTripsPanel({ isAdmin, canApprove = isAdmin }: { isAdmin:
     if (res.ok) invalidate();
     else {
       const body = await res.json().catch(() => ({}));
-      window.alert(body.error || "Không thực hiện được");
+      toast(body.error || "Không thực hiện được", "error");
     }
   }
 
@@ -83,23 +87,7 @@ export function BusinessTripsPanel({ isAdmin, canApprove = isAdmin }: { isAdmin:
       <TripBanner />
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-2">
-          {(
-            [
-              ["trips", "Đăng ký & báo cáo"],
-              ["next", "Việc tiếp theo"],
-            ] as [Tab, string][]
-          ).map(([k, label]) => (
-            <button
-              key={k}
-              onClick={() => setTab(k)}
-              className={cn(
-                "rounded-xl border px-3.5 py-2 text-xs font-semibold transition-colors",
-                tab === k ? "border-amber-500/50 bg-amber-500/15 text-amber-300" : "border-white/10 text-muted2 hover:bg-white/10"
-              )}
-            >
-              {label}
-            </button>
-          ))}
+          <UxTabs<Tab> label="Khu công tác" value={tab} onChange={setTab} tabs={[["trips", "Đăng ký & báo cáo"], ["next", "Việc tiếp theo"]]} />
           {isAdmin && tab === "trips" && <EmployeeFilterSelect value={employeeId} onChange={setEmployeeId} />}
         </div>
         <button
@@ -188,14 +176,14 @@ export function BusinessTripsPanel({ isAdmin, canApprove = isAdmin }: { isAdmin:
               {isLoading && (
                 <tr>
                   <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
-                    Đang tải...
+                    <Skeleton />
                   </td>
                 </tr>
               )}
               {!isLoading && (data?.trips.length ?? 0) === 0 && (
                 <tr>
                   <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
-                    Chưa có đăng ký nào.
+                    <EmptyState title="Chưa có đăng ký nào" />
                   </td>
                 </tr>
               )}

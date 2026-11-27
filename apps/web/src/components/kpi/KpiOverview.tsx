@@ -2,6 +2,7 @@
 
 import { Fragment, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Skeleton } from "@/components/ux/states";
 import { cn, formatCurrencyVND, formatDateVN } from "@/lib/utils";
 import { Pencil, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 
@@ -174,8 +175,7 @@ export function KpiOverview({ isAdmin }: { isAdmin: boolean }) {
                 <tr>
                   <td colSpan={25} className="px-4 py-8 text-center text-muted-foreground">
                     <div className="inline-flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-amber-400 animate-ping" />
-                      Đang tải bảng đánh giá KPI...
+                      <Skeleton label="Đang tải bảng đánh giá KPI..." rows={4} />
                     </div>
                   </td>
                 </tr>

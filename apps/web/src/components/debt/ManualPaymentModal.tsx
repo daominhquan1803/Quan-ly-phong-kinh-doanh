@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { confirmDialog } from "@/components/ux/confirm";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Undo2, X } from "lucide-react";
@@ -90,7 +91,7 @@ export function ManualPaymentModal({ invoice, onClose }: { invoice: ManualPaymen
     const msg = p.isManual
       ? "Xoá khoản tiền về nhập tay này? Hoá đơn sẽ quay về chưa về phần tiền này."
       : "Chuyển khoản tiền về từ file này về CHƯA VỀ? Tiền không bị xoá — khoản này chuyển sang mục \"Tiền về chưa khớp công nợ\" để gắn lại đúng hoá đơn (hoặc xoá).";
-    if (!window.confirm(msg)) return;
+    if (!(await confirmDialog(msg, p.isManual ? { danger: true } : { title: "Chuyển về chưa về", okLabel: "Chuyển" }))) return;
     setError(null);
     const res = await fetch(`/api/debt/${invoice.id}/payments/${p.allocationId}`, { method: "DELETE" });
     if (!res.ok) {

@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Skeleton, EmptyState } from "@/components/ux/states";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { cn, formatDateVN } from "@/lib/utils";
 import { normalizeVN } from "@/lib/text-normalize";
@@ -387,7 +388,7 @@ export function QuoteOverview() {
                 {(summary?.byAssignee.length ?? 0) === 0 && (
                   <tr>
                     <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
-                      {summaryLoading ? "Đang tải..." : "Chưa có dữ liệu."}
+                      {summaryLoading ? <Skeleton /> : <EmptyState title="Chưa có dữ liệu" />}
                     </td>
                   </tr>
                 )}
@@ -478,8 +479,7 @@ export function QuoteOverview() {
                 <tr>
                   <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">
                     <div className="inline-flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-amber-400 animate-ping" />
-                      Đang tải danh sách báo giá...
+                      <Skeleton label="Đang tải danh sách báo giá..." rows={5} />
                     </div>
                   </td>
                 </tr>

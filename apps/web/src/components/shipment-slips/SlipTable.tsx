@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { confirmDialog } from "@/components/ux/confirm";
+import { Skeleton } from "@/components/ux/states";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDateVN, toDateInputValueVN } from "@/lib/utils";
@@ -52,13 +54,11 @@ export function SlipTable({ isAdmin }: { isAdmin: boolean }) {
   });
 
   async function handleResync() {
-    if (
-      !window.confirm(
-        "Khớp lại toàn bộ Phiếu đi hàng với các dòng PO trong Tiến độ giao hàng? (Không liên quan AMIS — số đi hàng chỉ lấy từ phiếu admin đã nhập.) Dùng khi số giao hàng chưa cập nhật đúng sau khi nhập phiếu."
-      )
-    ) {
-      return;
-    }
+    const ok = await confirmDialog(
+      "Khớp lại toàn bộ Phiếu đi hàng với các dòng PO trong Tiến độ giao hàng? (Không liên quan AMIS — số đi hàng chỉ lấy từ phiếu admin đã nhập.) Dùng khi số giao hàng chưa cập nhật đúng sau khi nhập phiếu.",
+      { okLabel: "Khớp lại" }
+    );
+    if (!ok) return;
     setSyncing(true);
     setSyncError(null);
     setSyncResult(null);
@@ -195,7 +195,7 @@ export function SlipTable({ isAdmin }: { isAdmin: boolean }) {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
         {isLoading && (
           <p className="text-xs text-muted-foreground col-span-full py-12 text-center">
-            Đang tải danh sách phiếu đi hàng...
+            <Skeleton label="Đang tải danh sách phiếu đi hàng..." rows={5} />
           </p>
         )}
         {!isLoading && (data?.slips.length ?? 0) === 0 && (

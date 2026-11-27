@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { confirmDialog } from "@/components/ux/confirm";
+import { toast } from "@/components/ux/toast";
+import { Skeleton, EmptyState } from "@/components/ux/states";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, FileText, Trash2, PackageCheck } from "lucide-react";
@@ -30,7 +33,7 @@ export function PickingSlipList() {
   });
 
   async function handleDelete(slip: SlipRow) {
-    if (!confirm(`Xoá phiếu ${slip.slipNumber} (${slip.customerName})? Không thể hoàn tác.`)) return;
+    if (!(await confirmDialog(`Xoá phiếu ${slip.slipNumber} (${slip.customerName})? Không thể hoàn tác.`, { danger: true }))) return;
     setDeletingId(slip.id);
     const res = await fetch(`/api/picking-slips/${slip.id}`, { method: "DELETE" });
     setDeletingId(null);
@@ -38,7 +41,7 @@ export function PickingSlipList() {
       queryClient.invalidateQueries({ queryKey: ["picking-slips"] });
     } else {
       const json = await res.json().catch(() => ({}));
-      alert(json.error ?? "Không xoá được phiếu");
+      toast(json.error ?? "Không xoá được phiếu", "error");
     }
   }
 
@@ -80,15 +83,14 @@ export function PickingSlipList() {
             {isLoading && (
               <tr>
                 <td colSpan={6} className="px-5 py-12 text-center text-muted-foreground">
-                  Đang tải danh sách phiếu...
+                  <Skeleton label="Đang tải danh sách phiếu..." rows={5} />
                 </td>
               </tr>
             )}
             {!isLoading && (data?.slips.length ?? 0) === 0 && (
               <tr>
                 <td colSpan={6} className="px-5 py-12 text-center text-muted-foreground">
-                  <PackageCheck className="h-8 w-8 text-muted2 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm font-medium text-ink">Chưa có phiếu soạn hàng nào</p>
+                  <EmptyState title="Chưa có phiếu soạn hàng nào" />
                   <p className="text-xs text-muted-foreground mt-1">
                     Bấm &quot;Tạo phiếu mới&quot; để xuất phiếu chuẩn bị hàng
                   </p>

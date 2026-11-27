@@ -9,6 +9,10 @@ import { normalizeCustomerCode } from "@/lib/debt-customer-match";
 import { computeDebtStatus, remainingAmount, overdueDays, mondayOfWeek, DEBT_STATUS_LABEL, DebtStatus } from "@/lib/debt-status";
 import { reminderMilestoneFor, DEBT_REMINDER_MILESTONE_LABEL, DebtReminderMilestone } from "@/lib/debt-reminder";
 import { DebtStatusBadge } from "./DebtStatusBadge";
+import { UxTabs } from "@/components/ux/UxTabs";
+import { toast } from "@/components/ux/toast";
+import { confirmDialog } from "@/components/ux/confirm";
+import { Skeleton, EmptyState } from "@/components/ux/states";
 import { DebtPaymentsImportWizard } from "./DebtPaymentsImportWizard";
 import { ManualPaymentModal, type ManualPaymentInvoice } from "./ManualPaymentModal";
 import { DebtUnmatchedPaymentsPanel } from "./DebtUnmatchedPaymentsPanel";
@@ -82,19 +86,6 @@ function pct(n: number): string {
   return `${(n * 100).toFixed(1)}%`;
 }
 
-function ImportResultToast({ message, onClose }: { message: string; onClose: () => void }) {
-  return (
-    <div className="flex items-center justify-between gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-sm px-4 py-3 shadow-[0_0_15px_rgba(16,185,129,0.15)] backdrop-blur-sm">
-      <span className="flex items-center gap-2">
-        <CheckCircle2 className="h-4 w-4 shrink-0" /> {message}
-      </span>
-      <button onClick={onClose} className="p-1 hover:bg-white/10 rounded-lg transition-colors text-muted-foreground hover:text-ink">
-        <X className="h-3.5 w-3.5" />
-      </button>
-    </div>
-  );
-}
-
 export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<DebtTab>("debt");
@@ -111,7 +102,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
   const [showPaymentsWizard, setShowPaymentsWizard] = useState(false);
   const [expandedWeek, setExpandedWeek] = useState<number | null>(null);
   const [paymentInvoice, setPaymentInvoice] = useState<ManualPaymentInvoice | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const setToast = (message: string) => toast(message);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadingBaseline, setUploadingBaseline] = useState(false);
   const [uploadingNewInvoices, setUploadingNewInvoices] = useState(false);
@@ -214,7 +205,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
   }
 
   async function handleDeleteInvoice(row: InvoiceRow) {
-    if (!window.confirm(`Xoá hoá đơn ${row.invoiceNumber ?? "—"} của ${row.customerName}? Dùng cho hoá đơn không thuộc phòng. Không hoàn tác được.`)) return;
+    if (!(await confirmDialog(`Xoá hoá đơn ${row.invoiceNumber ?? "—"} của ${row.customerName}? Dùng cho hoá đơn không thuộc phòng. Không hoàn tác được.`, { danger: true }))) return;
     setUploadError(null);
     const res = await fetch(`/api/debt/${row.id}`, { method: "DELETE" });
     const json = await res.json().catch(() => ({}));
@@ -397,7 +388,6 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
 
   return (
     <div className="space-y-6">
-      {toast && <ImportResultToast message={toast} onClose={() => setToast(null)} />}
       {uploadError && (
         <div className="rounded-xl border border-brandRed-500/30 bg-brandRed-500/10 text-alert text-sm px-4 py-3 flex items-center justify-between shadow-[0_0_15px_rgba(200,16,46,0.15)]">
           <span>{uploadError}</span>
@@ -487,27 +477,12 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2 border-b border-white/10 pb-3">
-        {(
-          [
-            ["debt", "Công nợ theo NVKD & tra cứu"],
-            ["plan", "Kế hoạch & khoản cần thu"],
-            ...(isAdmin ? [["import", "Nhập dữ liệu"]] : []),
-          ] as [DebtTab, string][]
-        ).map(([k, label]) => (
-          <button
-            key={k}
-            type="button"
-            onClick={() => setTab(k)}
-            className={cn(
-              "rounded-xl px-4 py-2 text-sm font-semibold transition-all",
-              tab === k ? "bg-white/10 text-white" : "text-muted2 hover:bg-white/[0.05] hover:text-ink"
-            )}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <UxTabs<DebtTab>
+        label="Khu công nợ"
+        value={tab}
+        onChange={setTab}
+        tabs={[["debt", "Công nợ theo NVKD & tra cứu"], ["plan", "Kế hoạch & khoản cần thu"], ...(isAdmin ? [["import", "Nhập dữ liệu"] as [DebtTab, string]] : [])]}
+      />
 
       {tab === "plan" && summary && summary.weeklyPlan.length > 0 && (
         <div className="glass-card border border-white/10 p-5 space-y-4">
@@ -585,7 +560,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
               </div>
             </div>
           </div>
-          {!weekSummary && <p className="text-sm text-muted-foreground">Đang tải...</p>}
+          {!weekSummary && <Skeleton />}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
             {(weekSummary?.weeklyPlan ?? []).map((w) => (
               <button
@@ -914,7 +889,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                   <td colSpan={isAdmin ? 12 : 11} className="px-4 py-8 text-center text-muted-foreground">
                     <div className="inline-flex items-center gap-2">
                       <span className="h-2 w-2 rounded-full bg-amber-400 animate-ping" />
-                      Đang tải danh sách công nợ...
+                      <Skeleton label="Đang tải danh sách công nợ..." rows={5} />
                     </div>
                   </td>
                 </tr>
@@ -922,7 +897,7 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
               {!isLoading && visibleRows.length === 0 && (
                 <tr>
                   <td colSpan={isAdmin ? 12 : 11} className="px-4 py-8 text-center text-muted-foreground">
-                    Không còn công nợ nào khớp bộ lọc.
+                    <EmptyState title="Không còn công nợ nào khớp bộ lọc" />
                   </td>
                 </tr>
               )}

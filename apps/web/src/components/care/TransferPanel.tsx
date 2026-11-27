@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { confirmDialog } from "@/components/ux/confirm";
+import { Skeleton } from "@/components/ux/states";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRightLeft } from "lucide-react";
 import { cn, formatDateVN } from "@/lib/utils";
@@ -64,7 +66,7 @@ export function TransferPanel({ onOpenCustomer }: { onOpenCustomer: (id: string)
 
   async function transfer() {
     const empName = data?.employees.find((e) => e.id === target)?.name ?? "";
-    if (!confirm(`Chuyển ${picked.size} khách cho ${empName}?${moveDebt ? " Công nợ đang đứng tên anh của các khách này cũng chuyển theo." : ""}`)) return;
+    if (!(await confirmDialog(`Chuyển ${picked.size} khách cho ${empName}?${moveDebt ? " Công nợ đang đứng tên anh của các khách này cũng chuyển theo." : ""}`, { okLabel: "Chuyển" }))) return;
     setBusy(true);
     setMsg(null);
     try {
@@ -98,7 +100,7 @@ export function TransferPanel({ onOpenCustomer }: { onOpenCustomer: (id: string)
           <p className="text-[11px] text-muted-foreground">
             Chỉ đổi người phụ trách hồ sơ khách (lịch chăm sóc, nhắc việc). Doanh số theo đơn đã ghi không đổi. Công nợ chỉ chuyển theo khi anh tick ô “Chuyển cả công nợ”.
           </p>
-          {isLoading && <p className="text-sm text-muted-foreground">Đang tải...</p>}
+          {isLoading && <Skeleton />}
           {error && <p className="text-sm text-alert">{(error as Error).message}</p>}
           {data && (
             <>

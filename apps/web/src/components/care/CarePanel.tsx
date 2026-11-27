@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { confirmDialog } from "@/components/ux/confirm";
+import { Skeleton } from "@/components/ux/states";
 import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Search, BellRing, CalendarClock } from "lucide-react";
@@ -74,8 +76,8 @@ export function CarePanel() {
   const [search, setSearch] = useState("");
   // Khung Hồ sơ khách có nút lưu riêng: đang sửa chưa lưu mà chuyển khách thì phần vừa nhập mất — hỏi lại trước khi chuyển.
   const [profileDirty, setProfileDirty] = useState(false);
-  const selectCustomer = (id: string) => {
-    if (id !== selectedId && profileDirty && !confirm("Hồ sơ khách đang sửa nhưng CHƯA LƯU. Chuyển sang khách khác sẽ mất phần vừa nhập. Vẫn chuyển?")) return;
+  const selectCustomer = async (id: string) => {
+    if (id !== selectedId && profileDirty && !(await confirmDialog("Hồ sơ khách đang sửa nhưng CHƯA LƯU. Chuyển sang khách khác sẽ mất phần vừa nhập. Vẫn chuyển?", { okLabel: "Vẫn chuyển" }))) return;
     setSelectedId(id);
   };
 
@@ -140,7 +142,7 @@ export function CarePanel() {
               className="w-full rounded-lg border border-gray-200/40 bg-transparent py-2 pl-9 pr-3 text-sm text-ink"
             />
           </div>
-          {isLoading && <p className="mt-3 text-sm text-muted-foreground">Đang tải...</p>}
+          {isLoading && <Skeleton rows={5} />}
           <div className="mt-2 divide-y divide-gray-200/20">
             {matches.map((c) => (
               <button

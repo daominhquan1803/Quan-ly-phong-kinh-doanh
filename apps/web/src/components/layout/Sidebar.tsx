@@ -1,5 +1,7 @@
 "use client";
+// Lucian UX/UI Prompt #417 · MIT License (c) 2026 Seokwoooo · https://lucianlabs.dev/uxui-prompt/#417
 
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -24,6 +26,7 @@ import {
   HeartHandshake,
 } from "lucide-react";
 import { SidebarBanner } from "./SidebarBanner";
+import "@/components/ux/lucian.css";
 
 /** Thứ tự theo luồng làm việc (anh Quân duyệt 23/10/2026): việc hằng ngày → khách & bán hàng →
  * giao hàng & thu tiền → kế hoạch & đánh giá → hệ thống. `group` null = đứng đầu, không có tiêu đề. */
@@ -61,16 +64,60 @@ export const canSeeNavItem = (item: { adminOnly: boolean }, role?: "ADMIN" | "SA
 export function Sidebar({ role, accessLevel }: { role?: "ADMIN" | "SALES"; accessLevel?: AccessLevel }) {
   const pathname = usePathname();
   const visible = NAV_ITEMS.filter((item) => canSeeNavItem(item, role, accessLevel));
+  const [rail, setRail] = useState(false);
+  const nav = useRef<HTMLElement>(null);
+  const pill = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    try {
+      setRail(localStorage.getItem("sidebar") === "rail");
+    } catch {
+      // trình duyệt chặn localStorage: giữ thanh bên đầy đủ
+    }
+  }, []);
+
+  // Con trượt nhảy tới mục đang mở (đo theo vị trí thật vì có tiêu đề nhóm xen giữa).
+  useEffect(() => {
+    const active = nav.current?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!pill.current) return;
+    pill.current.style.opacity = active ? "1" : "0";
+    if (active) pill.current.style.setProperty("--py", `${active.offsetTop}px`);
+  }, [pathname, rail]);
+
+  function toggleRail() {
+    setRail((v) => {
+      try {
+        localStorage.setItem("sidebar", v ? "full" : "rail");
+      } catch {
+        // không lưu được thì chỉ đổi cho phiên này
+      }
+      return !v;
+    });
+  }
+
+  function onKeyDown(e: React.KeyboardEvent) {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    const links = Array.from(nav.current?.querySelectorAll<HTMLElement>("a") ?? []);
+    const next = links[links.indexOf(document.activeElement as HTMLElement) + (e.key === "ArrowDown" ? 1 : -1)];
+    if (!next) return;
+    e.preventDefault();
+    next.focus();
+  }
 
   return (
-    <aside className="hidden md:flex md:w-64 md:flex-col bg-navy-900/95 backdrop-blur-2xl border-r border-gray-200/80 text-ink shadow-[4px_0_24px_rgba(0,0,0,0.35)] select-none">
+    <aside
+      className={cn(
+        "ux u417 hidden md:flex md:flex-col shrink-0 bg-navy-900/95 backdrop-blur-2xl border-r border-gray-200/80 text-ink select-none",
+        rail ? "is-rail md:w-[68px]" : "md:w-64"
+      )}
+    >
       {/* Brand Header */}
-      <div className="flex items-center gap-3 px-5 py-5 border-b border-gray-200/70">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white [--c-white:255_255_255] p-1.5 shadow-[0_0_15px_rgba(255,255,255,0.2)]">
+      <div className="flex items-center gap-3 px-3.5 py-5 border-b border-gray-200/70">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white [--c-white:255_255_255] p-1.5 shadow-[0_0_15px_rgba(255,255,255,0.2)]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo/mark.svg" alt="Hoàng Gia PS" className="w-full h-auto logo-3d-spin" />
         </div>
-        <div className="leading-tight">
+        <div className="u417-lb leading-tight">
           <div className="flex items-center gap-1.5">
             <p className="font-bold text-sm tracking-wider text-ink">HOÀNG GIA</p>
             <span className="flex h-1.5 w-1.5 rounded-full bg-amber-500 shadow-[0_0_6px_#E0A327]"></span>
@@ -79,46 +126,52 @@ export function Sidebar({ role, accessLevel }: { role?: "ADMIN" | "SALES"; acces
         </div>
       </div>
 
-      {/* Navigation List */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        {visible.map((item, i) => {
-          const active = pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href + "/"));
-          const Icon = item.icon;
-          return (
-            <div key={item.href}>
-            {showGroupTitle(visible, i) && (
-              <p className="px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted2/70">{item.group}</p>
-            )}
-            <Link
-              href={item.href}
-              className={cn(
-                "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200",
-                active
-                  ? "bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-transparent text-amber-400 font-semibold border-l-2 border-l-amber-500 shadow-[inset_0_1px_0_rgba(224,163,39,0.15)]"
-                  : "text-ink2/70 hover:bg-navy-50/70 hover:text-ink"
-              )}
-            >
-              <Icon
-                className={cn(
-                  "h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110",
-                  active ? "text-amber-400" : "text-muted2 group-hover:text-amber-400/80"
-                )}
-              />
-              <span className="truncate">{item.label}</span>
-            </Link>
-            </div>
-          );
-        })}
-      </nav>
-
-      {/* Brand Mini Banner */}
-      <SidebarBanner />
-
-      {/* Footer Copyright */}
-      <div className="px-5 py-3.5 border-t border-gray-200/70 text-[11px] text-muted2 flex items-center justify-between">
-        <span>© {new Date().getFullYear()} Hoàng Gia PS</span>
-        <span className="text-[10px] font-mono text-muted2/60">v1.2</span>
+      <div className={cn("flex px-3.5 pt-3", rail ? "justify-center" : "justify-end")}>
+        <button type="button" className="u417-tg" aria-expanded={!rail} aria-label={rail ? "Mở rộng thanh bên" : "Thu gọn thanh bên"} title={rail ? "Mở rộng thanh bên" : "Thu gọn thanh bên"} onClick={toggleRail}>
+          <svg viewBox="0 0 12 12" aria-hidden="true">
+            <path d="M7.5 2.5 4 6l3.5 3.5" />
+          </svg>
+        </button>
       </div>
+
+      {/* Navigation List */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-2">
+        <nav ref={nav} className="relative" aria-label="Menu chính" onKeyDown={onKeyDown}>
+          <span ref={pill} className="u417-pl" aria-hidden="true" />
+          {visible.map((item, i) => {
+            const active = pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href + "/"));
+            const Icon = item.icon;
+            return (
+              <div key={item.href}>
+                {showGroupTitle(visible, i) &&
+                  (rail ? (
+                    <hr className="mx-2 my-2 border-gray-200/60" />
+                  ) : (
+                    // Không cho xuống dòng: lúc đang giãn rộng mà tiêu đề gập 2 dòng thì con trượt đo sai vị trí.
+                    <p className="overflow-hidden whitespace-nowrap px-3 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted2/70">{item.group}</p>
+                  ))}
+                <Link href={item.href} className="u417-it" aria-current={active ? "page" : undefined} title={rail ? item.label : undefined}>
+                  <Icon aria-hidden="true" />
+                  <span className="u417-lb">{item.label}</span>
+                </Link>
+              </div>
+            );
+          })}
+        </nav>
+      </div>
+
+      {!rail && (
+        <>
+          {/* Brand Mini Banner */}
+          <SidebarBanner />
+
+          {/* Footer Copyright */}
+          <div className="px-5 py-3.5 border-t border-gray-200/70 text-[11px] text-muted2 flex items-center justify-between">
+            <span>© {new Date().getFullYear()} Hoàng Gia PS</span>
+            <span className="text-[10px] font-mono text-muted2/60">v1.2</span>
+          </div>
+        </>
+      )}
     </aside>
   );
 }

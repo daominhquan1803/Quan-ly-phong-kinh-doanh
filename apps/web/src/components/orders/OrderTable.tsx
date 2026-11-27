@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Skeleton } from "@/components/ux/states";
 import { OrderStatusBadge } from "./StatusBadge";
 import { cn, formatCurrencyVND, formatDateVN } from "@/lib/utils";
 import { normalizeVN } from "@/lib/text-normalize";
@@ -299,7 +300,7 @@ export function OrderTable({ isAdmin }: { isAdmin: boolean }) {
               {isLoading && (
                 <tr>
                   <td colSpan={8} className="px-5 py-12 text-center text-muted-foreground">
-                    Đang tải dữ liệu đơn hàng...
+                    <Skeleton label="Đang tải dữ liệu đơn hàng..." rows={5} />
                   </td>
                 </tr>
               )}

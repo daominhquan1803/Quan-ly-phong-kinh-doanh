@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { confirmDialog } from "@/components/ux/confirm";
+import { toast } from "@/components/ux/toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn, formatCurrencyVND, formatDateVN } from "@/lib/utils";
 import { normalizeVN } from "@/lib/text-normalize";
@@ -105,7 +107,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
   });
 
   async function setPoClosed(poCode: string, closed: boolean) {
-    if (closed && !window.confirm(`Xác nhận kết thúc đơn ${poCode}? Đơn sẽ được coi là đã hoàn tất, không cần giao thêm và không tính vào giá trị/quá hạn chưa giao nữa. Có thể bấm "Mở lại đơn" sau nếu bấm nhầm.`)) {
+    if (closed && !(await confirmDialog(`Xác nhận kết thúc đơn ${poCode}? Đơn sẽ được coi là đã hoàn tất, không cần giao thêm và không tính vào giá trị/quá hạn chưa giao nữa. Có thể bấm "Mở lại đơn" sau nếu bấm nhầm.`, { okLabel: "Kết thúc đơn" }))) {
       return;
     }
     setPendingCodes((prev) => new Set(prev).add(poCode));
@@ -117,7 +119,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        window.alert(json.error ?? "Không cập nhật được trạng thái đơn");
+        toast(json.error ?? "Không cập nhật được trạng thái đơn", "error");
         return;
       }
       queryClient.invalidateQueries({ queryKey: ["shipping-status-summary"] });

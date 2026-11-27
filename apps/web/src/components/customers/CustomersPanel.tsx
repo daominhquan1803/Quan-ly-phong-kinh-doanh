@@ -26,6 +26,9 @@ import {
   Unlock,
 } from "lucide-react";
 import { DuplicateCustomers } from "./DuplicateCustomers";
+import { confirmDialog } from "@/components/ux/confirm";
+import { toast } from "@/components/ux/toast";
+import { EmptyState } from "@/components/ux/states";
 import { PAYMENT_TERM_TYPE_LABEL, PaymentTermType, describePaymentTerm } from "@/lib/customer-payment-term";
 import { normalizeVN } from "@/lib/text-normalize";
 
@@ -405,15 +408,16 @@ export function CustomersPanel({ isAdmin = true, canManage = false }: { isAdmin?
   }
 
   /** Gọi API quản lý khách (xoá / khoá / bỏ gộp) rồi tải lại danh sách; hiện đúng lỗi máy chủ trả về. */
-  async function manage(id: string, url: string, init: RequestInit) {
+  async function manage(id: string, url: string, init: RequestInit, done: string) {
     setBusyRow(id);
     setError(null);
     try {
       const res = await fetch(url, init);
       if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? "Thao tác thất bại");
+      toast(done);
       await queryClient.invalidateQueries({ queryKey: ["customers"] });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Có lỗi xảy ra");
+      toast(e instanceof Error ? e.message : "Có lỗi xảy ra", "error");
     } finally {
       setBusyRow(null);
     }
@@ -421,19 +425,19 @@ export function CustomersPanel({ isAdmin = true, canManage = false }: { isAdmin?
 
   const postJson = (body: unknown): RequestInit => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 
-  function handleDelete(c: CustomerRow) {
-    if (!confirm(`Xoá hẳn khách ${c.customerCode}? Không khôi phục được.\nKhách còn trên AMIS sẽ được tạo lại vào lần đồng bộ sau.`)) return;
-    manage(c.id, `/api/customers/${c.id}`, { method: "DELETE" });
+  async function handleDelete(c: CustomerRow) {
+    if (!(await confirmDialog(`Xoá hẳn khách ${c.customerCode}? Không khôi phục được.\nKhách còn trên AMIS sẽ được tạo lại vào lần đồng bộ sau.`, { danger: true }))) return;
+    manage(c.id, `/api/customers/${c.id}`, { method: "DELETE" }, `Đã xoá khách ${c.customerCode}`);
   }
 
-  function handleLock(c: CustomerRow, locked: boolean) {
-    if (locked && !confirm(`Khoá tạm ${c.customerCode}? Khách bị ẩn khỏi danh sách và lịch chăm sóc; công nợ vẫn hiện.`)) return;
-    manage(c.id, `/api/customers/${c.id}/lock`, postJson({ locked }));
+  async function handleLock(c: CustomerRow, locked: boolean) {
+    if (locked && !(await confirmDialog(`Khoá tạm ${c.customerCode}? Khách bị ẩn khỏi danh sách và lịch chăm sóc; công nợ vẫn hiện.`, { okLabel: "Khoá tạm" }))) return;
+    manage(c.id, `/api/customers/${c.id}/lock`, postJson({ locked }), `Đã ${locked ? "khoá tạm" : "mở khoá"} ${c.customerCode}`);
   }
 
-  function handleUnmerge(c: CustomerRow) {
-    if (!confirm(`Bỏ gộp ${c.customerCode}? Mã này hiện lại; lịch sử chăm sóc đã chuyển vẫn ở mã chính.`)) return;
-    manage(c.id, "/api/customers/merge", postJson({ unmergeId: c.id }));
+  async function handleUnmerge(c: CustomerRow) {
+    if (!(await confirmDialog(`Bỏ gộp ${c.customerCode}? Mã này hiện lại; lịch sử chăm sóc đã chuyển vẫn ở mã chính.`, { okLabel: "Bỏ gộp" }))) return;
+    manage(c.id, "/api/customers/merge", postJson({ unmergeId: c.id }), `Đã bỏ gộp ${c.customerCode}`);
   }
 
   return (
@@ -945,10 +949,7 @@ export function CustomersPanel({ isAdmin = true, canManage = false }: { isAdmin?
       {showDuplicates && (
         <DuplicateCustomers
           canManage={canManage}
-          onDone={(message, ok) => {
-            setError(ok ? null : message);
-            setImportMsg(ok ? message : null);
-          }}
+          onDone={() => setError(null)}
         />
       )}
 
@@ -1194,8 +1195,7 @@ export function CustomersPanel({ isAdmin = true, canManage = false }: { isAdmin?
                 <tr>
                   <td colSpan={6} className="px-5 py-12 text-center">
                     <div className="flex flex-col items-center justify-center space-y-2 text-muted-foreground">
-                      <Building2 className="h-10 w-10 text-muted2 opacity-50" />
-                      <p className="text-sm font-medium text-ink">Không tìm thấy khách hàng nào</p>
+                      <EmptyState title="Không tìm thấy khách hàng nào" />
                       <p className="text-xs text-muted-foreground">
                         {search.trim() || nvkdFilter
                           ? "Thử thay đổi từ khoá tìm kiếm hoặc đặt lại bộ lọc"

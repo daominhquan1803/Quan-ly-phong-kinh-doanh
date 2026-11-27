@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { confirmDialog } from "@/components/ux/confirm";
 import { useSession } from "next-auth/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plane, ChevronDown, ChevronUp } from "lucide-react";
@@ -165,9 +166,9 @@ function Suggestions({ trip }: { trip: UpcomingTrip }) {
                           <select
                             value=""
                             disabled={add.isPending}
-                            onChange={(e) => {
+                            onChange={async (e) => {
                               const person = employees.find((u) => u.id === e.target.value);
-                              if (person && window.confirm(`Nhờ ${person.name} đi gặp ${r.customerName} trong chuyến này? ${person.name} sẽ nhận thông báo và được tính điểm gặp khách.`)) {
+                              if (person && (await confirmDialog(`Nhờ ${person.name} đi gặp ${r.customerName} trong chuyến này? ${person.name} sẽ nhận thông báo và được tính điểm gặp khách.`, { okLabel: "Nhờ đi hộ" }))) {
                                 add.mutate({ customerId: r.customerId, attendeeId: person.id });
                               }
                             }}

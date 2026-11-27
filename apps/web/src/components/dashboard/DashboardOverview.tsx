@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
+import { RollingNumber } from "@/components/ux/RollingNumber";
 import {
   Bar,
   BarChart,
@@ -228,7 +229,7 @@ export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
               className="font-mono text-2xl font-bold tracking-tight text-ink tabular-nums"
               title={isLoading ? undefined : formatCurrencyVND(data?.totalActual ?? 0)}
             >
-              {isLoading ? "—" : formatCompactVND(data?.totalActual ?? 0)}
+              {isLoading ? "—" : <RollingNumber key={data?.totalActual} value={formatCompactVND(data?.totalActual ?? 0)} />}
             </p>
             <p className="text-[11px] text-muted-foreground mt-1">Theo giá trị đã giao trong tháng</p>
             <TrendLine delta={data?.actualTrendPct ?? null} unit="%" />
@@ -250,7 +251,7 @@ export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
               className="font-mono text-2xl font-bold tracking-tight text-ink tabular-nums"
               title={isLoading ? undefined : formatCurrencyVND(data?.totalPoValue ?? 0)}
             >
-              {isLoading ? "—" : formatCompactVND(data?.totalPoValue ?? 0)}
+              {isLoading ? "—" : <RollingNumber key={data?.totalPoValue} value={formatCompactVND(data?.totalPoValue ?? 0)} />}
             </p>
             <p className="text-[11px] text-muted-foreground mt-1">Theo ngày đặt hàng trong tháng</p>
             <TrendLine delta={data?.poTrendPct ?? null} unit="%" />
@@ -269,7 +270,7 @@ export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
           </div>
           <div className="mt-3">
             <p className="font-mono text-2xl font-bold tracking-tight text-ink tabular-nums">
-              {isLoading || data?.completionPct == null ? "—" : `${data.completionPct}%`}
+              {isLoading || data?.completionPct == null ? "—" : <RollingNumber key={data.completionPct} value={`${data.completionPct}%`} />}
             </p>
             <p className="text-[11px] text-muted-foreground mt-1">Chỉ tiêu doanh thu toàn tháng</p>
             <TrendLine delta={data?.completionTrendPts ?? null} unit=" điểm" />
@@ -307,7 +308,7 @@ export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
                 data && data.overdueOrderCount > 0 ? "text-alert" : "text-ink"
               )}
             >
-              {isLoading ? "—" : data?.overdueOrderCount ?? 0}
+              {isLoading ? "—" : <RollingNumber key={data?.overdueOrderCount} value={String(data?.overdueOrderCount ?? 0)} />}
             </span>
             {data && data.overdueOrderCount > 0 && (
               <span className="inline-flex items-center rounded-full bg-brandRed-50 px-2 py-0.5 text-xs font-semibold text-alert border border-brandRed-600/20 animate-pulse">
@@ -351,7 +352,7 @@ export function DashboardOverview({ isAdmin }: { isAdmin: boolean }) {
                 )}
                 title={isLoading ? undefined : formatCurrencyVND(data?.debtOverdue ?? 0)}
               >
-                {isLoading ? "—" : formatCompactVND(data?.debtOverdue ?? 0)}
+                {isLoading ? "—" : <RollingNumber key={data?.debtOverdue} value={formatCompactVND(data?.debtOverdue ?? 0)} />}
               </p>
               <p className="text-[11px] text-muted-foreground mt-1">Hoá đơn đã vượt thời hạn thanh toán</p>
             </div>
