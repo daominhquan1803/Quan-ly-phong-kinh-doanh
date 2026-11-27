@@ -1305,6 +1305,33 @@ model PoTrackingImportBatch {
   @@map("po_tracking_import_batches")
 }
 
+// Bản sao lệnh sản xuất (LSX) đọc từ trang "Hoàng Gia Lệnh SX" — 1 dòng / LSX / mã hàng, thay toàn bộ mỗi lần
+// đồng bộ (apps/worker/src/sync/productionPlan.ts). Ghép với PoTrackingLine theo Số PO + mã hàng; LSX đã huỷ không lưu.
+model ProductionLine {
+  id              String    @id // "<id LSX bên nguồn>#<thứ tự mã>"
+  lsxNo           String
+  poCodes         String[] // 1 LSX có thể gộp nhiều PO
+  itemCode        String
+  customerName    String?
+  quantity        Decimal?  @db.Decimal(14, 2)
+  orderedOn       DateTime?
+  dueOn           DateTime?
+  done            Boolean   @default(false)
+  completedOn     DateTime?
+  runningOn       String? // máy đang chạy
+  currentStages   String? // công đoạn đang đứng
+  plannedMachine  String?
+  hasProgress     Boolean   @default(false)
+  priority        String?
+  plannedShipOn   DateTime? // "dự kiến" đặt tay bên trang sản xuất
+  plannedShipTime String?
+  hideAutoPlan    Boolean   @default(false)
+  syncedAt        DateTime  @default(now())
+
+  @@index([itemCode])
+  @@map("production_lines")
+}
+
 model PoTrackingLine {
   id String @id @default(cuid())
 

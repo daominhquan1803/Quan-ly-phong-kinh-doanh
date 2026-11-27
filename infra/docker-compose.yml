@@ -85,6 +85,10 @@ services:
       BAO_GIA_DB_PATH: ${BAO_GIA_DB_PATH:-}
       # Phân tích khách hỏi giá bằng Perplexity (customerAnalysis.ts) — không đặt key = tắt tính năng.
       PERPLEXITY_API_KEY: ${PERPLEXITY_API_KEY:-}
+      # Đọc lệnh sản xuất từ trang "Hoàng Gia Lệnh SX" (productionPlan.ts) — thiếu user/mật khẩu = tắt. Đặt bằng infra/set-lenhsx.sh.
+      LENHSX_URL: ${LENHSX_URL:-}
+      LENHSX_USER: ${LENHSX_USER:-}
+      LENHSX_PASSWORD: ${LENHSX_PASSWORD:-}
       QUOTE_SYNC_CRON: ${QUOTE_SYNC_CRON:-15 6 * * *}
       QUOTE_SYNC_CRON_TIMEZONE: ${QUOTE_SYNC_CRON_TIMEZONE:-Asia/Ho_Chi_Minh}
       # Thông báo nhắc việc (Kế hoạch tuần sắp hết hạn + KPI tháng chậm tiến độ) — worker gọi

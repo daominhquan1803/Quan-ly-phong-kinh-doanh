@@ -5,6 +5,7 @@ import { runAmisCustomerSync } from "./sync/amisCustomers";
 import { runQuoteSync } from "./sync/quotes";
 import { runBaoGiaAppSync, isBaoGiaAppConfigured } from "./sync/baoGiaApp";
 import { runCustomerAnalysis } from "./sync/customerAnalysis";
+import { runProductionPlanSync, isProductionPlanConfigured } from "./sync/productionPlan";
 import { runWeekPlanReminder } from "./notifications/weekPlanReminder";
 import { runKpiReminder } from "./notifications/kpiReminder";
 import { runDebtDueReminder } from "./notifications/debtDueReminder";
@@ -85,6 +86,15 @@ async function main() {
     },
     { timezone: process.env.LEAD_SHEET_SYNC_CRON_TIMEZONE || "Asia/Ho_Chi_Minh" }
   );
+
+  // Lệnh sản xuất (trang "Hoàng Gia Lệnh SX"): đọc 15 phút/lần trong giờ làm việc, thứ Hai–thứ Bảy.
+  if (isProductionPlanConfigured()) {
+    const syncProduction = () => runProductionPlanSync().catch((err) => logger.warn(`Đồng bộ lệnh sản xuất lỗi: ${err instanceof Error ? err.message : err}`));
+    cron.schedule(process.env.LENHSX_SYNC_CRON || "*/15 7-18 * * 1-6", syncProduction, { timezone: NOTIFY_CRON_TIMEZONE });
+    syncProduction();
+  } else {
+    logger.warn("Chưa cấu hình LENHSX_USER/LENHSX_PASSWORD — bỏ qua đồng bộ lệnh sản xuất.");
+  }
 
   // App báo giá (từ 10/10/2026): đọc file dữ liệu chỉ-đọc, 10 phút/lần — lần nào không có thay đổi thì không ghi log.
   if (isBaoGiaAppConfigured()) {
