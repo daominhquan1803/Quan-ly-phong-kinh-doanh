@@ -1,6 +1,6 @@
 # Theo dõi tiến độ hàng hoá — kế hoạch thực hiện
 
-Ngày lập: 27/11/2026. Trạng thái: anh Quân đã duyệt 4 đợt (27/11/2026). Đợt 1 đã viết code.
+Ngày lập: 27/11/2026. Trạng thái: anh Quân đã duyệt 4 đợt (27/11/2026). Đợt 1 và đợt 2 đã viết code (đợt 2 làm ngay theo yêu cầu để mọi nhân viên xem được hàng của mình).
 
 Đã chốt: mã đầu AA, ST là hàng thương mại; SI, SB, GC là hàng sản xuất. Đồng bộ dùng tài khoản trang sản xuất cấp cho anh Quân, anh tự nhập vào máy chủ bằng `infra/set-lenhsx.sh`.
 

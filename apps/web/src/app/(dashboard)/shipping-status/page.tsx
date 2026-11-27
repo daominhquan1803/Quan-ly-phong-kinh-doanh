@@ -1,6 +1,5 @@
 import { auth } from "@/lib/auth";
-import { ShippingStatusOverview } from "@/components/shipping-status/ShippingStatusOverview";
-import { ProductionMatchPanel } from "@/components/shipping-status/ProductionMatchPanel";
+import { ShippingStatusTabs } from "@/components/shipping-status/ShippingStatusTabs";
 
 export default async function ShippingStatusPage() {
   const session = await auth();
@@ -10,8 +9,7 @@ export default async function ShippingStatusPage() {
         <h1 className="text-xl font-semibold text-ink">Tiến độ giao hàng</h1>
         <p className="text-sm text-muted-foreground">Tỷ lệ giao đúng hạn, đơn quá hạn và cảnh báo sắp tới hạn</p>
       </div>
-      {session?.user?.role === "ADMIN" && <ProductionMatchPanel />}
-      <ShippingStatusOverview isAdmin={session?.user?.role === "ADMIN"} />
+      <ShippingStatusTabs isAdmin={session?.user?.role === "ADMIN"} />
     </div>
   );
 }
