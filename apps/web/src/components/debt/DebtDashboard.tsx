@@ -49,7 +49,7 @@ interface SummaryResponse {
   overdueRate: number;
   badDebtRate: number;
   perEmployee: { employeeId: string; employeeName: string; totalDebt: number; overdueDebt: number; badDebt: number }[] | null;
-  weeklyPlan: { weekIndex: number; start: string; end: string; planned: number; plannedOriginal: number; earlyDeducted: number; carried: number; lines: WeekPlanLineView[]; collected: number; early: number; outsidePlan: number; rate: number | null }[];
+  weeklyPlan: { weekIndex: number; start: string; end: string; planned: number; plannedOriginal: number; earlyDeducted: number; carried: number; lines: WeekPlanLineView[]; collected: number; early: number; outsidePlan: number; received: number; rate: number | null }[];
   monthlyPlan: { planned: number; collected: number; early: number; outsidePlan: number; rate: number | null; totalReceived: number };
 }
 
@@ -636,6 +636,13 @@ export function DebtDashboard({ isAdmin }: { isAdmin: boolean }) {
                   <p className="flex justify-between gap-2" title="Tiền về trong tuần này của hoá đơn không hẹn thu trong tháng — không tính vào % thực hiện">
                     <span>Ngoài kế hoạch</span>
                     <span className="font-mono text-ink">{formatCurrencyVND(w.outsidePlan)}</span>
+                  </p>
+                  <p
+                    className="flex justify-between gap-2 border-t border-white/10 pt-1 mt-1 font-semibold"
+                    title="Toàn bộ tiền về trong tuần của cả công ty (kể cả khoản chưa khớp hoá đơn) — cộng các tuần bằng 'Tổng tiền về trong tháng'"
+                  >
+                    <span>Tổng tiền về</span>
+                    <span className="font-mono text-emerald-400">{formatCurrencyVND(w.received)}</span>
                   </p>
                 </div>
               </button>
