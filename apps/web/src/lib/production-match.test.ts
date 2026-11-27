@@ -35,6 +35,16 @@ describe("progressFor", () => {
     expect(progressFor(line("AA07"), [], -9, TOMORROW)).toMatchObject({ status: "TRADING", alert: null });
   });
 
+  it("PO đặt trước khi có dữ liệu sản xuất, không có lệnh -> PO cũ, không cảnh báo", () => {
+    const since = new Date("2026-10-12T00:00:00Z");
+    const at = (poDate: string, code = "SI09", rows: LsxRow[] = []) => progressFor({ ...line(code), poDate: new Date(poDate) }, rows, -30, TOMORROW, since);
+    expect(at("2026-09-30T00:00:00Z")).toMatchObject({ status: "OLD_PO", alert: null });
+    // 00:00 ngày 12/10 giờ Việt Nam = 17:00 ngày 11/10 UTC -> vẫn tính là ngày 12/10.
+    expect(at("2026-10-11T17:00:00Z")).toMatchObject({ status: "NO_LSX", alert: "LATE" });
+    expect(at("2026-09-30T00:00:00Z", "SI01", [lsx("SI01")]).status).toBe("WAITING");
+    expect(at("2026-09-30T00:00:00Z", "AA07").status).toBe("TRADING");
+  });
+
   it("dự kiến xong: ngày đặt tay, hoặc quy tắc công đoạn cuối cho ngày mai", () => {
     const eta = (extra: Partial<LsxRow>) => progressFor(line("SI01"), [lsx("SI01", { hasProgress: true, ...extra })], 5, TOMORROW).eta;
     expect(eta({ currentStages: "Xẻ - QC, Đóng gói" })).toEqual({ date: TOMORROW, time: "09:00" });

@@ -40,6 +40,7 @@ Thêm một bảng lưu bản sao các dòng LSX (mỗi mã hàng một dòng). 
 | Chờ sản xuất | Có LSX, chưa chạy công đoạn nào; hiện máy dự kiến |
 | Chưa có lệnh sản xuất | Mã GC, SB, SI nhưng không tìm thấy LSX |
 | Hàng thương mại | Mã AA, ST; chờ dữ liệu của PKH |
+| PO cũ, chưa có dữ liệu SX | Mã sản xuất, không có LSX, PO đặt trước ngày lệnh sớm nhất trên trang sản xuất (12/10/2026). Không cảnh báo |
 
 Một dòng PO có nhiều LSX thì lấy trạng thái chậm nhất.
 

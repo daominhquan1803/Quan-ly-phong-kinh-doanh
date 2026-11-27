@@ -22,6 +22,7 @@ interface Line {
 }
 interface Data {
   syncedAt: string | null;
+  dataSince?: string | null;
   lines: Line[];
   unmatchedLsx: { lsxNo: string; poCodes: string[]; itemCode: string; customerName: string | null }[];
 }
@@ -31,13 +32,14 @@ const STATUS_LABEL: Record<ProductionStatus, string> = {
   RUNNING: "Đang sản xuất",
   DONE: "Đã xong, chờ giao",
   NO_LSX: "Chưa có lệnh sản xuất",
+  OLD_PO: "PO cũ, chưa có dữ liệu SX",
   TRADING: "Hàng thương mại",
   OTHER: "Chưa phân loại",
 };
 const ALERT_LABEL: Record<ProductionAlert, string> = { LATE: "Trễ", AT_RISK: "Nguy cơ trễ", DONE_NOT_SHIPPED: "Xong chưa giao" };
 const ALERT_CLASS: Record<ProductionAlert, string> = { LATE: "text-alert", AT_RISK: "text-amber-400", DONE_NOT_SHIPPED: "text-emerald-400" };
 
-type Filter = "ALL" | "LATE" | "AT_RISK" | "DONE" | "RUNNING" | "WAITING" | "NO_LSX" | "TRADING";
+type Filter = "ALL" | "LATE" | "AT_RISK" | "DONE" | "RUNNING" | "WAITING" | "NO_LSX" | "OLD_PO" | "TRADING";
 const FILTERS: [Filter, string][] = [
   ["ALL", "Tất cả"],
   ["LATE", "Trễ"],
@@ -46,6 +48,7 @@ const FILTERS: [Filter, string][] = [
   ["RUNNING", "Đang sản xuất"],
   ["WAITING", "Chờ sản xuất"],
   ["NO_LSX", "Chưa có lệnh"],
+  ["OLD_PO", "PO cũ"],
   ["TRADING", "Thương mại"],
 ];
 const matches = (l: Line, f: Filter) => f === "ALL" || l.alert === f || l.status === f;
@@ -79,6 +82,7 @@ export function ProductionProgress({ isAdmin }: { isAdmin: boolean }) {
     <div className="space-y-3 rounded-2xl border border-white/10 bg-navy-900/60 p-4">
       <p className="text-xs text-muted-foreground">
         Cập nhật từ trang sản xuất lúc {new Date(data.syncedAt).toLocaleString("vi-VN")}. Hàng thương mại (AA, ST) chờ dữ liệu phòng kế hoạch.
+        {data.dataSince && ` Lệnh sản xuất có từ ngày ${date(data.dataSince)}; PO đặt trước đó mà không có lệnh ghi là "PO cũ".`}
       </p>
       <div className="flex flex-wrap items-center gap-2">
         {FILTERS.map(([k, label]) => (

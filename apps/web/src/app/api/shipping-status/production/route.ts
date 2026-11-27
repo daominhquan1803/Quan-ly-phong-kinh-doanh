@@ -19,10 +19,11 @@ export async function GET() {
 
     const poLines = await prisma.poTrackingLine.findMany({
       where: { salesEmployeeId: { not: null }, ...scopeByOwner(session, "salesEmployeeId"), OR: [{ statusRaw: null }, { statusRaw: { not: "Kết thúc" } }] },
-      select: { poCode: true, itemCode: true, itemName: true, customerCode: true, statusRaw: true, remainingQty: true, requestedDeliveryDate: true, delayReason: { select: { category: true, status: true, newDeliveryDate: true } }, salesEmployee: { select: { name: true } } },
+      select: { poCode: true, poDate: true, itemCode: true, itemName: true, customerCode: true, statusRaw: true, remainingQty: true, requestedDeliveryDate: true, delayReason: { select: { category: true, status: true, newDeliveryDate: true } }, salesEmployee: { select: { name: true } } },
     });
     const closed = normPoStatus("Kết thúc");
     const tomorrow = vnTomorrow();
+    const dataSince = rows.reduce<Date | null>((min, r) => (r.orderedOn && (!min || r.orderedOn < min) ? r.orderedOn : min), null);
     const lines = poLines
       .filter((l) => normPoStatus(l.statusRaw) !== closed)
       .map((l) => {
@@ -36,7 +37,7 @@ export async function GET() {
           salesEmployeeName: l.salesEmployee?.name ?? null,
           remainingQty: l.remainingQty == null ? null : Number(l.remainingQty),
           dueOn,
-          ...progressFor(l, rows, daysLeft, tomorrow),
+          ...progressFor(l, rows, daysLeft, tomorrow, dataSince),
         };
       })
       .sort((a, b) => (a.dueOn?.getTime() ?? Infinity) - (b.dueOn?.getTime() ?? Infinity));
@@ -48,7 +49,7 @@ export async function GET() {
       unmatched = unmatchedLsx(all.map((l) => ({ ...l, hasSalesEmployee: Boolean(l.salesEmployeeId) })), rows).map((r) => ({ lsxNo: r.lsxNo, poCodes: r.poCodes, itemCode: r.itemCode, customerName: r.customerName }));
     }
 
-    return NextResponse.json({ syncedAt: rows[0].syncedAt, lines, unmatchedLsx: unmatched });
+    return NextResponse.json({ syncedAt: rows[0].syncedAt, dataSince, lines, unmatchedLsx: unmatched });
   } catch (err) {
     if (err instanceof UnauthorizedError) return NextResponse.json({ error: err.message }, { status: 401 });
     console.error("shipping-status/production GET error", err);

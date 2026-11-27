@@ -17,7 +17,7 @@ export interface LsxRow {
   hideAutoPlan: boolean;
 }
 
-export type ProductionStatus = "WAITING" | "RUNNING" | "DONE" | "NO_LSX" | "TRADING" | "OTHER";
+export type ProductionStatus = "WAITING" | "RUNNING" | "DONE" | "NO_LSX" | "OLD_PO" | "TRADING" | "OTHER";
 export type ProductionAlert = "LATE" | "AT_RISK" | "DONE_NOT_SHIPPED";
 
 /** Mã đầu SI, SB, GC là hàng sản xuất; AA, ST là hàng thương mại (anh Quân xác nhận 27/11/2026). */
@@ -49,10 +49,24 @@ function etaOf(row: LsxRow, tomorrow: string): { date: string; time: string } | 
   return times[0] ? { date: tomorrow, time: times[0] } : null;
 }
 
-/** Tiến độ của 1 dòng PO còn nợ hàng. Nhiều lệnh -> lấy trạng thái và ngày dự kiến CHẬM nhất. */
-export function progressFor(line: { poCode: string; itemCode: string | null }, rows: LsxRow[], daysLeft: number | null, tomorrow: string) {
+// Ngày theo giờ Việt Nam: ngày PO lưu lúc 00:00 giờ VN là 17:00 hôm trước theo UTC.
+const vnDay = (d: Date) => isoDay(new Date(d.getTime() + 7 * 3_600_000));
+
+/**
+ * Tiến độ của 1 dòng PO còn nợ hàng. Nhiều lệnh -> lấy trạng thái và ngày dự kiến CHẬM nhất.
+ * `dataSince` = ngày lệnh sớm nhất bên trang sản xuất: PO đặt trước đó mà không có lệnh thì không biết tiến độ,
+ * không báo "chưa có lệnh"/"trễ".
+ */
+export function progressFor(
+  line: { poCode: string; itemCode: string | null; poDate?: Date | null },
+  rows: LsxRow[],
+  daysLeft: number | null,
+  tomorrow: string,
+  dataSince: Date | null = null
+) {
   const lsx = findLsx(line, rows);
   const unfinished = lsx.filter((r) => !r.done);
+  const beforeData = Boolean(dataSince && line.poDate && vnDay(line.poDate) < vnDay(dataSince));
   const status: ProductionStatus = isTradingCode(line.itemCode)
     ? "TRADING"
     : lsx.length
@@ -62,7 +76,9 @@ export function progressFor(line: { poCode: string; itemCode: string | null }, r
           ? "RUNNING"
           : "DONE"
       : isProductionCode(line.itemCode)
-        ? "NO_LSX"
+        ? beforeData
+          ? "OLD_PO"
+          : "NO_LSX"
         : "OTHER";
 
   const notStarted = status === "WAITING" || status === "NO_LSX";
