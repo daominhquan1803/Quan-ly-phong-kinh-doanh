@@ -635,12 +635,20 @@ model Customer {
   source  String?
   leadKey String? @unique
 
+  // Khách trùng (anh Quân 27/11/2026), xem apps/web/src/lib/customer-merge.ts. lockedAt = khoá tạm (ẩn khỏi danh sách/chăm sóc, công nợ vẫn hiện).
+  // mergedIntoId = hồ sơ phụ đã gộp vào hồ sơ chính; không xoá để đồng bộ AMIS không tạo lại.
+  lockedAt     DateTime?
+  mergedIntoId String?
+  mergedInto   Customer?  @relation("CustomerMerge", fields: [mergedIntoId], references: [id], onDelete: SetNull)
+  mergedFrom   Customer[] @relation("CustomerMerge")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   careLogs  CustomerCareLog[]
   tripStops BusinessTripStop[] @relation("TripStopCustomer")
 
+  @@index([mergedIntoId])
   @@map("customers")
 }
 

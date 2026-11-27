@@ -22,7 +22,10 @@ import {
   Building2,
   Sparkles,
   Filter,
+  Lock,
+  Unlock,
 } from "lucide-react";
+import { DuplicateCustomers } from "./DuplicateCustomers";
 import { PAYMENT_TERM_TYPE_LABEL, PaymentTermType, describePaymentTerm } from "@/lib/customer-payment-term";
 import { normalizeVN } from "@/lib/text-normalize";
 
@@ -39,7 +42,14 @@ interface CustomerRow {
   paymentTermMonthOffset: number | null;
   /** "SHEET_LEAD" = khách tiềm năng tạo từ Google Sheet (mã tạm KHM-…); khách AMIS/nhập tay = null. */
   source?: string | null;
+  lockedAt: string | null;
+  mergedIntoId: string | null;
+  mergedInto: { customerCode: string } | null;
 }
+
+type StatusFilter = "ACTIVE" | "LOCKED" | "MERGED";
+
+const statusOfRow = (c: CustomerRow): StatusFilter => (c.mergedIntoId ? "MERGED" : c.lockedAt ? "LOCKED" : "ACTIVE");
 
 interface EmployeeOption {
   id: string;
@@ -88,8 +98,10 @@ function toRowEdit(c: CustomerRow): RowEdit {
 }
 
 /** isAdmin=false (NVKD): chỉ thấy + sửa khách của mình; không đổi NVKD phụ trách, không nhập Excel hàng loạt. */
-export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
+export function CustomersPanel({ isAdmin = true, canManage = false }: { isAdmin?: boolean; canManage?: boolean }) {
   const queryClient = useQueryClient();
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ACTIVE");
+  const [showDuplicates, setShowDuplicates] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     customerCode: "",
@@ -149,9 +161,14 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
   });
   const lastAmisSync = amisSyncData?.lastSync ?? null;
 
+  // Khách đang dùng (không khoá tạm, không phải mã phụ đã gộp) — thẻ thống kê và ô lọc đếm theo danh sách này.
+  const activeCustomers = useMemo(() => (data?.customers ?? []).filter((c) => statusOfRow(c) === "ACTIVE"), [data?.customers]);
+  const lockedCount = (data?.customers ?? []).filter((c) => statusOfRow(c) === "LOCKED").length;
+  const mergedCount = (data?.customers ?? []).filter((c) => statusOfRow(c) === "MERGED").length;
+
   // Thống kê nhanh KPI
   const stats = useMemo(() => {
-    const list = data?.customers ?? [];
+    const list = activeCustomers;
     const total = list.length;
     const assigned = list.filter((c) => !!c.salesEmployee?.id).length;
     const unassigned = total - assigned;
@@ -164,32 +181,32 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
       assignedPercent: total > 0 ? Math.round((assigned / total) * 100) : 0,
       withTermsPercent: total > 0 ? Math.round((withTerms / total) * 100) : 0,
     };
-  }, [data?.customers]);
+  }, [activeCustomers]);
 
   // Số lượng khách hàng theo từng nhân viên kinh doanh
   const employeeCustomerCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    for (const c of data?.customers ?? []) {
+    for (const c of activeCustomers) {
       if (c.salesEmployee?.id) {
         counts[c.salesEmployee.id] = (counts[c.salesEmployee.id] ?? 0) + 1;
       }
     }
     return counts;
-  }, [data?.customers]);
+  }, [activeCustomers]);
 
   // Các nhóm thời hạn công nợ đang có (kèm số khách) cho ô lọc: 0, 30, 60 ngày..., cuối tháng N+x, rồi "chưa có thời hạn".
   const termOptions = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const c of data?.customers ?? []) counts.set(termKey(c), (counts.get(termKey(c)) ?? 0) + 1);
+    for (const c of activeCustomers) counts.set(termKey(c), (counts.get(termKey(c)) ?? 0) + 1);
     const rank = (k: string) => (k.startsWith("D:") ? 0 : k.startsWith("M:") ? 1 : 2);
     return Array.from(counts.entries())
       .map(([key, count]) => ({ key, count }))
       .sort((a, b) => rank(a.key) - rank(b.key) || Number(a.key.slice(2)) - Number(b.key.slice(2)));
-  }, [data?.customers]);
+  }, [activeCustomers]);
 
   // Bộ lọc khách hàng
   const filteredCustomers = useMemo(() => {
-    let list = data?.customers ?? [];
+    let list = (data?.customers ?? []).filter((c) => statusOfRow(c) === statusFilter);
     if (termFilter) list = list.filter((c) => termKey(c) === termFilter);
     if (nvkdFilter === "UNASSIGNED") {
       list = list.filter((c) => !c.salesEmployee?.id);
@@ -214,7 +231,7 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
       );
     }
     return list;
-  }, [data, search, nvkdFilter, termFilter, onlyWithTerms, onlyMissingEmail]);
+  }, [data, search, nvkdFilter, termFilter, onlyWithTerms, onlyMissingEmail, statusFilter]);
 
   // Phân trang
   const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / (pageSize || 50)));
@@ -387,18 +404,36 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Xoá khách hàng này khỏi danh sách?")) return;
+  /** Gọi API quản lý khách (xoá / khoá / bỏ gộp) rồi tải lại danh sách; hiện đúng lỗi máy chủ trả về. */
+  async function manage(id: string, url: string, init: RequestInit) {
     setBusyRow(id);
+    setError(null);
     try {
-      const res = await fetch(`/api/customers/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("Xoá thất bại");
+      const res = await fetch(url, init);
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? "Thao tác thất bại");
       await queryClient.invalidateQueries({ queryKey: ["customers"] });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Có lỗi xảy ra");
     } finally {
       setBusyRow(null);
     }
+  }
+
+  const postJson = (body: unknown): RequestInit => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+  function handleDelete(c: CustomerRow) {
+    if (!confirm(`Xoá hẳn khách ${c.customerCode}? Không khôi phục được.\nKhách còn trên AMIS sẽ được tạo lại vào lần đồng bộ sau.`)) return;
+    manage(c.id, `/api/customers/${c.id}`, { method: "DELETE" });
+  }
+
+  function handleLock(c: CustomerRow, locked: boolean) {
+    if (locked && !confirm(`Khoá tạm ${c.customerCode}? Khách bị ẩn khỏi danh sách và lịch chăm sóc; công nợ vẫn hiện.`)) return;
+    manage(c.id, `/api/customers/${c.id}/lock`, postJson({ locked }));
+  }
+
+  function handleUnmerge(c: CustomerRow) {
+    if (!confirm(`Bỏ gộp ${c.customerCode}? Mã này hiện lại; lịch sử chăm sóc đã chuyển vẫn ở mã chính.`)) return;
+    manage(c.id, "/api/customers/merge", postJson({ unmergeId: c.id }));
   }
 
   return (
@@ -787,6 +822,31 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
             </select>
           </div>
 
+          {/* Trạng thái: đang dùng / khoá tạm / mã phụ đã gộp */}
+          <select
+            value={statusFilter}
+            aria-label="Trạng thái khách"
+            onChange={(e) => {
+              setStatusFilter(e.target.value as StatusFilter);
+              setPage(1);
+            }}
+            className="rounded-xl border border-gray-200/80 bg-navy-50/80 px-3 py-2 text-sm text-ink transition-all focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
+          >
+            <option value="ACTIVE">Đang dùng ({activeCustomers.length})</option>
+            <option value="LOCKED">Đã khoá tạm ({lockedCount})</option>
+            <option value="MERGED">Đã gộp ({mergedCount})</option>
+          </select>
+
+          <button
+            onClick={() => setShowDuplicates((v) => !v)}
+            aria-pressed={showDuplicates}
+            className={`rounded-xl border px-3 py-2 text-sm font-medium transition-all ${
+              showDuplicates ? "border-amber-500 bg-amber-500/10 text-amber-400" : "border-gray-200/80 bg-navy-50/80 text-ink hover:border-amber-500/40"
+            }`}
+          >
+            Khách trùng
+          </button>
+
           {/* Bộ lọc thời hạn công nợ */}
           <select
             value={termFilter}
@@ -882,6 +942,16 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
         </div>
       </div>
 
+      {showDuplicates && (
+        <DuplicateCustomers
+          canManage={canManage}
+          onDone={(message, ok) => {
+            setError(ok ? null : message);
+            setImportMsg(ok ? message : null);
+          }}
+        />
+      )}
+
       {/* Bảng Dữ Liệu Khách Hàng Glassmorphism */}
       <div className="overflow-hidden rounded-2xl border border-gray-200/80 bg-navy-900/50 shadow-card backdrop-blur-xl">
         <div className="overflow-x-auto">
@@ -933,6 +1003,8 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
                           Khách tiềm năng
                         </span>
                       )}
+                      {c.mergedInto && <span className="mt-1 block text-[11px] text-muted-foreground">Đã gộp vào {c.mergedInto.customerCode}</span>}
+                      {c.lockedAt && <span className="mt-1 block text-[11px] font-semibold text-alert">Khoá tạm</span>}
                       <a
                         href={`/reports?tab=sales&by=customer&q=${encodeURIComponent(c.customerCode)}`}
                         className="mt-1 block text-[11px] text-info-500 hover:underline"
@@ -1079,14 +1151,39 @@ export function CustomersPanel({ isAdmin = true }: { isAdmin?: boolean }) {
                           </button>
                         )}
 
-                        <button
-                          onClick={() => handleDelete(c.id)}
-                          disabled={busyRow === c.id}
-                          title="Xoá khách hàng"
-                          className="rounded-lg p-1.5 text-muted-foreground hover:bg-brandRed-50 hover:text-alert transition-colors disabled:opacity-40"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        {canManage && c.mergedIntoId && (
+                          <button
+                            onClick={() => handleUnmerge(c)}
+                            disabled={busyRow === c.id}
+                            className="rounded-lg border border-gray-200 px-2 py-1 text-xs text-ink2 hover:bg-navy-50 disabled:opacity-40"
+                          >
+                            Bỏ gộp
+                          </button>
+                        )}
+
+                        {canManage && !c.mergedIntoId && (
+                          <button
+                            onClick={() => handleLock(c, !c.lockedAt)}
+                            disabled={busyRow === c.id}
+                            title={c.lockedAt ? "Mở khoá khách" : "Khoá tạm khách"}
+                            aria-label={`${c.lockedAt ? "Mở khoá" : "Khoá tạm"} ${c.customerCode}`}
+                            className="rounded-lg p-1.5 text-muted-foreground hover:bg-navy-50 hover:text-amber-400 transition-colors disabled:opacity-40"
+                          >
+                            {c.lockedAt ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+                          </button>
+                        )}
+
+                        {canManage && !c.mergedIntoId && (
+                          <button
+                            onClick={() => handleDelete(c)}
+                            disabled={busyRow === c.id}
+                            title="Xoá khách hàng (chỉ khách chưa có dữ liệu)"
+                            aria-label={`Xoá ${c.customerCode}`}
+                            className="rounded-lg p-1.5 text-muted-foreground hover:bg-brandRed-50 hover:text-alert transition-colors disabled:opacity-40"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

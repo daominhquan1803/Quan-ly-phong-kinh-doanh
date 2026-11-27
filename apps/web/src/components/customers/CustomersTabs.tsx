@@ -31,7 +31,7 @@ export function CustomersTabs({ isAdmin, isSystem }: { isAdmin: boolean; isSyste
           </button>
         ))}
       </div>
-      {tab === "list" ? <CustomersPanel isAdmin={isAdmin} /> : <CustomerReportPanel isAdmin={isAdmin} canFixGroups={isSystem} />}
+      {tab === "list" ? <CustomersPanel isAdmin={isAdmin} canManage={isSystem} /> : <CustomerReportPanel isAdmin={isAdmin} canFixGroups={isSystem} />}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { loadCarePlan, type Tier } from "./customer-care-plan";
 import { openProblem } from "./customer-care-team";
 import { classifyItem, groupsText, type GroupKey } from "./product-groups";
 import { profileCompleteness, type StageKey, type StatusKey } from "./customer-profile";
+import { loadAliases, VISIBLE_CUSTOMER } from "./customer-merge";
 
 /**
  * Báo cáo "Danh sách khách hàng" (anh Quân chốt 20/10/2026): mỗi khách 1 dòng gồm hồ sơ (NVKD nhập), đang mua nhóm
@@ -110,7 +111,7 @@ export async function buildCustomerReport(options: { employeeId?: string; custom
   const only = options.employeeId;
 
   const customers = await prisma.customer.findMany({
-    where: { ...(only ? { salesEmployeeId: only } : {}), ...(options.customerId ? { id: options.customerId } : {}) },
+    where: { ...VISIBLE_CUSTOMER, ...(only ? { salesEmployeeId: only } : {}), ...(options.customerId ? { id: options.customerId } : {}) },
     select: {
       id: true,
       customerCode: true,
@@ -136,6 +137,11 @@ export async function buildCustomerReport(options: { employeeId?: string; custom
   const ids = customers.map((c) => c.id);
   const byCode = new Map(customers.map((c) => [normalizeCustomerCode(c.customerCode), c.id]));
   const byName = new Map(customers.map((c) => [c.customerName.trim().toLowerCase(), c.id]));
+  // Đơn, công nợ, báo giá mang mã/tên của hồ sơ đã gộp tính vào hồ sơ chính.
+  for (const a of await loadAliases(ids)) {
+    byCode.set(a.code, a.primaryId);
+    if (!byName.has(a.name.toLowerCase())) byName.set(a.name.toLowerCase(), a.primaryId);
+  }
   const idOf = (code: string | null, name: string) => (code && byCode.get(normalizeCustomerCode(code))) || byName.get(name.trim().toLowerCase()) || null;
 
   const [orderAgg, items, addresses, quotes, logs, risk, invoices, plan, snap, employees, overrides] = await Promise.all([

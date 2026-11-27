@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@hoanggia/db";
 import { requireSession, UnauthorizedError } from "@/lib/rbac";
 import { effectiveAddresses } from "@/lib/customer-address";
+import { VISIBLE_CUSTOMER } from "@/lib/customer-merge";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,7 @@ export async function GET() {
   try {
     await requireSession();
     const rows = await prisma.customer.findMany({
+      where: VISIBLE_CUSTOMER,
       select: { id: true, customerCode: true, customerName: true, address: true, salesEmployee: { select: { id: true, name: true } } },
       orderBy: { customerName: "asc" },
     });

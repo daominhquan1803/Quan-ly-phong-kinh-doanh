@@ -177,7 +177,7 @@ async function syncCustomers(cands: EntryCandidate[], now: Date = new Date()): P
   if (!cands.length) return out;
 
   const [customers, users, logs] = await Promise.all([
-    prisma.customer.findMany({ select: { id: true, customerCode: true, customerName: true, salesEmployeeId: true, leadKey: true, address: true, contactPerson: true, contactPhone: true, staffSize: true, ownership: true, painPoint: true } }),
+    prisma.customer.findMany({ select: { id: true, customerCode: true, customerName: true, salesEmployeeId: true, leadKey: true, address: true, contactPerson: true, contactPhone: true, staffSize: true, ownership: true, painPoint: true, mergedIntoId: true } }),
     prisma.user.findMany({ select: { id: true, name: true } }),
     prisma.customerCareLog.findMany({ where: { sheetKey: { not: null } }, select: { id: true, sheetKey: true } }),
   ]);
@@ -185,10 +185,14 @@ async function syncCustomers(cands: EntryCandidate[], now: Date = new Date()): P
   const taken = new Set(customers.map((c) => c.customerCode));
   const byLeadKey = new Map<string, CustomerRow>();
   const byName = new Map<string, CustomerRow[]>();
-  const add = (c: CustomerRow) => {
-    if (c.leadKey) byLeadKey.set(c.leadKey, c);
+  // Hồ sơ đã gộp quy về hồ sơ chính (cả khoá dòng sheet lẫn tên) để lần chăm sóc không rơi vào hồ sơ ẩn.
+  const byId = new Map<string, CustomerRow>(customers.map((c) => [c.id, c]));
+  const add = (c: CustomerRow & { mergedIntoId?: string | null }) => {
+    const target = (c.mergedIntoId && byId.get(c.mergedIntoId)) || c;
+    if (c.leadKey) byLeadKey.set(c.leadKey, target);
     const k = companyKey(c.customerName);
-    if (k) byName.set(k, [...(byName.get(k) ?? []), c]);
+    const list = byName.get(k) ?? [];
+    if (k && !list.includes(target)) byName.set(k, [...list, target]);
   };
   customers.forEach(add);
   const logByKey = new Map(logs.map((l) => [l.sheetKey!, l.id]));

@@ -15,7 +15,8 @@ export async function GET() {
     const customers = await prisma.customer.findMany({
       where: scopeByOwner(session, "salesEmployeeId"),
       orderBy: { customerName: "asc" },
-      include: { salesEmployee: { select: { id: true, name: true } } },
+      // Trả cả khách đã khoá / đã gộp (trang Công nợ cần email của mọi mã) — nơi hiển thị tự lọc theo lockedAt, mergedIntoId.
+      include: { salesEmployee: { select: { id: true, name: true } }, mergedInto: { select: { customerCode: true } } },
     });
     return NextResponse.json({ customers });
   } catch (err) {

@@ -151,7 +151,8 @@ export async function getReportData(opts: {
       : Promise.resolve([]),
     oihAsOfEnd ? Promise.resolve([]) : getPoAggregates(scopeEmployeeId ? { salesEmployeeId: scopeEmployeeId } : {}),
     prisma.customer.findMany({
-      where: { createdAt: { gte: rangeStart, lt: rangeEnd }, ...(scopeEmployeeId ? { salesEmployeeId: scopeEmployeeId } : {}) },
+      // Hồ sơ đã gộp là bản trùng, không tính là khách mới.
+      where: { mergedIntoId: null, createdAt: { gte: rangeStart, lt: rangeEnd }, ...(scopeEmployeeId ? { salesEmployeeId: scopeEmployeeId } : {}) },
       select: { customerCode: true, customerName: true, createdAt: true, salesEmployeeId: true, salesEmployee: { select: { name: true } } },
       orderBy: { createdAt: "asc" },
     }),

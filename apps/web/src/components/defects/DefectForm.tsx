@@ -11,6 +11,8 @@ import type { DefectRow } from "./types";
 interface CustomerOption {
   customerCode: string;
   customerName: string;
+  lockedAt: string | null;
+  mergedIntoId: string | null;
 }
 interface SlipOption {
   id: string;
@@ -104,6 +106,7 @@ export function DefectForm({ initial, onDone, onCancel }: { initial?: DefectRow 
     const q = customerName.trim().toLowerCase();
     if (!q || !customersData) return [];
     return customersData.customers
+      .filter((c) => !c.lockedAt && !c.mergedIntoId)
       .filter((c) => c.customerName.toLowerCase().includes(q) || c.customerCode.toLowerCase().includes(q))
       .slice(0, 12);
   }, [customerName, customersData]);

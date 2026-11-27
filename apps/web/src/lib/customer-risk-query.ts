@@ -64,14 +64,25 @@ export async function getCustomerRiskReport(options: {
   // Khách mua theo vụ / dự án (NVKD tích ở trang Chăm sóc) KHÔNG chấm theo nhịp đặt hàng — giữa hai vụ im lặng là
   // bình thường; họ được nhắc riêng theo lịch vụ (xem lib/customer-season.ts).
   const nonRegular = await prisma.customer.findMany({
-    where: { buyingPattern: { not: "REGULAR" } },
+    where: { buyingPattern: { not: "REGULAR" }, mergedIntoId: null },
     select: { customerCode: true, customerName: true },
   });
+  // Khách đã gộp: đơn của mã phụ tính vào mã chính (một nhịp đặt hàng). Khách khoá tạm: không cảnh báo.
+  // Khớp theo mã trước; chỉ khớp theo tên khi đơn không có mã (mã đang dùng có thể trùng tên mã đã khoá).
+  const hidden = await prisma.customer.findMany({
+    where: { OR: [{ mergedIntoId: { not: null } }, { lockedAt: { not: null } }] },
+    select: { customerCode: true, customerName: true, lockedAt: true, mergedInto: { select: { customerCode: true, customerName: true, lockedAt: true } } },
+  });
+  const hiddenByCode = new Map(hidden.map((c) => [normalizeCustomerCode(c.customerCode), c]));
+  const hiddenByName = new Map(hidden.map((c) => [c.customerName.trim().toLowerCase(), c]));
   const skipCodes = new Set(nonRegular.map((c) => normalizeCustomerCode(c.customerCode)));
   const skipNames = new Set(nonRegular.map((c) => c.customerName.trim().toLowerCase()));
 
   const byCustomer = new Map<string, CustomerRiskInput>();
-  for (const o of orders) {
+  for (const raw of orders) {
+    const h = raw.customerCode ? hiddenByCode.get(normalizeCustomerCode(raw.customerCode)) : hiddenByName.get(raw.customerName.trim().toLowerCase());
+    if (h && (h.mergedInto ?? h).lockedAt) continue;
+    const o = h?.mergedInto ? { ...raw, customerCode: h.mergedInto.customerCode, customerName: h.mergedInto.customerName } : raw;
     if (
       (o.customerCode && skipCodes.has(normalizeCustomerCode(o.customerCode))) ||
       skipNames.has(o.customerName.trim().toLowerCase())

@@ -23,20 +23,24 @@ export interface UnassignedRow {
 export async function getUnassignedCustomers(now: Date = new Date()): Promise<UnassignedRow[]> {
   const since = new Date(now.getTime() - 365 * DAY);
   const [customers, orders] = await Promise.all([
-    prisma.customer.findMany({ select: { id: true, customerCode: true, customerName: true, salesEmployeeId: true } }),
+    prisma.customer.findMany({ select: { id: true, customerCode: true, customerName: true, salesEmployeeId: true, lockedAt: true, mergedIntoId: true } }),
     prisma.order.findMany({
       where: { orderDate: { gte: since }, status: { not: "CANCELLED" } },
       select: { customerCode: true, customerName: true, orderDate: true, totalValue: true, salesEmployeeId: true, salesEmployee: { select: { name: true } } },
     }),
   ]);
-  const byCode = new Map(customers.map((c) => [normalizeCustomerCode(c.customerCode), c]));
-  const byName = new Map(customers.map((c) => [c.customerName.trim().toLowerCase(), c]));
+  // Hồ sơ đã gộp quy về hồ sơ chính; khách khoá tạm không đưa vào danh sách chờ phân.
+  const byId = new Map(customers.map((c) => [c.id, c]));
+  const target = (c: (typeof customers)[number]) => (c.mergedIntoId && byId.get(c.mergedIntoId)) || c;
+  const byCode = new Map(customers.map((c) => [normalizeCustomerCode(c.customerCode), target(c)]));
+  // Hồ sơ đang dùng xếp sau cùng để thắng khi trùng tên với hồ sơ đã gộp / đã khoá.
+  const byName = new Map([...customers].sort((a, b) => Number(!a.mergedIntoId && !a.lockedAt) - Number(!b.mergedIntoId && !b.lockedAt)).map((c) => [c.customerName.trim().toLowerCase(), target(c)]));
 
   interface Agg { customerId: string | null; code: string | null; name: string; orders: number; value: number; last: number; byEmp: Map<string, { n: number; name: string }> }
   const groups = new Map<string, Agg>();
   for (const o of orders) {
     const c = (o.customerCode && byCode.get(normalizeCustomerCode(o.customerCode))) || byName.get(o.customerName.trim().toLowerCase()) || null;
-    if (c?.salesEmployeeId) continue; // đã có người phụ trách
+    if (c?.salesEmployeeId || c?.lockedAt) continue; // đã có người phụ trách, hoặc khoá tạm
     const key = c ? `c:${c.id}` : `n:${(o.customerCode ? normalizeCustomerCode(o.customerCode) : "") || o.customerName.trim().toLowerCase()}`;
     const g =
       groups.get(key) ??
@@ -54,7 +58,7 @@ export async function getUnassignedCustomers(now: Date = new Date()): Promise<Un
   }
   // hồ sơ chưa gán nhưng không có đơn 12 tháng vẫn liệt kê (để anh gán), xếp cuối
   for (const c of customers) {
-    if (c.salesEmployeeId || groups.has(`c:${c.id}`)) continue;
+    if (c.salesEmployeeId || c.lockedAt || c.mergedIntoId || groups.has(`c:${c.id}`)) continue;
     groups.set(`c:${c.id}`, { customerId: c.id, code: c.customerCode, name: c.customerName, orders: 0, value: 0, last: 0, byEmp: new Map() });
   }
 

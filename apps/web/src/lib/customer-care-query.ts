@@ -1,6 +1,7 @@
 import { prisma, normalizeCustomerCode } from "@hoanggia/db";
 import { checkSeason, suggestSeasonMonths, type SeasonCheckResult } from "./customer-season";
 import { getCustomerRiskReport } from "./customer-risk-query";
+import { loadAliases, VISIBLE_CUSTOMER } from "./customer-merge";
 
 const DAY_MS = 86_400_000;
 /** Đã có ghi chăm sóc "vẫn mua bình thường" trong ngần này ngày thì không nhắc nguy cơ nữa. */
@@ -25,6 +26,7 @@ export interface UncaredRisk {
 export async function getUncaredRisks(now: Date = new Date()): Promise<UncaredRisk[]> {
   const report = await getCustomerRiskReport({});
   const customers = await prisma.customer.findMany({
+    where: VISIBLE_CUSTOMER,
     select: {
       id: true,
       customerCode: true,
@@ -98,6 +100,11 @@ export async function loadOrderDates(
     byCode.set(normalizeCustomerCode(c.customerCode), c.id);
     byName.set(c.customerName.trim().toLowerCase(), c.id);
   }
+  // Đơn mang mã/tên của hồ sơ đã gộp tính vào hồ sơ chính.
+  for (const a of await loadAliases(customers.map((c) => c.id))) {
+    byCode.set(a.code, a.primaryId);
+    if (!byName.has(a.name.toLowerCase())) byName.set(a.name.toLowerCase(), a.primaryId);
+  }
   const orders = await prisma.order.findMany({
     where: { orderDate: { not: null }, status: { not: "CANCELLED" } },
     select: { customerCode: true, customerName: true, orderDate: true },
@@ -126,7 +133,7 @@ export function hasOpenIssue(logsDesc: { outcome: string }[]): boolean {
 /** Tổng hợp cho trang Chăm sóc: mỗi khách kèm lần chăm sóc cuối, hẹn lại, trạng thái vụ. `onlyEmployeeId` = phạm vi SALES. */
 export async function getCareOverview(options: { onlyEmployeeId?: string }, now: Date = new Date()): Promise<CareCustomerRow[]> {
   const customers = await prisma.customer.findMany({
-    where: options.onlyEmployeeId ? { salesEmployeeId: options.onlyEmployeeId } : {},
+    where: { ...VISIBLE_CUSTOMER, ...(options.onlyEmployeeId ? { salesEmployeeId: options.onlyEmployeeId } : {}) },
     orderBy: { customerName: "asc" },
     include: {
       salesEmployee: { select: { id: true, name: true } },

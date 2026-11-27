@@ -2,6 +2,7 @@ import { prisma, normalizeCustomerCode } from "@hoanggia/db";
 import { normalizeVN } from "./text-normalize";
 import { COUNTED_ANY_STOP_WHERE } from "./business-trip-report";
 import { workingDeadline } from "./admin-kpi";
+import { loadAliases, VISIBLE_CUSTOMER } from "./customer-merge";
 
 /**
  * Lịch chăm sóc khách theo hạng (anh Quân chốt 20/10/2026).
@@ -154,12 +155,18 @@ export async function loadCarePlan(options: { onlyEmployeeId?: string } = {}, no
   });
   const empIds = employees.map((e) => e.id);
   const customers = await prisma.customer.findMany({
-    where: { salesEmployeeId: { in: empIds } },
+    where: { ...VISIBLE_CUSTOMER, salesEmployeeId: { in: empIds } },
     select: { id: true, customerCode: true, customerName: true, salesEmployeeId: true, buyingPattern: true },
   });
   const byCode = new Map(customers.map((c) => [normalizeCustomerCode(c.customerCode), c.id]));
   const byName = new Map(customers.map((c) => [c.customerName.trim().toLowerCase(), c.id]));
   const byNorm = new Map(customers.map((c) => [normalizeVN(c.customerName), c.id]));
+  // Đơn / lần gặp mang mã hoặc tên của hồ sơ đã gộp tính vào hồ sơ chính.
+  for (const a of await loadAliases(customers.map((c) => c.id))) {
+    byCode.set(a.code, a.primaryId);
+    if (!byName.has(a.name.toLowerCase())) byName.set(a.name.toLowerCase(), a.primaryId);
+    if (!byNorm.has(normalizeVN(a.name))) byNorm.set(normalizeVN(a.name), a.primaryId);
+  }
 
   const [orders, logs, stops] = await Promise.all([
     prisma.order.findMany({

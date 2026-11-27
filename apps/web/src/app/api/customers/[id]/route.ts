@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@hoanggia/db";
-import { requireSession, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
+import { requireSession, requireSystemAdmin, UnauthorizedError, ForbiddenError } from "@/lib/rbac";
+import { customerDataSummary } from "@/lib/customer-merge";
 import { computeDueDateFromTerm, PaymentTerm } from "@/lib/customer-payment-term";
 import { emailListField, normalizeEmailList } from "@/lib/debt-reminder";
 import { assignCustomerToUnassignedInvoices } from "@/lib/customer-invoice-sync";
@@ -94,12 +95,17 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
+/** Xoá hẳn: chỉ quản trị hệ thống, chỉ khi khách không gắn dữ liệu nào (có dữ liệu thì dùng Gộp hoặc Khoá tạm). */
 export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const session = await requireSession();
-    const target = await prisma.customer.findUnique({ where: { id: params.id }, select: { salesEmployeeId: true } });
-    if (!target || (session.user.role !== "ADMIN" && target.salesEmployeeId !== session.user.id)) {
-      return NextResponse.json({ error: "Không tìm thấy khách hàng" }, { status: 404 });
+    await requireSystemAdmin();
+    const target = await prisma.customer.findUnique({ where: { id: params.id }, select: { id: true, customerCode: true, mergedIntoId: true } });
+    if (!target) return NextResponse.json({ error: "Không tìm thấy khách hàng" }, { status: 404 });
+    // Hồ sơ phụ được giữ lại chính là để đồng bộ AMIS không tạo lại bản trùng.
+    if (target.mergedIntoId) return NextResponse.json({ error: "Mã đã gộp được giữ lại để AMIS không tạo lại — không xoá được." }, { status: 409 });
+    const data = await customerDataSummary(target);
+    if (data.length) {
+      return NextResponse.json({ error: `Khách đang có ${data.join(", ")} — không xoá được. Dùng Gộp hoặc Khoá tạm.` }, { status: 409 });
     }
     await prisma.customer.delete({ where: { id: params.id } });
     return NextResponse.json({ ok: true });

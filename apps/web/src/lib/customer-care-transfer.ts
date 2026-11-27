@@ -1,5 +1,6 @@
 import { prisma, normalizeCustomerCode } from "@hoanggia/db";
 import { loadCarePlan, type Tier } from "./customer-care-plan";
+import { VISIBLE_CUSTOMER } from "./customer-merge";
 
 /**
  * Chuyển hàng loạt khách đang đứng tên người quản trị (anh Quân 20/10/2026: chuyển bớt khách của anh cho NVKD).
@@ -23,7 +24,7 @@ export async function getOwnedCustomers(ownerId: string, now: Date = new Date())
   const since = new Date(now.getTime() - 365 * DAY);
   const [customers, orders, plan, invoices] = await Promise.all([
     prisma.customer.findMany({
-      where: { salesEmployeeId: ownerId },
+      where: { ...VISIBLE_CUSTOMER, salesEmployeeId: ownerId },
       select: { id: true, customerCode: true, customerName: true, buyingPattern: true },
       orderBy: { customerName: "asc" },
     }),
