@@ -26,7 +26,8 @@ interface NotificationRow {
     | "CARE_DUE_DAILY"
     | "CARE_ESCALATION"
     | "CARE_WEEKLY"
-    | "WEEK_PLAN_FOLLOWUP";
+    | "WEEK_PLAN_FOLLOWUP"
+    | "PRODUCTION_DAILY";
   title: string;
   message: string;
   link: string | null;
@@ -169,7 +170,7 @@ export function NotificationBell() {
                         {!n.readAt && <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />}
                         <div className={cn(!n.readAt ? "" : "pl-3.5")}>
                           <p className="text-sm font-medium text-ink">{n.title}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">{n.message}</p>
+                          <p className="whitespace-pre-line text-xs text-muted-foreground mt-0.5">{n.message}</p>
                           <p className="text-[11px] text-muted2 mt-1">{timeAgo(n.createdAt)}</p>
                         </div>
                       </div>

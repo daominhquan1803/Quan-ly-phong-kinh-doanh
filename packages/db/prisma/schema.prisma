@@ -1540,6 +1540,7 @@ model WeekPlanResultEntry {
 // ---------- Thông báo nhắc việc (Kế hoạch tuần sắp hết hạn, KPI tháng chưa đạt tiến độ...) ----------
 
 enum NotificationType {
+  PRODUCTION_DAILY // 8h sáng: hàng trễ / nguy cơ trễ / xong chưa giao của từng NVKD
   WEEK_PLAN_FOLLOWUP // tới ngày hẹn hành động tiếp theo của khách liên hệ mới
   WEEK_PLAN_REMINDER
   KPI_REMINDER

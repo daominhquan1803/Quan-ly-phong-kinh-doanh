@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findLsx, progressFor, unmatchedLsx, type LsxRow } from "./production-match";
+import { buildDigests, findLsx, progressFor, unmatchedLsx, type LsxRow } from "./production-match";
 
 const lsx = (itemCode: string, extra: Partial<LsxRow> = {}): LsxRow => ({
   lsxNo: "1", poCodes: ["D11.26DT01A"], itemCode, customerName: "K", done: false, hasProgress: false, runningOn: null,
@@ -51,6 +51,16 @@ describe("progressFor", () => {
     expect(eta({ currentStages: "Bế" })).toBeNull();
     expect(eta({ currentStages: "Cắt tờ", hideAutoPlan: true })).toBeNull();
     expect(eta({ currentStages: "Bế", plannedShipOn: new Date("2026-12-01"), plannedShipTime: "14:00" })).toEqual({ date: "2026-12-01", time: "14:00" });
+  });
+});
+
+describe("buildDigests", () => {
+  it("đếm theo NVKD, xếp dòng gấp trước, tối đa 5, bỏ dòng không cảnh báo", () => {
+    const at = (employee: string, alert: "LATE" | "AT_RISK" | "DONE_NOT_SHIPPED" | null, day: number) => ({ salesEmployeeId: employee, alert, poCode: `P${day}`, itemCode: "SI01", customerCode: "C", dueOn: new Date(Date.UTC(2026, 10, day)) });
+    const digests = buildDigests([at("u1", "DONE_NOT_SHIPPED", 1), at("u1", "AT_RISK", 28), at("u1", "LATE", 20), at("u1", "LATE", 15), at("u1", "LATE", 25), at("u1", "LATE", 26), at("u1", null, 2), at("u2", null, 3)]);
+    expect(digests).toHaveLength(1);
+    expect(digests[0]).toMatchObject({ employeeId: "u1", late: 4, atRisk: 1, done: 1 });
+    expect(digests[0].top.map((l) => l.poCode)).toEqual(["P15", "P20", "P25", "P26", "P28"]);
   });
 });
 

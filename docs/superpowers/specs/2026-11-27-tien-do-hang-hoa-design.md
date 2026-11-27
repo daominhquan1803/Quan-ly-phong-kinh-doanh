@@ -58,7 +58,7 @@ Trang Tiến độ giao hàng thêm tab "Tiến độ hàng hoá": thẻ đếm 
 
 1. **Đồng bộ và đối chiếu.** Bảng mới, worker đọc LSX, báo cáo dòng không khớp. Anh kiểm tra số liệu thật trước khi sang đợt 2.
 2. **Tab "Tiến độ hàng hoá".** Trạng thái, cảnh báo, lọc.
-3. **Nhắc qua Zalo Bot.** Mỗi sáng gửi NVKD đơn trễ, nguy cơ trễ, xong chưa giao.
+3. **Nhắc qua Zalo Bot.** Mỗi sáng gửi NVKD đơn trễ, nguy cơ trễ, xong chưa giao. Đã chốt: 8h, thứ Hai đến thứ Bảy; số đếm kèm 5 dòng gấp nhất; PO cũ không tính; số liệu sản xuất cũ quá 3 giờ thì không gửi.
 4. **Hàng thương mại.** Làm khi PKH có công cụ. Dùng chung tab, thêm nguồn dữ liệu. Chưa thiết kế vì chưa biết dữ liệu.
 
 Kiểm thử: test cho phần ghép mã và tính trạng thái; đối chiếu tay vài đơn với trang sản xuất sau khi đồng bộ.

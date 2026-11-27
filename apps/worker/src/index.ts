@@ -17,6 +17,7 @@ import { runAdminKpiDigest } from "./notifications/adminKpiDigest";
 import { runCustomerAlerts } from "./notifications/customerAlerts";
 import { runCareDaily, runCareEscalations } from "./notifications/carePlan";
 import { runWeekPlanFollowup } from "./notifications/weekPlanFollowup";
+import { runProductionDigest } from "./notifications/productionDigest";
 import { runLeadSheetSync } from "./sync/leadSheet";
 import { runCarePhotoCleanup } from "./notifications/carePhotoCleanup";
 import { runCustomerReportSnapshot } from "./notifications/customerReportSnapshot";
@@ -132,6 +133,7 @@ async function main() {
       runCustomerAlerts().catch((err) => logger.error("Lỗi cảnh báo khách hàng:", err));
       runCareDaily().catch((err) => logger.error("Lỗi lịch chăm sóc 8h:", err));
       runWeekPlanFollowup().catch((err) => logger.error("Lỗi nhắc hành động tiếp theo kế hoạch tuần:", err));
+      runProductionDigest().catch((err) => logger.error("Lỗi nhắc tiến độ hàng:", err));
     },
     { timezone: NOTIFY_CRON_TIMEZONE }
   );

@@ -102,6 +102,38 @@ export function progressFor(
   };
 }
 
+interface DigestLine {
+  salesEmployeeId: string | null;
+  alert: ProductionAlert | null;
+  poCode: string;
+  itemCode: string | null;
+  customerCode: string | null;
+  dueOn: Date | null;
+}
+
+// Thứ tự gấp: đã trễ, rồi sắp trễ, rồi xong chưa giao; cùng loại thì hạn cũ nhất trước.
+const URGENCY: Record<ProductionAlert, number> = { LATE: 0, AT_RISK: 1, DONE_NOT_SHIPPED: 2 };
+const TOP = 5;
+
+/** Tin nhắc hằng ngày: đếm theo NVKD và chọn 5 dòng gấp nhất. Dòng không có cảnh báo (PO cũ, thương mại...) bỏ qua. */
+export function buildDigests(lines: DigestLine[]) {
+  const byEmployee = new Map<string, (DigestLine & { alert: ProductionAlert })[]>();
+  for (const l of lines) {
+    if (!l.salesEmployeeId || !l.alert) continue;
+    const list = byEmployee.get(l.salesEmployeeId) ?? [];
+    list.push(l as DigestLine & { alert: ProductionAlert });
+    byEmployee.set(l.salesEmployeeId, list);
+  }
+  return [...byEmployee].map(([employeeId, list]) => {
+    const count = (a: ProductionAlert) => list.filter((l) => l.alert === a).length;
+    const top = [...list]
+      .sort((a, b) => URGENCY[a.alert] - URGENCY[b.alert] || (a.dueOn?.getTime() ?? Infinity) - (b.dueOn?.getTime() ?? Infinity))
+      .slice(0, TOP)
+      .map((l) => ({ poCode: l.poCode, itemCode: l.itemCode, customerCode: l.customerCode, dueOn: l.dueOn, alert: l.alert }));
+    return { employeeId, late: count("LATE"), atRisk: count("AT_RISK"), done: count("DONE_NOT_SHIPPED"), top };
+  });
+}
+
 /** Lệnh chưa xong của phòng mình (mã phòng đã có trong PO của NVKD đang quản lý) nhưng không khớp dòng PO nào. */
 export function unmatchedLsx<T extends LsxRow>(lines: { poCode: string; itemCode: string | null; hasSalesEmployee: boolean }[], rows: T[]): T[] {
   const used = new Set(lines.flatMap((l) => findLsx(l, rows)));
