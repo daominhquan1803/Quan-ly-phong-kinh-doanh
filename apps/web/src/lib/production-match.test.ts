@@ -22,6 +22,7 @@ describe("progressFor", () => {
     const done = lsx("SI01", { done: true, completedOn: new Date("2026-11-20") });
     const running = lsx("SI01", { lsxNo: "2", hasProgress: true, runningOn: "Máy 4", currentStages: "Bế" });
     expect(progressFor(line("SI01"), [done], 5, TOMORROW)).toMatchObject({ status: "DONE", alert: "DONE_NOT_SHIPPED" });
+    expect(progressFor(line("SI01"), [done], -1, TOMORROW)).toMatchObject({ status: "DONE", alert: "LATE" });
     expect(progressFor(line("SI01"), [done, running], 5, TOMORROW)).toMatchObject({ status: "RUNNING", alert: null, stage: "Đang chạy Máy 4" });
     expect(progressFor(line("SI01"), [running, lsx("SI01")], 5, TOMORROW).status).toBe("WAITING");
   });

@@ -1,6 +1,8 @@
 import { prisma } from "@hoanggia/db";
 import { getMonthWeekRanges } from "./week-plan";
 import { CONFIRM_FROM, confirmInfo, isConfirmError } from "./order-confirmation";
+import { closedInTime, type ManualClose } from "./delivery-late";
+import { loadOldPoFilter } from "./old-po";
 
 /**
  * KPI Admin kinh doanh (anh Quân chốt 17/10/2026).
@@ -73,7 +75,8 @@ export function gradeOf(total: number): { grade: string; label: string } {
 export interface PaymentIn { paymentDate: Date | null; createdAt: Date }
 export interface SlipIn { slipDate: Date | null; createdAt: Date }
 export interface ComplaintIn { receivedAt: Date | null; createdAt: Date; respondedAt: Date | null; closedAt: Date | null }
-export interface LineIn {
+export interface LineIn extends ManualClose {
+  oldPo?: boolean;
   id: string;
   poCode: string;
   itemCode: string | null;
@@ -125,7 +128,8 @@ export function evalComplaints(rows: ComplaintIn[], now: Date, requireClose: boo
   return { total, ok, pct: pctOf(ok, total) };
 }
 
-export type LineVerdict = "ON_TIME" | "LATE" | "EXEMPT" | "NOT_DUE";
+// SKIP = không đưa vào KPI: đơn đóng trước/đúng hạn, hoặc PO cũ chưa có lệnh sản xuất (xem lib/delivery-late.ts).
+export type LineVerdict = "ON_TIME" | "LATE" | "EXEMPT" | "NOT_DUE" | "SKIP";
 export function lineVerdict(l: LineIn, now: Date): LineVerdict {
   // Khách đổi lịch + Trưởng phòng đã duyệt + có ngày mới -> tính hạn theo ngày mới (cùng quy tắc effectiveDeadline ở packages/db).
   // Hạn mới mà vẫn giao trễ thì tính TRỄ thật, không được miễn nữa (miễn chỉ dành cho lý do không có ngày hẹn mới).
@@ -135,7 +139,9 @@ export function lineVerdict(l: LineIn, now: Date): LineVerdict {
   const dueEnd = vnDayStart(due).getTime() + DAY;
   const deliveredByDue = l.events.filter((e) => e.eventDate.getTime() < dueEnd).reduce((s, e) => s + e.quantity, 0);
   if (deliveredByDue >= l.poQuantity - EPS) return "ON_TIME";
+  if (closedInTime(l, due)) return "SKIP";
   if (now.getTime() < dueEnd) return "NOT_DUE";
+  if (l.oldPo) return "SKIP";
   if (!rescheduled && l.reason && l.reason.status === "APPROVED" && l.reason.category !== "ADMIN") return "EXEMPT";
   return "LATE";
 }
@@ -147,7 +153,7 @@ export function evalDeliveries(lines: LineIn[], now: Date) {
   let lateCount = 0;
   for (const l of lines) {
     const v = lineVerdict(l, now);
-    if (v === "NOT_DUE") continue;
+    if (v === "NOT_DUE" || v === "SKIP") continue;
     if (v === "EXEMPT") {
       exemptValue += l.poValue;
       continue;
@@ -178,6 +184,7 @@ async function countOrderConfirmErrors(start: Date, endExcl: Date, now: Date): P
 }
 
 async function loadPeriodData(start: Date, endExcl: Date, adminId: string, now: Date = new Date()) {
+  const oldPo = await loadOldPoFilter();
   const [payments, slips, lines, complaints, defectCount, confirmErrors] = await Promise.all([
     prisma.debtPayment.findMany({
       where: { paymentDate: { gte: start, lt: endExcl }, importBatchId: { not: null }, matchStatus: { not: "IGNORED" } },
@@ -195,6 +202,10 @@ async function loadPeriodData(start: Date, endExcl: Date, adminId: string, now: 
         requestedDeliveryDate: true,
         poQuantity: true,
         poValue: true,
+        poDate: true,
+        manuallyClosed: true,
+        manuallyClosedAt: true,
+        manuallyClosedByUserId: true,
         deliveryEvents: { select: { eventDate: true, quantity: true } },
         delayReason: { select: { id: true, category: true, note: true, status: true, reviewNote: true, newDeliveryDate: true } },
       },
@@ -217,6 +228,10 @@ async function loadPeriodData(start: Date, endExcl: Date, adminId: string, now: 
     poValue: Number(l.poValue),
     events: l.deliveryEvents.map((e) => ({ eventDate: e.eventDate, quantity: Number(e.quantity) })),
     reason: l.delayReason,
+    manuallyClosed: l.manuallyClosed,
+    manuallyClosedAt: l.manuallyClosedAt,
+    manuallyClosedByUserId: l.manuallyClosedByUserId,
+    oldPo: oldPo.ignore(l),
   }));
   return { payments, slips, lines: lineRows, complaints, adminDefects: defectCount + confirmErrors, defectCount, confirmErrors };
 }

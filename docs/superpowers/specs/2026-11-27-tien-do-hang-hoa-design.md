@@ -59,6 +59,15 @@ Trang Tiến độ giao hàng thêm tab "Tiến độ hàng hoá": thẻ đếm 
 - Tab "Tiến độ hàng hoá" chỉ thống kê hàng sản xuất; bộ phận sản xuất không có dữ liệu hàng thương mại.
 - Dòng hàng sản xuất của PO cũ không có lệnh không tính trễ và sắp đến hạn ở "Tình hình giao hàng" và Tổng quan. Không sửa dữ liệu; giá trị chưa giao giữ nguyên. Hàng thương mại vẫn tính trễ như trước.
 
+## Định nghĩa "trễ" dùng chung (chốt 28/11/2026)
+
+- Trễ = quá hạn giao hiệu lực mà chưa giao, kể cả hàng đã sản xuất xong. Mục "Cảnh báo" ở trên được hiểu theo quy tắc này.
+- Hàng sản xuất của PO đặt trước 12/10/2026 mà không có lệnh: không tính trễ. Mốc cố định, không lấy theo dữ liệu đồng bộ.
+- "Kết thúc đơn": ai thấy đơn đều bấm được, bắt buộc ghi lý do. Đóng trước hoặc đúng hạn (và dòng app tự đóng) bỏ khỏi thống kê; đóng sau hạn vẫn tính trễ.
+- Tỷ lệ giao đúng hạn tính theo dòng hàng đã tới hạn, gồm cả dòng quá hạn còn mở.
+- KPI Admin kinh doanh vẫn miễn trễ khi lý do được Trưởng phòng duyệt không do Admin, vì đây là điểm trách nhiệm của Admin.
+- Mã: `apps/web/src/lib/delivery-late.ts`.
+
 ## Các đợt làm
 
 1. **Đồng bộ và đối chiếu.** Bảng mới, worker đọc LSX, báo cáo dòng không khớp. Anh kiểm tra số liệu thật trước khi sang đợt 2.

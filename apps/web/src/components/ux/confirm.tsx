@@ -10,24 +10,37 @@ interface Request {
   okLabel?: string;
   /** true = xoá/huỷ: nút đỏ, thùng rác mở nắp. */
   danger?: boolean;
-  resolve: (ok: boolean) => void;
+  /** Có giá trị = bắt nhập chữ (ít nhất 5 ký tự) mới bấm đồng ý được. */
+  inputLabel?: string;
+  resolve: (ok: boolean, text: string) => void;
 }
 
 const EVENT = "ux-confirm";
 
 /** Thay window.confirm: trả về true nếu người dùng đồng ý. */
-export function confirmDialog(message: string, options: Omit<Request, "message" | "resolve"> = {}): Promise<boolean> {
+export function confirmDialog(message: string, options: Omit<Request, "message" | "resolve" | "inputLabel"> = {}): Promise<boolean> {
   return new Promise((resolve) => window.dispatchEvent(new CustomEvent<Request>(EVENT, { detail: { message, resolve, ...options } })));
+}
+
+/** Hỏi lại kèm ô nhập bắt buộc: trả về nội dung đã nhập, hoặc null nếu bấm Huỷ. */
+export function promptDialog(message: string, inputLabel: string, options: Pick<Request, "title" | "okLabel"> = {}): Promise<string | null> {
+  return new Promise((done) =>
+    window.dispatchEvent(
+      new CustomEvent<Request>(EVENT, { detail: { message, inputLabel, resolve: (ok, text) => done(ok ? text : null), ...options } })
+    )
+  );
 }
 
 export function ConfirmHost() {
   const [request, setRequest] = useState<Request | null>(null);
   const [phase, setPhase] = useState("");
+  const [text, setText] = useState("");
   const dialog = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     const onConfirm = (e: Event) => {
       setPhase("");
+      setText("");
       setRequest((e as CustomEvent<Request>).detail);
     };
     window.addEventListener(EVENT, onConfirm);
@@ -50,7 +63,7 @@ export function ConfirmHost() {
       () => {
         dialog.current?.close();
         setRequest(null);
-        done.resolve(ok);
+        done.resolve(ok, text.trim());
       },
       animateTrash ? 1100 : 260
     );
@@ -100,12 +113,23 @@ export function ConfirmHost() {
         </div>
         <h3 id="ux-confirm-title">{request.title ?? (request.danger ? "Xác nhận xoá" : "Xác nhận")}</h3>
         <p id="ux-confirm-text">{request.message}</p>
+        {request.inputLabel && (
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            aria-label={request.inputLabel}
+            placeholder={request.inputLabel}
+            maxLength={300}
+            rows={3}
+            className="mb-4 w-full resize-none rounded-xl border border-white/15 bg-transparent p-2.5 text-left text-sm text-ink"
+          />
+        )}
         <div className="u436-bs">
           {/* Tiêu điểm mặc định ở nút Huỷ để Enter không xoá nhầm. */}
           <button type="button" className="u436-no" autoFocus onClick={() => finish(false)}>
             Huỷ
           </button>
-          <button type="button" className={`u436-ok ${request.danger ? "" : "is-ask"}`} onClick={() => finish(true)}>
+          <button type="button" className={`u436-ok disabled:opacity-40 ${request.danger ? "" : "is-ask"}`} disabled={!!request.inputLabel && text.trim().length < 5} onClick={() => finish(true)}>
             {request.okLabel ?? (request.danger ? "Xoá" : "Đồng ý")}
           </button>
         </div>

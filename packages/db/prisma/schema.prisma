@@ -1398,6 +1398,8 @@ model PoTrackingLine {
   manuallyClosedAt       DateTime?
   manuallyClosedByUserId String?
   manuallyClosedByUser   User?     @relation("PoLineManuallyClosedBy", fields: [manuallyClosedByUserId], references: [id])
+  // Lý do bấm "Kết thúc đơn" (bắt buộc từ 28/11/2026).
+  manualCloseReason      String?
 
   // Hàng mẫu (AMIS ghi chú "Hàng mẫu"...): giá trị luôn 0 nên KHÔNG tính doanh số/giá trị còn lại, nhưng vẫn
   // theo dõi SL giao và hạn giao. Đặt khi đồng bộ đơn AMIS (xem sample-lines.ts, po-tracking-from-orders.ts).

@@ -19,8 +19,11 @@ export async function POST(req: NextRequest) {
     const closed = body.closed === true;
     if (!poCode) return NextResponse.json({ error: "Thiếu Số PO" }, { status: 400 });
 
+    const reason = typeof body.reason === "string" ? body.reason.trim().slice(0, 300) : "";
+    if (closed && reason.length < 5) return NextResponse.json({ error: "Cần ghi lý do kết thúc đơn (ít nhất 5 ký tự)" }, { status: 400 });
+
     const scope = scopeByOwner(session, "salesEmployeeId");
-    const result = await setPoManualClosed(poCode, closed, session.user.id, scope);
+    const result = await setPoManualClosed(poCode, closed, session.user.id, scope, closed ? reason : null);
     if (result.updatedLineCount === 0) {
       return NextResponse.json(
         { error: "Không tìm thấy đơn này hoặc anh không có quyền thao tác" },

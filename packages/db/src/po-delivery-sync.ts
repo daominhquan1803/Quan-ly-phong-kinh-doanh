@@ -32,6 +32,7 @@ export interface PoAggregate {
   poValue: number;
   manuallyClosedAt: Date | null;
   manuallyClosedByName: string | null;
+  manualCloseReason: string | null;
 }
 
 /**
@@ -63,6 +64,7 @@ export async function getPoAggregates(
       remainingValue: true,
       poValue: true,
       manuallyClosedAt: true,
+      manualCloseReason: true,
       manuallyClosedByUser: { select: { name: true } },
       deliveryEvents: { select: { eventDate: true }, orderBy: { eventDate: "desc" }, take: 1 },
     },
@@ -85,12 +87,14 @@ export async function getPoAggregates(
         poValue: 0,
         manuallyClosedAt: null,
         manuallyClosedByName: null,
+        manualCloseReason: null,
       };
       poMap.set(l.poCode, agg);
     }
     if (l.manuallyClosedAt && (!agg.manuallyClosedAt || l.manuallyClosedAt > agg.manuallyClosedAt)) {
       agg.manuallyClosedAt = l.manuallyClosedAt;
       agg.manuallyClosedByName = l.manuallyClosedByUser?.name ?? null;
+      agg.manualCloseReason = l.manualCloseReason;
     }
 
     const deadline = effectiveDeadline(l.requestedDeliveryDate, l.delayReason);
@@ -295,7 +299,8 @@ export async function setPoManualClosed(
   poCode: string,
   closed: boolean,
   userId: string | null,
-  lineWhere: Record<string, unknown> = {}
+  lineWhere: Record<string, unknown> = {},
+  reason: string | null = null
 ): Promise<SetPoManualClosedResult> {
   const lines = await prisma.poTrackingLine.findMany({
     where: { poCode, ...lineWhere },
@@ -310,6 +315,7 @@ export async function setPoManualClosed(
       manuallyClosed: closed,
       manuallyClosedAt: closed ? new Date() : null,
       manuallyClosedByUserId: closed ? userId : null,
+      manualCloseReason: closed ? reason : null,
     },
   });
   for (const lineId of lineIds) {

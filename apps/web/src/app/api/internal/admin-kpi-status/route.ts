@@ -3,6 +3,7 @@ import { prisma } from "@hoanggia/db";
 import { requireInternalToken, UnauthorizedError } from "@/lib/rbac";
 import { findMonthWeekForDate } from "@/lib/week-plan";
 import { getAdminWeek, lineVerdict, vnDayStart } from "@/lib/admin-kpi";
+import { loadOldPoFilter } from "@/lib/old-po";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -27,7 +28,7 @@ export async function GET(req: NextRequest) {
       prisma.user.findMany({ where: { role: "ADMIN", accessLevel: "OPERATOR", active: true }, select: { id: true, name: true } }),
       prisma.poTrackingLine.findMany({
         where: { requestedDeliveryDate: { gte: monthStart, lt: today }, baselineClosed: false, poQuantity: { gt: 0 }, delayReason: null },
-        select: { id: true, requestedDeliveryDate: true, poQuantity: true, deliveryEvents: { select: { eventDate: true, quantity: true } } },
+        select: { id: true, poCode: true, itemCode: true, poDate: true, manuallyClosed: true, manuallyClosedAt: true, manuallyClosedByUserId: true, requestedDeliveryDate: true, poQuantity: true, deliveryEvents: { select: { eventDate: true, quantity: true } } },
       }),
       prisma.invoiceCorrection.count({ where: { invoiceDate: { gte: monthStart }, cause: null } }),
       prisma.defectReport.findMany({ where: { respondedAt: null, closedAt: null }, select: { receivedAt: true, createdAt: true } }),
@@ -35,6 +36,7 @@ export async function GET(req: NextRequest) {
       prisma.user.findMany({ where: { role: "ADMIN", accessLevel: "FULL", active: true }, select: { id: true } }),
     ]);
 
+    const oldPo = await loadOldPoFilter();
     const lateNoReason = lines.filter(
       (l) =>
         lineVerdict(
@@ -49,6 +51,10 @@ export async function GET(req: NextRequest) {
             poValue: 0,
             events: l.deliveryEvents.map((e) => ({ eventDate: e.eventDate, quantity: Number(e.quantity) })),
             reason: null,
+            manuallyClosed: l.manuallyClosed,
+            manuallyClosedAt: l.manuallyClosedAt,
+            manuallyClosedByUserId: l.manuallyClosedByUserId,
+            oldPo: oldPo.ignore(l),
           },
           now
         ) === "LATE"

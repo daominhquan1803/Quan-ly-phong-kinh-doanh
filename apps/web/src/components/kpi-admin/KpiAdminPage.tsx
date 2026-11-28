@@ -58,7 +58,7 @@ interface LateLine {
   poValue: number;
   events: { eventDate: string; quantity: number }[];
   reason: Reason | null;
-  verdict: "ON_TIME" | "LATE" | "EXEMPT" | "NOT_DUE";
+  verdict: "ON_TIME" | "LATE" | "EXEMPT" | "NOT_DUE" | "SKIP";
 }
 interface Correction {
   id: string;
@@ -416,7 +416,7 @@ function LateLineRow({ l, canEdit, isSystem, onSaved }: { l: LateLine; canEdit: 
               )}
             >
               {REASON_STATUS[l.reason.status]}
-              {l.verdict === "EXEMPT" && " · không tính trễ"}
+              {(l.verdict === "EXEMPT" || l.verdict === "SKIP") && " · không tính trễ"}
               {l.reason.reviewNote && <span className="font-normal text-muted2"> — {l.reason.reviewNote}</span>}
             </p>
           </div>

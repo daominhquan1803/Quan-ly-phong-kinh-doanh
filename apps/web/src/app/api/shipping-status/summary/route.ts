@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma, getPoAggregates, type PoAggregate } from "@hoanggia/db";
+import { prisma, getPoAggregates, effectiveDeadline, normPoStatus, PO_CLOSED_STATUS, type PoAggregate } from "@hoanggia/db";
+import { onTimeRate } from "@/lib/delivery-late";
 import { loadOldPoFilter } from "@/lib/production-lines";
 import { requireSession, scopeByOwner, UnauthorizedError } from "@/lib/rbac";
 import { daysUntilDeadline } from "@/lib/order-status";
@@ -55,19 +56,49 @@ export async function GET(req: NextRequest) {
     const upcoming = openPos.filter(isPoUpcoming);
     const overdueValue = overdue.reduce((s, p) => s + p.remainingValue, 0);
 
-    // Tỷ lệ giao đúng hạn: trong các PO đã "Kết thúc" có hạn giao (lấy hạn muộn nhất trong các
-    // dòng, vì hạn thường đồng nhất theo PO) rơi trong 90 ngày qua, bao nhiêu % có đợt giao GẦN
-    // NHẤT không muộn hơn hạn. PO đã đóng nhưng không có đợt giao nào ghi nhận (dữ liệu thiếu)
-    // bị loại khỏi mẫu tính, không suy đoán.
+    // Tỷ lệ giao đúng hạn theo DÒNG HÀNG, gồm cả dòng quá hạn còn mở (quy tắc ở lib/delivery-late.ts).
     const rateCutoff = new Date();
     rateCutoff.setDate(rateCutoff.getDate() - RATE_WINDOW_DAYS);
     const now = new Date();
-    const closedPos = allPos.filter((p) => !p.isOpen);
-    const dueInWindow = closedPos.filter(
-      (p) => p.latestDeadlineAll && p.latestDeadlineAll >= rateCutoff && p.latestDeadlineAll <= now && p.latestDeliveryDate
-    );
-    const onTimeInWindow = dueInWindow.filter((p) => p.latestDeliveryDate! <= p.latestDeadlineAll!).length;
-    const onTimeRatePct = dueInWindow.length > 0 ? Math.round((onTimeInWindow / dueInWindow.length) * 100) : null;
+    const rateRows = await prisma.poTrackingLine.findMany({
+      where: {
+        salesEmployeeId: { not: null },
+        ...scope,
+        ...(employeeId && session.user.role === "ADMIN" ? { salesEmployeeId: employeeId } : {}),
+        OR: [{ requestedDeliveryDate: { gte: rateCutoff } }, { delayReason: { newDeliveryDate: { gte: rateCutoff } } }],
+      },
+      select: {
+        poCode: true,
+        itemCode: true,
+        poDate: true,
+        statusRaw: true,
+        poQuantity: true,
+        totalDeliveredQty: true,
+        requestedDeliveryDate: true,
+        delayReason: { select: { category: true, status: true, newDeliveryDate: true } },
+        manuallyClosed: true,
+        manuallyClosedAt: true,
+        manuallyClosedByUserId: true,
+        deliveryEvents: { select: { eventDate: true }, orderBy: { eventDate: "desc" }, take: 1 },
+      },
+    });
+    // Bộ lọc riêng để không cộng vào số "dòng PO cũ đã bỏ" hiển thị dưới thống kê trễ.
+    const rateOldPo = await loadOldPoFilter();
+    const onTimeRatePct = onTimeRate(
+      rateRows.map((l) => ({
+        dueOn: effectiveDeadline(l.requestedDeliveryDate, l.delayReason),
+        isOpen: normPoStatus(l.statusRaw) !== PO_CLOSED_STATUS,
+        poQuantity: l.poQuantity == null ? null : Number(l.poQuantity),
+        deliveredQty: Number(l.totalDeliveredQty ?? 0),
+        lastDeliveryOn: l.deliveryEvents[0]?.eventDate ?? null,
+        oldPo: rateOldPo.ignore(l),
+        manuallyClosed: l.manuallyClosed,
+        manuallyClosedAt: l.manuallyClosedAt,
+        manuallyClosedByUserId: l.manuallyClosedByUserId,
+      })),
+      rateCutoff,
+      now
+    ).pct;
 
     // "Giá trị đã giao (tháng)" và tổng theo nhân viên lấy CHUNG 1 nguồn với Tổng quan/Kế
     // hoạch kinh doanh (PoDeliveryEvent theo eventDate trong tháng) — đảm bảo số liệu khớp
@@ -190,6 +221,7 @@ export async function GET(req: NextRequest) {
         salesEmployeeName: p.salesEmployeeName,
         manuallyClosedAt: p.manuallyClosedAt,
         manuallyClosedByName: p.manuallyClosedByName,
+        reason: p.manualCloseReason,
       }));
 
     const toRow = (p: PoAgg) => ({

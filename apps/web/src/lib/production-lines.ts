@@ -1,32 +1,12 @@
 import { prisma, normPoStatus, effectiveDeadline } from "@hoanggia/db";
 import { daysUntilDeadline } from "@/lib/order-status";
 import { progressFor } from "@/lib/production-match";
+import { dataSinceOf } from "@/lib/old-po";
+
+export { loadOldPoFilter } from "@/lib/old-po";
 
 /** Ngày mai theo giờ Việt Nam, "yyyy-mm-dd" (không phụ thuộc múi giờ của máy chủ). */
 const vnTomorrow = () => new Date(Date.now() + (7 + 24) * 3_600_000).toISOString().slice(0, 10);
-
-/** Ngày lệnh sớm nhất bên trang sản xuất = từ đó mới có dữ liệu. */
-const firstOrderedOn = (rows: { orderedOn: Date | null }[]) =>
-  rows.reduce<Date | null>((min, r) => (r.orderedOn && (!min || r.orderedOn < min) ? r.orderedOn : min), null);
-
-/**
- * Bộ lọc cho thống kê trễ: dòng HÀNG SẢN XUẤT đặt trước khi trang sản xuất có dữ liệu và không có lệnh thì không
- * tính trễ (PO cũ đã giao nhưng chưa đóng trên app). Hàng thương mại vẫn tính trễ như thường.
- */
-export async function loadOldPoFilter() {
-  const rows = await prisma.productionLine.findMany();
-  const dataSince = firstOrderedOn(rows);
-  let count = 0;
-  return {
-    ignore(line: { poCode: string; itemCode: string | null; poDate: Date | null }) {
-      const old = progressFor(line, rows, null, "", dataSince).status === "OLD_PO";
-      if (old) count++;
-      return old;
-    },
-    /** Số dòng đã bỏ khỏi thống kê trễ (đọc SAU khi đã lọc). */
-    count: () => count,
-  };
-}
 
 /**
  * Các dòng PO còn nợ hàng kèm tiến độ sản xuất — dùng CHUNG cho tab "Tiến độ hàng hoá" và tin nhắc 8h,
@@ -43,7 +23,7 @@ export async function loadProductionLines(where: Record<string, unknown> = {}) {
   });
   const closed = normPoStatus("Kết thúc");
   const tomorrow = vnTomorrow();
-  const dataSince = firstOrderedOn(rows);
+  const dataSince = dataSinceOf(rows);
   const lines = poLines
     .filter((l) => normPoStatus(l.statusRaw) !== closed)
     .map((l) => {

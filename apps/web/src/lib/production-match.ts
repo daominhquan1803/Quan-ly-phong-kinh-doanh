@@ -84,8 +84,9 @@ export function progressFor(
   const notStarted = status === "WAITING" || status === "NO_LSX";
   let alert: ProductionAlert | null = null;
   if (status === "DONE") alert = "DONE_NOT_SHIPPED";
-  else if ((notStarted || status === "RUNNING") && daysLeft != null && daysLeft < 0) alert = "LATE";
   else if (notStarted && daysLeft != null && daysLeft <= AT_RISK_DAYS) alert = "AT_RISK";
+  // Quá hạn mà chưa giao là trễ, kể cả hàng đã sản xuất xong (xem lib/delivery-late.ts).
+  if (status !== "OLD_PO" && status !== "TRADING" && daysLeft != null && daysLeft < 0) alert = "LATE";
 
   const etas = unfinished.map((r) => etaOf(r, tomorrow));
   const eta = etas.length && etas.every(Boolean) ? [...etas].sort((a, b) => `${b!.date} ${b!.time}`.localeCompare(`${a!.date} ${a!.time}`))[0] : null;

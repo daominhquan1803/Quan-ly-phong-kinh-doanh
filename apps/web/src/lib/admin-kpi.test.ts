@@ -90,6 +90,11 @@ describe("đánh giá dữ liệu", () => {
     expect(lineVerdict(line({ reason }), now)).toBe("EXEMPT");
     expect(lineVerdict(line({ reason: { ...reason, status: "PENDING" } }), now)).toBe("LATE");
     expect(lineVerdict(line({ reason: { ...reason, category: "ADMIN" } }), now)).toBe("LATE");
+    // Đóng trước/đúng hạn thì bỏ khỏi KPI; đóng sau hạn vẫn trễ; PO cũ chưa có lệnh không tính.
+    const closed = (at: string) => ({ manuallyClosed: true, manuallyClosedAt: vn(at), manuallyClosedByUserId: "u1" });
+    expect(lineVerdict(line(closed("2026-10-01T09:00:00")), now)).toBe("SKIP");
+    expect(lineVerdict(line(closed("2026-10-30T09:00:00")), now)).toBe("LATE");
+    expect(lineVerdict(line({ oldPo: true }), now)).toBe("SKIP");
   });
 
   it("giao hàng: khách đổi lịch đã duyệt thì tính theo ngày hẹn mới", () => {

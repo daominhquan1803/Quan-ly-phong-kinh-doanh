@@ -84,7 +84,8 @@ export function parseShipmentSlipsWithMapping(
       return;
     }
     // Dòng tiêu đề "STT" / dòng đánh số thứ tự 1, 2, 3... (map nhầm cột hoặc sheet có hàng số cột) — không phải phiếu thật.
-    if (/^(stt|\d{1,4})$/i.test(slipNumber)) {
+    // Số phiếu luôn có chữ (BH...). Toàn số là cột bị lệch, vd "14800" là số lượng (đã sinh phiếu trùng ngày 23/10/2026).
+    if (/^(stt|\d+)$/i.test(slipNumber)) {
       result.errors.push({ rowNumber, message: `Bỏ qua dòng "${slipNumber}" — không phải số phiếu` });
       return;
     }

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { confirmDialog } from "@/components/ux/confirm";
+import { promptDialog } from "@/components/ux/confirm";
 import { toast } from "@/components/ux/toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { cn, formatCurrencyVND, formatDateVN } from "@/lib/utils";
@@ -48,6 +48,7 @@ interface ManuallyClosedOrderRow {
   salesEmployeeName: string;
   manuallyClosedAt: string;
   manuallyClosedByName: string | null;
+  reason: string | null;
 }
 
 interface SummaryResponse {
@@ -108,15 +109,21 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
   });
 
   async function setPoClosed(poCode: string, closed: boolean) {
-    if (closed && !(await confirmDialog(`Xác nhận kết thúc đơn ${poCode}? Đơn sẽ được coi là đã hoàn tất, không cần giao thêm và không tính vào giá trị/quá hạn chưa giao nữa. Có thể bấm "Mở lại đơn" sau nếu bấm nhầm.`, { okLabel: "Kết thúc đơn" }))) {
-      return;
+    let reason: string | null = null;
+    if (closed) {
+      reason = await promptDialog(
+        `Kết thúc đơn ${poCode}? Đơn không còn tính vào giá trị chưa giao và quá hạn. Đóng sau hạn giao thì KPI vẫn tính trễ. Bấm nhầm có thể "Mở lại đơn".`,
+        "Lý do kết thúc đơn (bắt buộc)",
+        { okLabel: "Kết thúc đơn" }
+      );
+      if (reason == null) return;
     }
     setPendingCodes((prev) => new Set(prev).add(poCode));
     try {
       const res = await fetch("/api/shipping-status/close", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ poCode, closed }),
+        body: JSON.stringify({ poCode, closed, reason }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -260,12 +267,12 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
         </div>
       </div>
 
-      {Boolean(data?.ignoredOldLines) && (
-        <p className="text-xs text-muted-foreground">
-          Số quá hạn và sắp đến hạn không tính {data!.ignoredOldLines} dòng hàng sản xuất của PO cũ (đặt trước khi trang sản xuất có dữ liệu, không có lệnh).
-          Các dòng này vẫn nằm trong giá trị chưa giao; PO nào đã giao xong thì bấm &quot;Kết thúc đơn&quot;.
-        </p>
-      )}
+      <p className="text-xs text-muted-foreground">
+        Trễ = quá hạn giao (hạn mới nếu khách đổi lịch đã duyệt) mà chưa giao, kể cả hàng đã sản xuất xong. Ở đây đếm theo PO;
+        tab Tiến độ hàng hoá đếm theo dòng hàng sản xuất.
+        {Boolean(data?.ignoredOldLines) &&
+          ` Không tính ${data!.ignoredOldLines} dòng hàng sản xuất của PO cũ (đặt trước 12/10/2026, không có lệnh); các dòng này vẫn nằm trong giá trị chưa giao.`}
+      </p>
 
       {uploadResult && (
         <div className="flex items-center justify-between gap-2 rounded-xl border border-success-600/30 bg-success-600/10 text-success-600 text-xs px-4 py-3 backdrop-blur-md">
@@ -301,7 +308,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
             <p className="font-mono text-3xl font-bold tracking-tight text-ink tabular-nums">
               {isLoading ? "—" : data?.onTimeRatePct != null ? `${data.onTimeRatePct}%` : "Chưa có"}
             </p>
-            <p className="text-[11px] text-muted-foreground mt-1">Đơn hàng hoàn tất đúng hẹn</p>
+            <p className="text-[11px] text-muted-foreground mt-1">Theo dòng hàng đã tới hạn, gồm cả dòng quá hạn chưa giao</p>
           </div>
         </div>
 
@@ -644,6 +651,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
                   <th className="px-5 py-3 text-left">NVKD</th>
                   <th className="px-5 py-3 text-left">Đóng lúc</th>
                   <th className="px-5 py-3 text-left">Người đóng</th>
+                  <th className="px-5 py-3 text-left">Lý do</th>
                   <th className="px-5 py-3 text-right">Thao tác</th>
                 </tr>
               </thead>
@@ -655,6 +663,7 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
                     <td className="px-5 py-3 text-xs text-ink2">{o.salesEmployeeName}</td>
                     <td className="px-5 py-3 text-xs text-ink2 font-mono">{formatDateVN(o.manuallyClosedAt)}</td>
                     <td className="px-5 py-3 text-xs text-muted-foreground">{o.manuallyClosedByName ?? "—"}</td>
+                    <td className="px-5 py-3 text-xs text-ink2 min-w-[12rem]">{o.reason ?? "—"}</td>
                     <td className="px-5 py-3 text-right">
                       <button
                         onClick={() => setPoClosed(o.poCode, false)}

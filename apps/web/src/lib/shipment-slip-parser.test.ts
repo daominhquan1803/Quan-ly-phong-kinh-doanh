@@ -75,6 +75,13 @@ describe("parseShipmentSlipsWithMapping", () => {
     expect(slips.map((s) => s.slipNumber)).toEqual(["BH03265"]);
   });
 
+  it("THẤT BẠI: số phiếu toàn số (cột bị lệch) -> báo lỗi dòng, không tạo phiếu", () => {
+    const buffer = makeBuffer([HEADERS, ["14800", "WOOJEON", "Mr Nam", "ST09565", "Tem A", "KHO S", "PO1", "Cái", 14800, 14800]]);
+    const { slips, errors } = parseShipmentSlipsWithMapping(buffer, mapping);
+    expect(slips).toHaveLength(0);
+    expect(errors).toHaveLength(1);
+  });
+
   it("uses Mã hàng as fallback Tên hàng when Tên hàng is blank — Mã hàng HOẶC Tên hàng là đủ", () => {
     const buffer = makeBuffer([HEADERS, ["BH03265", "SAMSUNG", "Mr Phú", "SI08244", "", "KHO S", "PO1", "Cái", 100, 100]]);
     const { slips, errors } = parseShipmentSlipsWithMapping(buffer, mapping);
