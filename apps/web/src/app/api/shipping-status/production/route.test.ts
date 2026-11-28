@@ -31,6 +31,13 @@ describe("GET /api/shipping-status/production", () => {
     expect(json.lines[0]).toMatchObject({ status: "DONE", lsxNos: ["9"] });
   });
 
+  it("không thống kê hàng thương mại", async () => {
+    h.auth.mockResolvedValue({ user: { id: "u1", role: "SALES" } });
+    h.po.mockResolvedValue([poLine, { ...poLine, itemCode: "AA071" }]);
+    const json = await (await GET()).json();
+    expect(json.lines.map((l: { itemCode: string }) => l.itemCode)).toEqual(["SI01"]);
+  });
+
   it("chưa đồng bộ được dữ liệu -> không trả trạng thái (tránh báo nhầm 'chưa có lệnh')", async () => {
     h.auth.mockResolvedValue({ user: { id: "u1", role: "SALES" } });
     h.prod.mockResolvedValue([]);

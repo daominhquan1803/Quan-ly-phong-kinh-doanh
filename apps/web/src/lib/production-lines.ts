@@ -5,6 +5,29 @@ import { progressFor } from "@/lib/production-match";
 /** Ngày mai theo giờ Việt Nam, "yyyy-mm-dd" (không phụ thuộc múi giờ của máy chủ). */
 const vnTomorrow = () => new Date(Date.now() + (7 + 24) * 3_600_000).toISOString().slice(0, 10);
 
+/** Ngày lệnh sớm nhất bên trang sản xuất = từ đó mới có dữ liệu. */
+const firstOrderedOn = (rows: { orderedOn: Date | null }[]) =>
+  rows.reduce<Date | null>((min, r) => (r.orderedOn && (!min || r.orderedOn < min) ? r.orderedOn : min), null);
+
+/**
+ * Bộ lọc cho thống kê trễ: dòng HÀNG SẢN XUẤT đặt trước khi trang sản xuất có dữ liệu và không có lệnh thì không
+ * tính trễ (PO cũ đã giao nhưng chưa đóng trên app). Hàng thương mại vẫn tính trễ như thường.
+ */
+export async function loadOldPoFilter() {
+  const rows = await prisma.productionLine.findMany();
+  const dataSince = firstOrderedOn(rows);
+  let count = 0;
+  return {
+    ignore(line: { poCode: string; itemCode: string | null; poDate: Date | null }) {
+      const old = progressFor(line, rows, null, "", dataSince).status === "OLD_PO";
+      if (old) count++;
+      return old;
+    },
+    /** Số dòng đã bỏ khỏi thống kê trễ (đọc SAU khi đã lọc). */
+    count: () => count,
+  };
+}
+
 /**
  * Các dòng PO còn nợ hàng kèm tiến độ sản xuất — dùng CHUNG cho tab "Tiến độ hàng hoá" và tin nhắc 8h,
  * để hai nơi không lệch số. `where` giới hạn phạm vi (vd NVKD đang đăng nhập).
@@ -20,7 +43,7 @@ export async function loadProductionLines(where: Record<string, unknown> = {}) {
   });
   const closed = normPoStatus("Kết thúc");
   const tomorrow = vnTomorrow();
-  const dataSince = rows.reduce<Date | null>((min, r) => (r.orderedOn && (!min || r.orderedOn < min) ? r.orderedOn : min), null);
+  const dataSince = firstOrderedOn(rows);
   const lines = poLines
     .filter((l) => normPoStatus(l.statusRaw) !== closed)
     .map((l) => {
@@ -37,6 +60,8 @@ export async function loadProductionLines(where: Record<string, unknown> = {}) {
         ...progressFor(l, rows, daysUntilDeadline(dueOn), tomorrow, dataSince),
       };
     })
+    // Trang sản xuất không có dữ liệu hàng thương mại nên không thống kê ở đây.
+    .filter((l) => l.status !== "TRADING")
     .sort((a, b) => (a.dueOn?.getTime() ?? Infinity) - (b.dueOn?.getTime() ?? Infinity));
 
   return { rows, syncedAt: rows[0].syncedAt, dataSince, lines };

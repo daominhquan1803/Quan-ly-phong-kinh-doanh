@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma, getPoAggregates } from "@hoanggia/db";
+import { loadOldPoFilter } from "@/lib/production-lines";
 import { requireSession, scopeByOwner, UnauthorizedError } from "@/lib/rbac";
 import { getEmployeeTargetVsActual, getProductGroupTargetVsActual } from "@/lib/dashboard-metrics";
 import { daysUntilDeadline } from "@/lib/order-status";
@@ -59,7 +60,8 @@ export async function GET() {
     // getPoAggregates) thay vì bảng Order đồng bộ AMIS trực tiếp như trước — trước đây 2 nơi
     // dùng 2 nguồn khác nhau nên có thể lệch số, và Order không có sẵn "giá trị còn lại" để
     // sắp xếp top 10 theo giá trị cao nhất như anh yêu cầu.
-    const allPos = await getPoAggregates(scopeByOwner(session, "salesEmployeeId"));
+    const oldPo = await loadOldPoFilter();
+    const allPos = await getPoAggregates(scopeByOwner(session, "salesEmployeeId"), oldPo.ignore);
     const isPoOverdue = (p: (typeof allPos)[number]) => {
       if (!p.isOpen || !p.earliestOpenDeadline) return false;
       const days = daysUntilDeadline(p.earliestOpenDeadline);

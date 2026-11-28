@@ -54,6 +54,11 @@ Một dòng PO có nhiều LSX thì lấy trạng thái chậm nhất.
 
 Trang Tiến độ giao hàng thêm tab "Tiến độ hàng hoá": thẻ đếm theo trạng thái và bảng gồm NVKD, khách, Số PO, mã hàng, SL còn nợ, hạn giao, trạng thái, số LSX, công đoạn, dự kiến xong. Có lọc và tìm kiếm. NVKD chỉ thấy đơn của mình.
 
+## Chốt ngày 28/11/2026
+
+- Tab "Tiến độ hàng hoá" chỉ thống kê hàng sản xuất; bộ phận sản xuất không có dữ liệu hàng thương mại.
+- Dòng hàng sản xuất của PO cũ không có lệnh không tính trễ và sắp đến hạn ở "Tình hình giao hàng" và Tổng quan. Không sửa dữ liệu; giá trị chưa giao giữ nguyên. Hàng thương mại vẫn tính trễ như trước.
+
 ## Các đợt làm
 
 1. **Đồng bộ và đối chiếu.** Bảng mới, worker đọc LSX, báo cáo dòng không khớp. Anh kiểm tra số liệu thật trước khi sang đợt 2.

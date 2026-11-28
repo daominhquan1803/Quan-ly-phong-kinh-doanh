@@ -40,7 +40,7 @@ const STATUS_LABEL: Record<ProductionStatus, string> = {
 const ALERT_LABEL: Record<ProductionAlert, string> = { LATE: "Trễ", AT_RISK: "Nguy cơ trễ", DONE_NOT_SHIPPED: "Xong chưa giao" };
 const ALERT_CLASS: Record<ProductionAlert, string> = { LATE: "text-alert", AT_RISK: "text-amber-400", DONE_NOT_SHIPPED: "text-emerald-400" };
 
-type Filter = "ALL" | "LATE" | "AT_RISK" | "DONE" | "RUNNING" | "WAITING" | "NO_LSX" | "OLD_PO" | "TRADING";
+type Filter = "ALL" | "LATE" | "AT_RISK" | "DONE" | "RUNNING" | "WAITING" | "NO_LSX" | "OLD_PO";
 const FILTERS: [Filter, string][] = [
   ["ALL", "Tất cả"],
   ["LATE", "Trễ"],
@@ -50,7 +50,6 @@ const FILTERS: [Filter, string][] = [
   ["WAITING", "Chờ sản xuất"],
   ["NO_LSX", "Chưa có lệnh"],
   ["OLD_PO", "PO cũ"],
-  ["TRADING", "Thương mại"],
 ];
 const matches = (l: Line, f: Filter) => f === "ALL" || l.alert === f || l.status === f;
 
@@ -82,7 +81,7 @@ export function ProductionProgress({ isAdmin }: { isAdmin: boolean }) {
   return (
     <div className="space-y-3 rounded-2xl border border-white/10 bg-navy-900/60 p-4">
       <p className="text-xs text-muted-foreground">
-        Cập nhật từ trang sản xuất lúc {new Date(data.syncedAt).toLocaleString("vi-VN")}. Hàng thương mại (AA, ST) chờ dữ liệu phòng kế hoạch.
+        Cập nhật từ trang sản xuất lúc {new Date(data.syncedAt).toLocaleString("vi-VN")}. Chỉ thống kê hàng sản xuất (SI, SB, GC), không gồm hàng thương mại.
         {data.dataSince && ` Lệnh sản xuất có từ ngày ${date(data.dataSince)}; PO đặt trước đó mà không có lệnh ghi là "PO cũ".`}
       </p>
       <div className="flex flex-wrap items-center gap-2">

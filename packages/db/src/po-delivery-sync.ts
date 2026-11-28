@@ -43,11 +43,17 @@ export interface PoAggregate {
  * phạm vi (vd salesEmployeeId cụ thể) — truyền {} lấy toàn bộ theo quyền gọi (áp scope ở phía
  * gọi hàm này).
  */
-export async function getPoAggregates(lineWhere: Record<string, unknown> = {}): Promise<PoAggregate[]> {
+export async function getPoAggregates(
+  lineWhere: Record<string, unknown> = {},
+  // Dòng còn mở trả true thì hạn giao của nó KHÔNG dùng để xét trễ / sắp đến hạn (giá trị chưa giao vẫn tính).
+  ignoreDeadline?: (line: { poCode: string; itemCode: string | null; poDate: Date | null }) => boolean
+): Promise<PoAggregate[]> {
   const lines = await prisma.poTrackingLine.findMany({
     where: { salesEmployeeId: { not: null }, ...lineWhere },
     select: {
       poCode: true,
+      itemCode: true,
+      poDate: true,
       salesEmployeeId: true,
       salesEmployee: { select: { id: true, name: true } },
       customerCode: true,
@@ -91,7 +97,7 @@ export async function getPoAggregates(lineWhere: Record<string, unknown> = {}): 
     const isLineOpen = normPoStatus(l.statusRaw) !== PO_CLOSED_STATUS;
     if (isLineOpen) {
       agg.isOpen = true;
-      if (deadline && (!agg.earliestOpenDeadline || deadline < agg.earliestOpenDeadline)) {
+      if (!ignoreDeadline?.(l) && deadline && (!agg.earliestOpenDeadline || deadline < agg.earliestOpenDeadline)) {
         agg.earliestOpenDeadline = deadline;
       }
       // Kẹp về 0 ở mức từng dòng — 1 số dòng "Kết thúc" có G.Trị còn lại âm trong file gốc (đã

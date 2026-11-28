@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, getPoAggregates, type PoAggregate } from "@hoanggia/db";
+import { loadOldPoFilter } from "@/lib/production-lines";
 import { requireSession, scopeByOwner, UnauthorizedError } from "@/lib/rbac";
 import { daysUntilDeadline } from "@/lib/order-status";
 
@@ -28,11 +29,15 @@ export async function GET(req: NextRequest) {
     const scope = scopeByOwner(session, "salesEmployeeId");
     const employeeId = req.nextUrl.searchParams.get("employeeId");
 
-    const allPos = await getPoAggregates({
-      ...scope,
-      // Chỉ ADMIN được lọc theo nhân viên bất kỳ — SALES đã bị scopeByOwner giới hạn.
-      ...(employeeId && session.user.role === "ADMIN" ? { salesEmployeeId: employeeId } : {}),
-    });
+    const oldPo = await loadOldPoFilter();
+    const allPos = await getPoAggregates(
+      {
+        ...scope,
+        // Chỉ ADMIN được lọc theo nhân viên bất kỳ — SALES đã bị scopeByOwner giới hạn.
+        ...(employeeId && session.user.role === "ADMIN" ? { salesEmployeeId: employeeId } : {}),
+      },
+      oldPo.ignore
+    );
     const openPos = allPos.filter((p) => p.isOpen);
 
     const isPoOverdue = (p: PoAgg) => {
@@ -203,6 +208,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       openCount: openPos.length,
+      ignoredOldLines: oldPo.count(),
       overdueCount: overdue.length,
       overdueValue,
       upcomingCount: upcoming.length,

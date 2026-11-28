@@ -52,6 +52,7 @@ interface ManuallyClosedOrderRow {
 
 interface SummaryResponse {
   openCount: number;
+  ignoredOldLines?: number;
   overdueCount: number;
   overdueValue: number;
   upcomingCount: number;
@@ -258,6 +259,13 @@ export function ShippingStatusOverview({ isAdmin }: { isAdmin: boolean }) {
           {isAdmin && <EmployeeFilterSelect value={employeeId} onChange={setEmployeeId} />}
         </div>
       </div>
+
+      {Boolean(data?.ignoredOldLines) && (
+        <p className="text-xs text-muted-foreground">
+          Số quá hạn và sắp đến hạn không tính {data!.ignoredOldLines} dòng hàng sản xuất của PO cũ (đặt trước khi trang sản xuất có dữ liệu, không có lệnh).
+          Các dòng này vẫn nằm trong giá trị chưa giao; PO nào đã giao xong thì bấm &quot;Kết thúc đơn&quot;.
+        </p>
+      )}
 
       {uploadResult && (
         <div className="flex items-center justify-between gap-2 rounded-xl border border-success-600/30 bg-success-600/10 text-success-600 text-xs px-4 py-3 backdrop-blur-md">
