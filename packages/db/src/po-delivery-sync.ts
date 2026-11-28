@@ -480,9 +480,6 @@ export async function applyShipmentSlipDeliveries(
   const touchedLineIds = new Set<string>(previouslyTouchedLines.map((r) => r.lineId));
   const unmatchedItems: string[] = [];
   let matchedCount = 0;
-  // SL đã phân bổ cho từng dòng TRONG CHÍNH LẦN CHẠY NÀY — trừ tiếp vào capacity của các dòng
-  // hàng khác trong cùng phiếu nếu chúng cũng rơi vào cùng nhóm nhiều-dòng-cùng-mã.
-  const allocatedThisRun = new Map<string, number>();
   let skippedBeforeBaseline = 0;
   const thisSlip = await prisma.shipmentSlip.findUnique({ where: { id: slipId }, select: { slipNumber: true } });
   // SL đã xét trong CHÍNH phiếu này cho từng nhóm (PO + mặt hàng) trước mốc — cộng vào phần "phiếu trước đó".
@@ -514,7 +511,6 @@ export async function applyShipmentSlipDeliveries(
       },
     });
     touchedLineIds.add(line.id);
-    allocatedThisRun.set(line.id, (allocatedThisRun.get(line.id) ?? 0) + qty);
     return "created";
   }
 
@@ -584,8 +580,10 @@ export async function applyShipmentSlipDeliveries(
     const sorted = [...candidates].sort((a, b) => parseOccurrenceIndex(a.naturalKey) - parseOccurrenceIndex(b.naturalKey));
     const allocCandidates: AllocationCandidate[] = [];
     for (const c of sorted) {
-      const otherSlipAgg = await getSlipAggForLine(c.id, c.importBatch ? baselineSlipCutoff(c.importBatch.createdAt) : undefined); // đã loại trừ chính phiếu này (event của nó đã bị xoá ở trên)
-      const used = Number(c.baselineDeliveredQty ?? 0) + otherSlipAgg.qty + (allocatedThisRun.get(c.id) ?? 0);
+      const otherSlipAgg = await getSlipAggForLine(c.id, c.importBatch ? baselineSlipCutoff(c.importBatch.createdAt) : undefined); // đợt CŨ của chính phiếu này đã xoá ở trên
+      // otherSlipAgg đã gồm cả đợt vừa ghi ở các dòng hàng trước của chính phiếu này (đã nằm trong DB) — cộng thêm
+      // lần nữa là trừ hai lần, số giao bị dồn vào dòng cuối (lỗi D11.26DT08A, 28/11/2026).
+      const used = Number(c.baselineDeliveredQty ?? 0) + otherSlipAgg.qty;
       allocCandidates.push({ lineId: c.id, capacity: Number(c.poQuantity) - used });
     }
 
